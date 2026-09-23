@@ -97,12 +97,14 @@ impl HerdrClient {
         let panes = self.list_panes();
         panes.into_iter().find(|p| {
             let label = p.label.as_deref().unwrap_or("");
+            // Strict match: the marketplace file-manager plugin (herdr-sidebar)
+            // labels its panes plainly "Sidebar". Matching that generic label made
+            // ensure treat the file manager's panes as ours and skip opening our
+            // sidebar. Only our own manifest titles count.
             let is_sidebar = label.eq_ignore_ascii_case("pi-sidebar")
                 || label.eq_ignore_ascii_case("Pi Sidebar")
                 || label.eq_ignore_ascii_case("pi-herdr-sidebar")
-                || label.eq_ignore_ascii_case("Pi Herdr Sidebar")
-                // herdr 0.9.x labels plugin panes plainly "Sidebar".
-                || label.eq_ignore_ascii_case("sidebar");
+                || label.eq_ignore_ascii_case("Pi Herdr Sidebar");
             if let Some(tid) = tab_id {
                 is_sidebar && p.tab_id.as_deref() == Some(tid)
             } else {

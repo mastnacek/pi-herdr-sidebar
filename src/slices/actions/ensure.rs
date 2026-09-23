@@ -67,10 +67,7 @@ pub fn snoozed_tabs() -> Vec<String> {
 }
 
 pub fn set_snoozed(tab_id: &str, snoozed: bool) {
-    let mut tabs: Vec<String> = snoozed_tabs()
-        .into_iter()
-        .filter(|t| t != tab_id)
-        .collect();
+    let mut tabs: Vec<String> = snoozed_tabs().into_iter().filter(|t| t != tab_id).collect();
     if snoozed {
         tabs.push(tab_id.to_string());
     }
@@ -109,10 +106,7 @@ fn anchor_pane(client: &HerdrClient, ctx: &PluginContext) -> Option<String> {
         return Some(p.pane_id.clone());
     }
     // 3. Any pane in the tab.
-    panes
-        .iter()
-        .find(|p| in_tab(p))
-        .map(|p| p.pane_id.clone())
+    panes.iter().find(|p| in_tab(p)).map(|p| p.pane_id.clone())
 }
 
 /// Event handler for tab.created / tab.focused / pane.focused /
@@ -156,8 +150,8 @@ pub fn run_toggle() -> Result<(), String> {
     let ctx = PluginContext::load();
 
     // Blocking lock: a discrete user action should wait out a concurrent hook.
-    let _lock = LaunchLock::acquire(true)
-        .ok_or_else(|| "could not acquire launcher lock".to_string())?;
+    let _lock =
+        LaunchLock::acquire(true).ok_or_else(|| "could not acquire launcher lock".to_string())?;
 
     if let Some(existing) = client.find_sidebar_pane(ctx.tab_id.as_deref()) {
         client.close_pane(&existing.pane_id)?;

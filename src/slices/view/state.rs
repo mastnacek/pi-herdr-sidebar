@@ -212,9 +212,9 @@ impl SidebarState {
                 let same_tab = current_tab.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
                 let not_self = p.pane_id.as_str() != own_pane;
                 let is_pi = p.agent.as_deref() == Some("pi")
-                    || p.terminal_title.as_deref().is_some_and(|t| {
-                        t.contains('π') || t.to_lowercase().contains("pi")
-                    });
+                    || p.terminal_title
+                        .as_deref()
+                        .is_some_and(|t| t.contains('π') || t.to_lowercase().contains("pi"));
                 same_tab && not_self && is_pi
             });
 
