@@ -19,9 +19,9 @@ fn entrypoint() -> &'static str {
     }
 }
 
-/// Is there a pi agent pane in the given tab?
-fn has_pi_agent(client: &HerdrClient, tab_id: Option<&str>) -> bool {
-    client.list_panes().iter().any(|p| {
+/// Find a pi agent pane in the given tab (returns its pane_id for anchoring).
+fn find_pi_pane(client: &HerdrClient, tab_id: Option<&str>) -> Option<String> {
+    client.list_panes().into_iter().find(|p| {
         let is_tab = tab_id.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
         if !is_tab {
             return false;
@@ -35,13 +35,13 @@ fn has_pi_agent(client: &HerdrClient, tab_id: Option<&str>) -> bool {
             }
         }
         false
-    })
+    }).map(|p| p.pane_id)
 }
 
 /// Open the sidebar pane under a cross-process pid lock so concurrent
 /// events/watchers cannot open duplicate panes. Returns Ok(false) when
 /// another process won the lock.
-fn open_sidebar_exclusive(client: &HerdrClient) -> Result<bool, String> {
+fn open_sidebar_exclusive(client: &HerdrClient, target_pane: Option<&str>) -> Result<bool, String> {
     let lock_path = pi_sidebar_snapshots_dir().join("ensure.lock");
     let my_pid = std::process::id();
 
@@ -60,7 +60,7 @@ fn open_sidebar_exclusive(client: &HerdrClient) -> Result<bool, String> {
         return Ok(false);
     }
 
-    let res = client.open_plugin_pane(entrypoint());
+    let res = client.open_plugin_pane(entrypoint(), target_pane);
     let _ = fs::remove_file(&lock_path);
     res.map(|_| true)
 }
@@ -127,9 +127,9 @@ pub fn run_ensure() -> Result<(), String> {
         return Ok(());
     }
 
-    // 2. Agent present right now → open immediately.
-    if has_pi_agent(&client, tab_id) {
-        open_sidebar_exclusive(&client)?;
+    // 2. Agent present right now → open immediately (anchored to its pane).
+    if let Some(pi_pane) = find_pi_pane(&client, tab_id) {
+        open_sidebar_exclusive(&client, Some(&pi_pane))?;
         return Ok(());
     }
 
@@ -173,9 +173,9 @@ pub fn run_ensure_watch(tab_id: &str, watch_lock: Option<&std::path::Path>) -> R
             return Ok(());
         }
 
-        if has_pi_agent(&client, Some(tab_id)) {
+        if let Some(pi_pane) = find_pi_pane(&client, Some(tab_id)) {
             if client.find_sidebar_pane(Some(tab_id)).is_none() {
-                open_sidebar_exclusive(&client)?;
+                open_sidebar_exclusive(&client, Some(&pi_pane))?;
             }
             return Ok(());
         }

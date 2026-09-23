@@ -16,7 +16,23 @@ pub fn run_toggle() -> Result<(), String> {
     #[cfg(not(windows))]
     let entrypoint = "sidebar";
 
-    client.open_plugin_pane(entrypoint)?;
+    // Anchor the split next to the pi agent pane when one exists in this tab.
+    let target = client
+        .list_panes()
+        .into_iter()
+        .find(|p| {
+            let is_tab = ctx
+                .tab_id
+                .as_deref()
+                .map_or(true, |tid| p.tab_id.as_deref() == Some(tid));
+            is_tab
+                && (p.agent.as_deref() == Some("pi")
+                    || p.terminal_title
+                        .as_deref()
+                        .map_or(false, |t| t.contains('π') || t.to_lowercase().contains("pi")))
+        })
+        .map(|p| p.pane_id);
+    client.open_plugin_pane(entrypoint, target.as_deref())?;
     client.notify("Pi Herdr Sidebar", "Sidebar opened.");
 
     Ok(())

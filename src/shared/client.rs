@@ -107,7 +107,7 @@ impl HerdrClient {
         })
     }
 
-    pub fn open_plugin_pane(&self, entrypoint: &str) -> Result<(), String> {
+    pub fn open_plugin_pane(&self, entrypoint: &str, target_pane: Option<&str>) -> Result<(), String> {
         let mut cmd = Command::new(&self.bin_path);
         cmd.args([
             "plugin",
@@ -123,6 +123,11 @@ impl HerdrClient {
             "right",
             "--no-focus",
         ]);
+        // Anchor the split next to the target pane — without this herdr opens
+        // the pane in the currently active tab, not the one that fired ensure.
+        if let Some(p) = target_pane {
+            cmd.args(["--target-pane", p]);
+        }
         let output = cmd.output().map_err(|e| e.to_string())?;
         if output.status.success() {
             Ok(())
