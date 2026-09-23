@@ -59,7 +59,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let titles = Tab::titles();
     let selected_index = state.active_tab.to_index();
 
-    let live_indicator = if state.snapshot.as_ref().map_or(false, |s| s.live) {
+    let live_indicator = if state.snapshot.as_ref().is_some_and(|s| s.live) {
         Span::styled(" ● LIVE ", Style::default().fg(Color::Green).bold())
     } else if state.snapshot.is_some() {
         // Snapshot exists but live=false: Pi session is reloading/restarting

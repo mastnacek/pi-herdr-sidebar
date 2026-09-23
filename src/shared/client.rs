@@ -96,7 +96,9 @@ impl HerdrClient {
         panes.into_iter().find(|p| {
             let label = p.label.as_deref().unwrap_or("");
             let is_sidebar = label.eq_ignore_ascii_case("pi-sidebar")
-                || label.eq_ignore_ascii_case("Pi Sidebar");
+                || label.eq_ignore_ascii_case("Pi Sidebar")
+                || label.eq_ignore_ascii_case("pi-herdr-sidebar")
+                || label.eq_ignore_ascii_case("Pi Herdr Sidebar");
             if let Some(tid) = tab_id {
                 is_sidebar && p.tab_id.as_deref() == Some(tid)
             } else {
@@ -112,7 +114,7 @@ impl HerdrClient {
             "pane",
             "open",
             "--plugin",
-            "pi.sidebar",
+            "pi.herdr-sidebar",
             "--entrypoint",
             entrypoint,
             "--placement",

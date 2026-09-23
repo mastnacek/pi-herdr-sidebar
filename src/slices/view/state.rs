@@ -209,10 +209,10 @@ impl SidebarState {
 
             // Find Pi agent in the SAME tab
             let found_pane = self.panes.iter().find(|p| {
-                let same_tab = current_tab.map_or(true, |tid| p.tab_id.as_deref() == Some(tid));
+                let same_tab = current_tab.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
                 let not_self = p.pane_id.as_str() != own_pane;
                 let is_pi = p.agent.as_deref() == Some("pi")
-                    || p.terminal_title.as_deref().map_or(false, |t| {
+                    || p.terminal_title.as_deref().is_some_and(|t| {
                         t.contains('π') || t.to_lowercase().contains("pi")
                     });
                 same_tab && not_self && is_pi

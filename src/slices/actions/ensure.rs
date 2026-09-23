@@ -22,7 +22,7 @@ fn entrypoint() -> &'static str {
 /// Is there a pi agent pane in the given tab?
 fn has_pi_agent(client: &HerdrClient, tab_id: Option<&str>) -> bool {
     client.list_panes().iter().any(|p| {
-        let is_tab = tab_id.map_or(true, |tid| p.tab_id.as_deref() == Some(tid));
+        let is_tab = tab_id.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
         if !is_tab {
             return false;
         }

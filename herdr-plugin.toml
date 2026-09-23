@@ -1,5 +1,5 @@
-id = "pi.sidebar"
-name = "Pi Sidebar"
+id = "pi.herdr-sidebar"
+name = "Pi Herdr Sidebar"
 version = "0.1.0"
 min_herdr_version = "0.7.0"
 description = "Herdr telemetry and skills sidebar for Pi coding agent with Ratatui TUI"
@@ -10,21 +10,21 @@ command = ["cargo", "build", "--release"]
 
 [[panes]]
 id = "sidebar"
-title = "Pi Sidebar"
+title = "Pi Herdr Sidebar"
 placement = "split"
 command = ["target/release/pi_sidebar", "view"]
 platforms = ["linux", "macos"]
 
 [[panes]]
 id = "sidebar-win"
-title = "Pi Sidebar"
+title = "Pi Herdr Sidebar"
 placement = "split"
 command = ["target/release/pi_sidebar.exe", "view"]
 platforms = ["windows"]
 
 [[panes]]
 id = "sidebar-popup"
-title = "Pi Sidebar Popup"
+title = "Pi Herdr Sidebar Popup"
 placement = "popup"
 width = "80%"
 height = 24
@@ -33,7 +33,7 @@ platforms = ["linux", "macos"]
 
 [[panes]]
 id = "sidebar-popup-win"
-title = "Pi Sidebar Popup"
+title = "Pi Herdr Sidebar Popup"
 placement = "popup"
 width = "80%"
 height = 24
@@ -42,28 +42,28 @@ platforms = ["windows"]
 
 [[actions]]
 id = "toggle"
-title = "Toggle Pi Sidebar"
+title = "Toggle Pi Herdr Sidebar"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar", "toggle"]
 platforms = ["linux", "macos"]
 
 [[actions]]
 id = "toggle-win"
-title = "Toggle Pi Sidebar"
+title = "Toggle Pi Herdr Sidebar"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar.exe", "toggle"]
 platforms = ["windows"]
 
 [[actions]]
 id = "popup"
-title = "Open Pi Sidebar Popup"
+title = "Open Pi Herdr Sidebar Popup"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar", "popup-action"]
 platforms = ["linux", "macos"]
 
 [[actions]]
 id = "popup-win"
-title = "Open Pi Sidebar Popup"
+title = "Open Pi Herdr Sidebar Popup"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar.exe", "popup-action"]
 platforms = ["windows"]

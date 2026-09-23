@@ -512,7 +512,7 @@ fn strip_comments(source: &str) -> String {
             }
             '/' if chars.peek() == Some(&'/') => {
                 // Line comment: skip to end of line.
-                while let Some(n) = chars.next() {
+                for n in chars.by_ref() {
                     if n == '\n' {
                         out.push('\n');
                         break;

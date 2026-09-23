@@ -1,4 +1,4 @@
-# Pi Sidebar (Herdr Plugin)
+# Pi Herdr Sidebar (Herdr Plugin)
 
 Native Herdr telemetry and skills sidebar for the [Pi coding agent](https://github.com/earendil-works/pi-mono), built in **Rust with Ratatui** following Vertical Slice Architecture (VSA).
 

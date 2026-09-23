@@ -9,7 +9,7 @@ pub fn run_popup() -> Result<(), String> {
             "pane",
             "open",
             "--plugin",
-            "pi.sidebar",
+            "pi.herdr-sidebar",
             "--entrypoint",
             "sidebar-popup",
         ])

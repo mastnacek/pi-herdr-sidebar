@@ -87,7 +87,7 @@ pub fn find_active_snapshot(target_pane_id: Option<&str>) -> Option<PathBuf> {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
             // Exclude request files like *.request.json
             let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if file_name.ends_with(".request.json") {
