@@ -1,6 +1,5 @@
 use crate::shared::{
-    snapshot_path_for_pane, HerdrClient, HerdrPaneInfo, PaneSnapshot,
-    PluginContext,
+    snapshot_path_for_pane, HerdrClient, HerdrPaneInfo, PaneSnapshot, PluginContext,
 };
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -224,16 +223,12 @@ impl SidebarState {
                         || p.terminal_title_stripped
                             .as_deref()
                             .is_some_and(|t| t.contains('π'))
-                        || p.terminal_title
-                            .as_deref()
-                            .is_some_and(|t| t.contains('π'));
+                        || p.terminal_title.as_deref().is_some_and(|t| t.contains('π'));
                     same_tab && not_self && is_pi
                 })
                 // Multiple agents can share a tab: prefer the focused pane,
                 // then agent-reported panes.
-                .max_by_key(|p| {
-                    (p.focused.unwrap_or(false), p.agent.as_deref() == Some("pi"))
-                });
+                .max_by_key(|p| (p.focused.unwrap_or(false), p.agent.as_deref() == Some("pi")));
 
             if let Some(pi_pane) = found_pane {
                 self.target_pane_id = Some(pi_pane.pane_id.clone());

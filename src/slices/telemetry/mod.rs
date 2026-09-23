@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 pub mod skills;
@@ -49,6 +50,244 @@ struct ThinkingChange {
     level: Option<String>,
 }
 
+/// Pi model catalog entry (from ~/.pi/agent/models.json overrides and
+/// models-store.json — the models.dev snapshot pi maintains). Read directly
+/// like the pi agent framework does; nothing hardcoded.
+#[derive(Deserialize, Clone)]
+struct ModelCost {
+    #[serde(default)]
+    input: f64,
+    #[serde(default)]
+    output: f64,
+    #[serde(rename = "cacheRead", default)]
+    cache_read: f64,
+    #[serde(rename = "cacheWrite", default)]
+    cache_write: f64,
+    /// Tiered pricing: full rates once prompt tokens exceed a threshold.
+    #[serde(default)]
+    tiers: Vec<CostTier>,
+}
+
+#[derive(Deserialize, Clone)]
+struct CostTier {
+    #[serde(rename = "inputTokensAbove", default)]
+    input_tokens_above: u64,
+    #[serde(default)]
+    input: f64,
+    #[serde(default)]
+    output: f64,
+    #[serde(rename = "cacheRead", default)]
+    cache_read: f64,
+    #[serde(rename = "cacheWrite", default)]
+    cache_write: f64,
+}
+
+/// USD rates per million tokens.
+struct Rates {
+    input: f64,
+    output: f64,
+    cache_read: f64,
+    cache_write: f64,
+}
+
+impl ModelCost {
+    fn rates(&self) -> Rates {
+        Rates {
+            input: self.input,
+            output: self.output,
+            cache_read: self.cache_read,
+            cache_write: self.cache_write,
+        }
+    }
+}
+
+impl CostTier {
+    fn rates(&self) -> Rates {
+        Rates {
+            input: self.input,
+            output: self.output,
+            cache_read: self.cache_read,
+            cache_write: self.cache_write,
+        }
+    }
+}
+
+impl ModelCost {
+    /// Byte-for-byte port of pi-ai `calculateCost` (see
+    /// pi-coding-agent dist chunk: `function calculateCost(model,usage)`).
+    /// Long-lived (1h) cache writes bill at 2× the input rate.
+    fn compute_total(&self, u: &Usage) -> f64 {
+        self.select_for(u).total_cost(u)
+    }
+
+    /// Select tiered rates by total prompt tokens (input + cacheRead +
+    /// cacheWrite), matching pi-ai's threshold walk.
+    fn select_for(&self, u: &Usage) -> Rates {
+        let input_tokens = u.input + u.cacheRead + u.cacheWrite;
+        let mut rates = self.rates();
+        let mut matched: Option<u64> = None;
+        for tier in &self.tiers {
+            if input_tokens > tier.input_tokens_above
+                && tier.input_tokens_above > matched.unwrap_or(0)
+            {
+                rates = tier.rates();
+                matched = Some(tier.input_tokens_above);
+            }
+        }
+        rates
+    }
+}
+
+impl Rates {
+    /// USD for one usage entry, per pi-ai `calculateCost` semantics.
+    fn total_cost(&self, u: &Usage) -> f64 {
+        let long_write = u.cache_write_1h.min(u.cacheWrite);
+        let short_write = u.cacheWrite - long_write;
+        let cache_write_cost =
+            self.cache_write * short_write as f64 + self.input * 2.0 * long_write as f64;
+        (self.input * u.input as f64
+            + self.output * u.output as f64
+            + self.cache_read * u.cacheRead as f64
+            + cache_write_cost)
+            / 1e6
+    }
+}
+
+/// One model row from the pi catalog.
+#[derive(Deserialize, Clone)]
+struct ModelEntry {
+    id: String,
+    #[serde(default, rename = "contextWindow")]
+    context_window: u64,
+    #[serde(default)]
+    cost: Option<ModelCost>,
+}
+
+#[derive(Deserialize)]
+struct ProviderCfg {
+    #[serde(default)]
+    models: Vec<ModelEntry>,
+}
+
+#[derive(Deserialize)]
+struct ProvidersFile {
+    #[serde(default)]
+    providers: std::collections::BTreeMap<String, ProviderCfg>,
+}
+
+#[derive(Deserialize)]
+struct TopLevelFile {
+    #[serde(flatten)]
+    providers: std::collections::BTreeMap<String, ProviderCfg>,
+}
+
+type Catalog = Vec<(String, Vec<ModelEntry>)>;
+
+/// Process-level catalog cache keyed by both files' mtimes — parse_session
+/// runs every refresh tick, and models-store.json is ~400 KB.
+static CATALOG: Mutex<Option<(Option<SystemTime>, Option<SystemTime>, Catalog)>> =
+    Mutex::new(None);
+
+fn catalog_mtimes() -> (Option<SystemTime>, Option<SystemTime>) {
+    let home = match crate::shared::dirs_home() {
+        Some(h) => h,
+        None => return (None, None),
+    };
+    let mtime = |p: PathBuf| {
+        fs::metadata(p).and_then(|m| m.modified()).ok()
+    };
+    (
+        mtime(home.join(".pi").join("agent").join("models.json")),
+        mtime(home.join(".pi").join("agent").join("models-store.json")),
+    )
+}
+
+fn load_catalog() -> Catalog {
+    let (m1, m2) = catalog_mtimes();
+    if let Ok(guard) = CATALOG.lock() {
+        if let Some((c1, c2, cat)) = guard.as_ref() {
+            if *c1 == m1 && *c2 == m2 {
+                return cat.clone();
+            }
+        }
+    }
+    let mut cat: Catalog = Vec::new();
+    let home = crate::shared::dirs_home();
+    if let Some(home) = home {
+        // models.json first: user config overrides the fetched store.
+        for (path, providers_key) in [
+            (home.join(".pi").join("agent").join("models.json"), true),
+            (home.join(".pi").join("agent").join("models-store.json"), false),
+        ] {
+            let Ok(text) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let providers = if providers_key {
+                serde_json::from_str::<ProvidersFile>(&text)
+                    .map(|f| f.providers)
+            } else {
+                serde_json::from_str::<TopLevelFile>(&text)
+                    .map(|f| f.providers)
+            };
+            if let Ok(providers) = providers {
+                for (name, cfg) in providers {
+                    cat.push((name, cfg.models));
+                }
+            }
+        }
+    }
+    if let Ok(mut guard) = CATALOG.lock() {
+        *guard = Some((m1, m2, cat.clone()));
+    }
+    cat
+}
+
+/// Resolve (provider, model_id) against the pi catalogs. `provider` empty
+/// means scan every provider (models.json overrides come first, so an exact
+/// user entry wins over the fetched store).
+fn catalog_lookup(provider: &str, model_id: &str) -> Option<ModelEntry> {
+    let cat = load_catalog();
+    let mut any_match: Option<&ModelEntry> = None;
+    for (pname, models) in &cat {
+        if !provider.is_empty() && pname != provider {
+            continue;
+        }
+        if let Some(m) = models.iter().find(|m| m.id == model_id) {
+            if pname == provider {
+                return Some(m.clone());
+            }
+            any_match = any_match.or(Some(m));
+        }
+    }
+    any_match.cloned()
+}
+
+fn context_window_for(provider: &str, model_id: &str) -> u64 {
+    catalog_lookup(provider, model_id)
+        .map(|m| m.context_window)
+        .unwrap_or(0)
+}
+
+/// pi-catalog cost rates for a model; None when the model has no pricing
+/// (local ollama models) or the model is unknown.
+fn catalog_cost(provider: &str, model_id: &str) -> Option<ModelCost> {
+    catalog_lookup(provider, model_id).and_then(|m| m.cost)
+}
+
+/// Add one usage entry's cost to the running total. Uses the JSONL-reported
+/// cost when the session provides it (pi computes it with the same formula);
+/// otherwise estimates from the pi catalog rates.
+fn add_usage_cost(t: &mut LiveTelemetry, u: &Usage, provider: Option<&str>, model: Option<&str>) {
+    match &u.cost {
+        Some(c) => t.total_cost += c.total,
+        None => {
+            if let Some(cost) = catalog_cost(provider.unwrap_or(""), model.unwrap_or("")) {
+                t.total_cost += cost.compute_total(u);
+            }
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct UsageCost {
     #[serde(default)]
@@ -65,6 +304,9 @@ struct Usage {
     cacheRead: u64,
     #[serde(default)]
     cacheWrite: u64,
+    /// Long-lived (1h) cache writes — billed at 2× input per pi-ai.
+    #[serde(default, rename = "cacheWrite1h")]
+    cache_write_1h: u64,
     #[serde(default)]
     totalTokens: u64,
     #[serde(default)]
@@ -166,92 +408,6 @@ fn newest_session_in(dir: &Path, session_id: &str) -> Option<PathBuf> {
     best.map(|(p, _)| p)
 }
 
-/// Look up the context window for a model. Sources, in order:
-/// 1. `~/.pi/agent/models.json` — user overrides (`providers.<p>.models[]`)
-/// 2. `~/.pi/agent/models-store.json` — model catalog (`<p>.models[]`)
-fn context_window_for(provider: &str, model_id: &str) -> u64 {
-    let Some(home) = crate::shared::dirs_home() else {
-        return 0;
-    };
-
-    let mut win = lookup_context_window(
-        &home.join(".pi").join("agent").join("models.json"),
-        Some("providers"),
-        provider,
-        model_id,
-    );
-    if win == 0 {
-        win = lookup_context_window(
-            &home.join(".pi").join("agent").join("models-store.json"),
-            None,
-            provider,
-            model_id,
-        );
-    }
-    win
-}
-
-/// Scan one model catalog file for `model_id`'s context window.
-///
-/// `providers_key` wraps the map when the file nests providers under a key
-/// (models.json); `None` reads providers from the top level (models-store.json).
-fn lookup_context_window(
-    path: &Path,
-    providers_key: Option<&str>,
-    provider: &str,
-    model_id: &str,
-) -> u64 {
-    #[derive(Deserialize)]
-    struct ModelEntry {
-        id: String,
-        #[serde(default, rename = "contextWindow")]
-        context_window: u64,
-    }
-    #[derive(Deserialize)]
-    struct ProviderCfg {
-        #[serde(default)]
-        models: Vec<ModelEntry>,
-    }
-    #[derive(Deserialize)]
-    struct ProvidersFile {
-        #[serde(default)]
-        providers: std::collections::BTreeMap<String, ProviderCfg>,
-    }
-    #[derive(Deserialize)]
-    struct TopLevelFile {
-        #[serde(flatten)]
-        providers: std::collections::BTreeMap<String, ProviderCfg>,
-    }
-
-    let Ok(text) = fs::read_to_string(path) else {
-        return 0;
-    };
-
-    let providers: std::collections::BTreeMap<String, ProviderCfg> = if providers_key.is_some() {
-        match serde_json::from_str::<ProvidersFile>(&text) {
-            Ok(f) => f.providers,
-            Err(_) => return 0,
-        }
-    } else {
-        match serde_json::from_str::<TopLevelFile>(&text) {
-            Ok(f) => f.providers,
-            Err(_) => return 0,
-        }
-    };
-
-    for (pname, cfg) in &providers {
-        if !provider.is_empty() && pname != provider {
-            continue;
-        }
-        for m in &cfg.models {
-            if m.id == model_id {
-                return m.context_window;
-            }
-        }
-    }
-    0
-}
-
 /// Newest session JSONL in the pi sessions tree, preferring the folder that
 /// matches `cwd`'s slug. Fully independent of herdr's `agentSession` reporting.
 pub fn find_newest_session(cwd: Option<&str>) -> Option<PathBuf> {
@@ -295,7 +451,10 @@ pub fn find_newest_session(cwd: Option<&str>) -> Option<PathBuf> {
 /// pick can be another agent's session.
 pub fn find_newest_session_scoped(cwd: Option<&str>) -> Option<PathBuf> {
     let cwd = cwd?;
-    let base = crate::shared::dirs_home()?.join(".pi").join("agent").join("sessions");
+    let base = crate::shared::dirs_home()?
+        .join(".pi")
+        .join("agent")
+        .join("sessions");
     let slug = session_dir_slug(cwd);
     newest_session_in(&base.join(&slug), "")
 }
@@ -390,13 +549,24 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
             "message" => {
                 if let Some(msg) = &entry.message {
                     if let Some(u) = &msg.usage {
+                        // Model identity BEFORE cost math: assistant messages
+                        // carry it directly; earlier entries inherit the
+                        // session's last known model.
+                        let prov = if msg.role.as_deref() == Some("assistant") {
+                            msg.provider.as_deref().filter(|s| !s.is_empty()).or(Some(last_model_provider.as_str()))
+                        } else {
+                            Some(last_model_provider.as_str())
+                        };
+                        let mid = if msg.role.as_deref() == Some("assistant") {
+                            msg.model.as_deref().filter(|s| !s.is_empty()).or(Some(last_model_id.as_str()))
+                        } else {
+                            Some(last_model_id.as_str())
+                        };
                         t.input_tokens += u.input;
                         t.output_tokens += u.output;
                         t.cache_read += u.cacheRead;
                         t.cache_write += u.cacheWrite;
-                        if let Some(c) = &u.cost {
-                            t.total_cost += c.total;
-                        }
+                        add_usage_cost(&mut t, u, prov, mid);
                         // Assistant usage reflects the full prompt size -> context
                         if msg.role.as_deref() == Some("assistant") && u.totalTokens > 0 {
                             t.context_tokens = u.totalTokens;
@@ -420,9 +590,12 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                     t.output_tokens += u.output;
                     t.cache_read += u.cacheRead;
                     t.cache_write += u.cacheWrite;
-                    if let Some(c) = &u.cost {
-                        t.total_cost += c.total;
-                    }
+                    add_usage_cost(
+                        &mut t,
+                        u,
+                        Some(last_model_provider.as_str()),
+                        Some(last_model_id.as_str()),
+                    );
                 }
             }
         }
@@ -521,5 +694,78 @@ mod tests {
         assert!(t.context_tokens > 0);
         assert!(!t.model_id.is_empty());
         assert!(!t.thinking_level.is_empty(), "thinkingLevel must be parsed");
+    }
+}
+
+/// Formula tests for the pi-ai calculateCost port. The reference
+/// implementation lives in pi-coding-agent's bundled pi-ai
+/// (`function calculateCost(model,usage)`); these keep the port honest.
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+
+    fn usage(input: u64, output: u64, cache_read: u64, cache_write: u64, cache_write_1h: u64) -> Usage {
+        Usage {
+            input,
+            output,
+            cacheRead: cache_read,
+            cacheWrite: cache_write,
+            cache_write_1h,
+            totalTokens: 0,
+            cost: None,
+        }
+    }
+
+    #[test]
+    fn flat_rates_match_pi_formula() {
+        // rates: $3/M in, $15/M out, $0.30/M cacheRead, $3.75/M cacheWrite
+        let cost = ModelCost {
+            input: 3.0,
+            output: 15.0,
+            cache_read: 0.3,
+            cache_write: 3.75,
+            tiers: vec![],
+        };
+        let u = usage(1_000_000, 100_000, 500_000, 0, 0);
+        // pi: 3*1 + 15*0.1 + 0.3*0.5 = 3 + 1.5 + 0.15 = 4.65
+        assert!((cost.compute_total(&u) - 4.65).abs() < 1e-9);
+    }
+
+    #[test]
+    fn one_hour_cache_write_bills_at_2x_input() {
+        let cost = ModelCost {
+            input: 3.0,
+            output: 15.0,
+            cache_read: 0.3,
+            cache_write: 3.75,
+            tiers: vec![],
+        };
+        // 200k short (5-min) + 100k long (1h) cache write
+        let u = usage(0, 0, 0, 300_000, 100_000);
+        // pi: (3.75*200k + 3*2*100k)/1e6 = (0.75 + 0.6) = 1.35
+        assert!((cost.compute_total(&u) - 1.35).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tiered_rates_pick_highest_matching_threshold() {
+        let cost = ModelCost {
+            input: 3.0,
+            output: 15.0,
+            cache_read: 0.3,
+            cache_write: 3.75,
+            tiers: vec![CostTier {
+                input_tokens_above: 200_000,
+                input: 6.0,
+                output: 22.5,
+                cache_read: 0.6,
+                cache_write: 7.5,
+            }],
+        };
+        let below = usage(100_000, 0, 0, 0, 0);
+        // 100k ≤ 200k threshold → base rates 3/M → 0.3
+        assert!((cost.compute_total(&below) - 0.3).abs() < 1e-9);
+        let above = usage(250_000, 0, 0, 0, 0);
+        // 250k > 200k threshold → 6/M → 1.5
+        assert!((cost.compute_total(&above) - 1.5).abs() < 1e-9);
     }
 }
