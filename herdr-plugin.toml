@@ -83,6 +83,16 @@ command = ["target/release/pi_sidebar.exe", "switch-tab"]
 platforms = ["windows"]
 
 [[events]]
+on = "workspace.created"
+platforms = ["linux", "macos"]
+command = ["target/release/pi_sidebar", "ensure"]
+
+[[events]]
+on = "workspace.created"
+platforms = ["windows"]
+command = ["target/release/pi_sidebar.exe", "ensure"]
+
+[[events]]
 on = "tab.focused"
 platforms = ["linux", "macos"]
 command = ["target/release/pi_sidebar", "ensure"]

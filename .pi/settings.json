@@ -1,0 +1,55 @@
+{
+  "packages": [
+    {
+      "source": "git:github.com/mastnacek/pi-lotusscript-modular",
+      "autoload": false,
+      "extensions": [
+        "-index.ts"
+      ],
+      "skills": [
+        "-skills\\lotusscript-modular\\SKILL.md"
+      ]
+    },
+    {
+      "source": "git:github.com/mastnacek/pi-plugin-dev",
+      "autoload": false,
+      "extensions": [
+        "-index.ts"
+      ],
+      "skills": [
+        "-skills\\pi-plugin-dev\\SKILL.md"
+      ]
+    },
+    {
+      "source": "git:github.com/mastnacek/pi-sidebar",
+      "autoload": false,
+      "extensions": [
+        "-index.ts"
+      ]
+    }
+  ],
+  "skills": [
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\find-skills\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\find-skills\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\gccli\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\gccli\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\gdcli\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\gdcli\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\gmcli\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\gmcli\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\lotus-script\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\lotus-script\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\nlm-cli-skill\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\nlm-cli-skill\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-plugin-dev\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-plugin-dev\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\prototype\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\prototype\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\transcribe\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\transcribe\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\vscode\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\vscode\\SKILL.md",
+    "C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\youtube-transcript\\SKILL.md",
+    "-C:\\Users\\jaroslav\\.pi\\agent\\skills\\pi-skills\\youtube-transcript\\SKILL.md"
+  ]
+}

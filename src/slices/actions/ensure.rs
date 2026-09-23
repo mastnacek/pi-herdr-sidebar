@@ -1,12 +1,13 @@
 use crate::shared::{pi_sidebar_snapshots_dir, HerdrClient, PluginContext};
-use std::fs;
-use std::process::Command;
-use std::time::{Duration, Instant};
+use std::fs::{self, File};
+use std::path::PathBuf;
 
-/// How long the detached watcher waits for a pi agent to register in the tab.
-const WATCH_TIMEOUT: Duration = Duration::from_secs(90);
-/// Poll interval for the watcher.
-const WATCH_POLL: Duration = Duration::from_millis(750);
+/// Marketplace-proven strategy (herdr-sidebar v0.13): open the sidebar on
+/// every ensure event, in any tab, without waiting for an agent to register.
+/// A snooze list records tabs the user closed via toggle so hooks don't fight
+/// the user. Serialization uses an OS advisory lock (std File::try_lock) —
+/// the OS releases it if a process crashes, so no pid files, no stale-lock
+/// cleanup, no PID-recycling false positives.
 
 fn entrypoint() -> &'static str {
     #[cfg(windows)]
@@ -19,191 +20,160 @@ fn entrypoint() -> &'static str {
     }
 }
 
-/// Find a pi agent pane in the given tab (returns its pane_id for anchoring).
-fn find_pi_pane(client: &HerdrClient, tab_id: Option<&str>) -> Option<String> {
-    client
-        .list_panes()
-        .into_iter()
-        .find(|p| {
-            let is_tab = tab_id.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
-            if !is_tab {
-                return false;
-            }
-            if p.agent.as_deref() == Some("pi") {
-                return true;
-            }
-            if let Some(title) = &p.terminal_title {
-                if title.contains('π') || title.to_lowercase().contains("pi") {
-                    return true;
-                }
-            }
-            false
-        })
-        .map(|p| p.pane_id)
+fn launcher_lock_path() -> PathBuf {
+    pi_sidebar_snapshots_dir().join("launcher.lock")
 }
 
-/// Open the sidebar pane under a cross-process pid lock so concurrent
-/// events/watchers cannot open duplicate panes. Returns Ok(false) when
-/// another process won the lock.
-fn open_sidebar_exclusive(
-    client: &HerdrClient,
-    target_pane: Option<&str>,
-    tab_id: Option<&str>,
-) -> Result<bool, String> {
-    let lock_path = pi_sidebar_snapshots_dir().join("ensure.lock");
-    let my_pid = std::process::id();
+fn snooze_path() -> PathBuf {
+    pi_sidebar_snapshots_dir().join("snoozed-tabs.json")
+}
 
-    if let Ok(content) = fs::read_to_string(&lock_path) {
-        if let Ok(prev) = content.trim().parse::<u32>() {
-            if prev != my_pid && pid_alive(prev) {
-                return Ok(false); // another ensure is opening right now
-            }
+/// OS-backed launcher lock. `blocking` for discrete user actions (toggle),
+/// non-blocking try for bursty focus hooks (redundant invocations yield —
+/// the winner opens the pane and later events observe it).
+struct LaunchLock {
+    _file: File,
+}
+
+impl LaunchLock {
+    fn acquire(wait: bool) -> Option<Self> {
+        let path = launcher_lock_path();
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .ok()?;
+        let acquired = if wait {
+            file.lock().is_ok()
+        } else {
+            file.try_lock().is_ok()
+        };
+        acquired.then_some(Self { _file: file })
+    }
+}
+
+/// Tabs where the user explicitly closed the sidebar (via toggle). Hooks skip
+/// these until the user opens the sidebar again.
+pub fn snoozed_tabs() -> Vec<String> {
+    fs::read_to_string(snooze_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub fn set_snoozed(tab_id: &str, snoozed: bool) {
+    let mut tabs: Vec<String> = snoozed_tabs()
+        .into_iter()
+        .filter(|t| t != tab_id)
+        .collect();
+    if snoozed {
+        tabs.push(tab_id.to_string());
+    }
+    if let Some(parent) = snooze_path().parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string(&tabs) {
+        let _ = fs::write(snooze_path(), json);
+    }
+}
+
+/// Pick a pane in the event's tab to anchor the split against, preferring the
+/// pane that fired the event, then a pi agent pane, then any pane in the tab.
+/// Returns None when the tab has no panes yet — opening without an anchor
+/// lands in the currently active tab, so callers must wait for the next
+/// pane.focused event instead.
+fn anchor_pane(client: &HerdrClient, ctx: &PluginContext) -> Option<String> {
+    let panes = client.list_panes();
+    let in_tab = |p: &crate::shared::HerdrPaneInfo| {
+        ctx.tab_id
+            .as_deref()
+            .is_none_or(|tid| p.tab_id.as_deref() == Some(tid))
+    };
+
+    // 1. The pane the event fired for.
+    if let Some(pid) = ctx.pane_id.as_deref() {
+        if let Some(p) = panes.iter().find(|p| p.pane_id == pid && in_tab(p)) {
+            return Some(p.pane_id.clone());
         }
     }
-    let _ = fs::write(&lock_path, my_pid.to_string());
-
-    // Re-check under the lock: winner may have opened it since our last check.
-    // Scoped to the tab — a sidebar in another tab must not block this one.
-    if client.find_sidebar_pane(tab_id).is_some() {
-        let _ = fs::remove_file(&lock_path);
-        return Ok(false);
-    }
-
-    let res = client.open_plugin_pane(entrypoint(), target_pane);
-    let _ = fs::remove_file(&lock_path);
-    res.map(|_| true)
-}
-
-fn pid_alive(pid: u32) -> bool {
-    #[cfg(windows)]
+    // 2. A pi agent pane in the tab.
+    if let Some(p) = panes
+        .iter()
+        .find(|p| in_tab(p) && p.agent.as_deref() == Some("pi"))
     {
-        Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {}", pid)])
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
-            .unwrap_or(false)
+        return Some(p.pane_id.clone());
     }
-    #[cfg(not(windows))]
-    {
-        unsafe { libc::kill(pid as i32, 0) == 0 }
-    }
-}
-
-/// Spawn a detached watcher process that waits for the pi agent to appear
-/// in `tab_id`, then opens the sidebar pane. Used when `ensure` fires before
-/// the agent has registered (tab.created race) — the event won't re-fire.
-fn spawn_watcher(tab_id: &str) {
-    // One watcher per tab: lock file records the WATCHER's pid (written by
-    // the watcher itself at startup — the spawning parent exits immediately,
-    // so its pid would go stale right away).
-    let watch_lock = pi_sidebar_snapshots_dir().join(format!(
-        "ensure-watch-{}.lock",
-        crate::shared::sanitize_key(tab_id)
-    ));
-
-    let exe = match std::env::current_exe() {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    let mut cmd = Command::new(exe);
-    cmd.args(["ensure-watch", "--tab", tab_id, "--watch-lock"]);
-    cmd.arg(&watch_lock);
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        cmd.creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW);
-    }
-
-    // Fire and forget; failure is non-fatal (ensure still ran its inline check).
-    let _ = cmd.spawn();
+    // 3. Any pane in the tab.
+    panes
+        .iter()
+        .find(|p| in_tab(p))
+        .map(|p| p.pane_id.clone())
 }
 
 /// Event handler for tab.created / tab.focused / pane.focused /
-/// workspace.focused. Opens the sidebar if this tab hosts a pi agent and the
-/// sidebar is missing. If no agent is registered yet, spawns a detached
-/// watcher so the sidebar still appears once the agent starts (covers both
-/// new sessions and post-`/reload` restarts with a closed sidebar).
+/// workspace.focused / workspace.created. Idempotently opens the sidebar in
+/// the event's tab when it is missing and not snoozed by the user.
 pub fn run_ensure() -> Result<(), String> {
     let client = HerdrClient::new();
     let ctx = PluginContext::load();
-    let tab_id = ctx.tab_id.as_deref();
 
-    // 1. Sidebar already open in this tab — nothing to do.
-    if client.find_sidebar_pane(tab_id).is_some() {
+    if let Some(tid) = ctx.tab_id.as_deref() {
+        if snoozed_tabs().iter().any(|t| t == tid) {
+            return Ok(()); // user closed it here; respect that
+        }
+    }
+
+    // Anchor required: without a pane in this tab, `plugin pane open` would
+    // land in whatever tab is active right now. A later pane.focused event
+    // gives us another chance.
+    let Some(anchor) = anchor_pane(&client, &ctx) else {
+        return Ok(());
+    };
+
+    // Non-blocking: concurrent focus events bail; the winner opens.
+    let Some(_lock) = LaunchLock::acquire(false) else {
+        return Ok(());
+    };
+
+    // Re-check under the lock.
+    if client.find_sidebar_pane(ctx.tab_id.as_deref()).is_some() {
         return Ok(());
     }
 
-    // 2. Agent present right now → open immediately (anchored to its pane).
-    if let Some(pi_pane) = find_pi_pane(&client, tab_id) {
-        open_sidebar_exclusive(&client, Some(&pi_pane), tab_id)?;
-        return Ok(());
-    }
-
-    // 3. No agent yet → likely a tab.created race (agent starts moments
-    //    later) or a fresh session. Spawn detached watcher to open the
-    //    sidebar as soon as the pi agent registers.
-    if let Some(tid) = ctx.tab_id.clone() {
-        spawn_watcher(&tid);
-    }
-
+    client.open_plugin_pane(entrypoint(), Some(&anchor))?;
     Ok(())
 }
 
-/// Detached watcher loop: poll until a pi agent appears in `tab_id`, then
-/// open the sidebar if it is still missing. Exits on success, timeout, or
-/// once the sidebar exists.
-pub fn run_ensure_watch(tab_id: &str, watch_lock: Option<&std::path::Path>) -> Result<(), String> {
+/// Toggle action: open-or-close like the ensure path, but records user intent
+/// (snooze) so hooks don't reopen the sidebar behind the user's back.
+pub fn run_toggle() -> Result<(), String> {
     let client = HerdrClient::new();
-    let deadline = Instant::now() + WATCH_TIMEOUT;
+    let ctx = PluginContext::load();
 
-    // Claim the lock with our own pid; bail out if a live watcher exists.
-    if let Some(lock_path) = watch_lock {
-        let my_pid = std::process::id();
-        if let Ok(content) = fs::read_to_string(lock_path) {
-            if let Ok(prev) = content.trim().parse::<u32>() {
-                if prev != my_pid && pid_alive(prev) {
-                    return Ok(()); // another watcher already running
-                }
-            }
+    // Blocking lock: a discrete user action should wait out a concurrent hook.
+    let _lock = LaunchLock::acquire(true)
+        .ok_or_else(|| "could not acquire launcher lock".to_string())?;
+
+    if let Some(existing) = client.find_sidebar_pane(ctx.tab_id.as_deref()) {
+        client.close_pane(&existing.pane_id)?;
+        if let Some(tid) = ctx.tab_id.as_deref() {
+            set_snoozed(tid, true);
         }
-        let _ = fs::write(lock_path, my_pid.to_string());
+        client.notify("Pi Herdr Sidebar", "Sidebar closed.");
+        return Ok(());
     }
 
-    let _guard = watch_lock.map(|p| WatchLockGuard {
-        path: p.to_path_buf(),
-    });
-
-    loop {
-        // Sidebar opened meanwhile (by another ensure/watcher) → done.
-        if client.find_sidebar_pane(Some(tab_id)).is_some() {
-            return Ok(());
-        }
-
-        if let Some(pi_pane) = find_pi_pane(&client, Some(tab_id)) {
-            if client.find_sidebar_pane(Some(tab_id)).is_none() {
-                open_sidebar_exclusive(&client, Some(&pi_pane), Some(tab_id))?;
-            }
-            return Ok(());
-        }
-
-        if Instant::now() >= deadline {
-            return Ok(());
-        }
-
-        std::thread::sleep(WATCH_POLL);
+    let anchor = anchor_pane(&client, &ctx)
+        .ok_or_else(|| "no pane to anchor the sidebar to in this tab".to_string())?;
+    client.open_plugin_pane(entrypoint(), Some(&anchor))?;
+    if let Some(tid) = ctx.tab_id.as_deref() {
+        set_snoozed(tid, false);
     }
-}
-
-/// Removes the watcher lock file on exit so future events can spawn again.
-struct WatchLockGuard {
-    path: std::path::PathBuf,
-}
-
-impl Drop for WatchLockGuard {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
+    client.notify("Pi Herdr Sidebar", "Sidebar opened.");
+    Ok(())
 }

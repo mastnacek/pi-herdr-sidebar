@@ -51,25 +51,6 @@ fn main() -> io::Result<()> {
                 eprintln!("Error ensuring sidebar: {}", e);
             }
         }
-        "ensure-watch" => {
-            // Detached watcher: --tab <tab_id> [--watch-lock <path>]
-            let get = |flag: &str| {
-                args.iter()
-                    .position(|a| a == flag)
-                    .and_then(|i| args.get(i + 1))
-                    .cloned()
-            };
-            let tab_id = get("--tab");
-            let watch_lock = get("--watch-lock").map(std::path::PathBuf::from);
-            match tab_id {
-                Some(tid) => {
-                    if let Err(e) = slices::actions::run_ensure_watch(&tid, watch_lock.as_deref()) {
-                        eprintln!("Error in ensure-watch: {}", e);
-                    }
-                }
-                None => eprintln!("ensure-watch requires --tab <tab_id>"),
-            }
-        }
         _ => {
             // Default to view
             slices::view::run_view(ViewMode::Pane, None)?;
