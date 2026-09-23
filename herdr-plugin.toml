@@ -1,0 +1,123 @@
+id = "pi.sidebar"
+name = "Pi Sidebar"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Herdr telemetry and skills sidebar for Pi coding agent with Ratatui TUI"
+platforms = ["linux", "macos", "windows"]
+
+[[build]]
+command = ["cargo", "build", "--release"]
+
+[[panes]]
+id = "sidebar"
+title = "Pi Sidebar"
+placement = "split"
+command = ["target/release/pi_sidebar", "view"]
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "sidebar-win"
+title = "Pi Sidebar"
+placement = "split"
+command = ["target/release/pi_sidebar.exe", "view"]
+platforms = ["windows"]
+
+[[panes]]
+id = "sidebar-popup"
+title = "Pi Sidebar Popup"
+placement = "popup"
+width = "80%"
+height = 24
+command = ["target/release/pi_sidebar", "popup"]
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "sidebar-popup-win"
+title = "Pi Sidebar Popup"
+placement = "popup"
+width = "80%"
+height = 24
+command = ["target/release/pi_sidebar.exe", "popup"]
+platforms = ["windows"]
+
+[[actions]]
+id = "toggle"
+title = "Toggle Pi Sidebar"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "toggle"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "toggle-win"
+title = "Toggle Pi Sidebar"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "toggle"]
+platforms = ["windows"]
+
+[[actions]]
+id = "popup"
+title = "Open Pi Sidebar Popup"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "popup-action"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "popup-win"
+title = "Open Pi Sidebar Popup"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "popup-action"]
+platforms = ["windows"]
+
+[[actions]]
+id = "switch-tab"
+title = "Switch Sidebar Tab"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "switch-tab"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "switch-tab-win"
+title = "Switch Sidebar Tab"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "switch-tab"]
+platforms = ["windows"]
+
+[[events]]
+on = "tab.focused"
+platforms = ["linux", "macos"]
+command = ["target/release/pi_sidebar", "ensure"]
+
+[[events]]
+on = "tab.focused"
+platforms = ["windows"]
+command = ["target/release/pi_sidebar.exe", "ensure"]
+
+[[events]]
+on = "workspace.focused"
+platforms = ["linux", "macos"]
+command = ["target/release/pi_sidebar", "ensure"]
+
+[[events]]
+on = "workspace.focused"
+platforms = ["windows"]
+command = ["target/release/pi_sidebar.exe", "ensure"]
+
+[[events]]
+on = "tab.created"
+platforms = ["linux", "macos"]
+command = ["target/release/pi_sidebar", "ensure"]
+
+[[events]]
+on = "tab.created"
+platforms = ["windows"]
+command = ["target/release/pi_sidebar.exe", "ensure"]
+
+[[events]]
+on = "pane.focused"
+platforms = ["linux", "macos"]
+command = ["target/release/pi_sidebar", "ensure"]
+
+[[events]]
+on = "pane.focused"
+platforms = ["windows"]
+command = ["target/release/pi_sidebar.exe", "ensure"]
