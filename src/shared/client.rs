@@ -73,9 +73,11 @@ impl HerdrClient {
     }
 
     pub fn list_panes(&self) -> Vec<HerdrPaneInfo> {
+        // herdr 0.9.x: `pane list` emits JSON by default and rejects `--json`.
+        // Appending the legacy flag made the CLI fail and this return an empty
+        // list, which silently disabled ensure/watcher pane discovery.
         let mut cmd = Command::new(&self.bin_path);
         cmd.args(["pane", "list"]);
-
         let output = match cmd.output() {
             Ok(o) if o.status.success() => o.stdout,
             _ => return Vec::new(),
@@ -98,7 +100,9 @@ impl HerdrClient {
             let is_sidebar = label.eq_ignore_ascii_case("pi-sidebar")
                 || label.eq_ignore_ascii_case("Pi Sidebar")
                 || label.eq_ignore_ascii_case("pi-herdr-sidebar")
-                || label.eq_ignore_ascii_case("Pi Herdr Sidebar");
+                || label.eq_ignore_ascii_case("Pi Herdr Sidebar")
+                // herdr 0.9.x labels plugin panes plainly "Sidebar".
+                || label.eq_ignore_ascii_case("sidebar");
             if let Some(tid) = tab_id {
                 is_sidebar && p.tab_id.as_deref() == Some(tid)
             } else {
@@ -107,7 +111,11 @@ impl HerdrClient {
         })
     }
 
-    pub fn open_plugin_pane(&self, entrypoint: &str, target_pane: Option<&str>) -> Result<(), String> {
+    pub fn open_plugin_pane(
+        &self,
+        entrypoint: &str,
+        target_pane: Option<&str>,
+    ) -> Result<(), String> {
         let mut cmd = Command::new(&self.bin_path);
         cmd.args([
             "plugin",

@@ -21,27 +21,35 @@ fn entrypoint() -> &'static str {
 
 /// Find a pi agent pane in the given tab (returns its pane_id for anchoring).
 fn find_pi_pane(client: &HerdrClient, tab_id: Option<&str>) -> Option<String> {
-    client.list_panes().into_iter().find(|p| {
-        let is_tab = tab_id.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
-        if !is_tab {
-            return false;
-        }
-        if p.agent.as_deref() == Some("pi") {
-            return true;
-        }
-        if let Some(title) = &p.terminal_title {
-            if title.contains('π') || title.to_lowercase().contains("pi") {
+    client
+        .list_panes()
+        .into_iter()
+        .find(|p| {
+            let is_tab = tab_id.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
+            if !is_tab {
+                return false;
+            }
+            if p.agent.as_deref() == Some("pi") {
                 return true;
             }
-        }
-        false
-    }).map(|p| p.pane_id)
+            if let Some(title) = &p.terminal_title {
+                if title.contains('π') || title.to_lowercase().contains("pi") {
+                    return true;
+                }
+            }
+            false
+        })
+        .map(|p| p.pane_id)
 }
 
 /// Open the sidebar pane under a cross-process pid lock so concurrent
 /// events/watchers cannot open duplicate panes. Returns Ok(false) when
 /// another process won the lock.
-fn open_sidebar_exclusive(client: &HerdrClient, target_pane: Option<&str>) -> Result<bool, String> {
+fn open_sidebar_exclusive(
+    client: &HerdrClient,
+    target_pane: Option<&str>,
+    tab_id: Option<&str>,
+) -> Result<bool, String> {
     let lock_path = pi_sidebar_snapshots_dir().join("ensure.lock");
     let my_pid = std::process::id();
 
@@ -55,7 +63,8 @@ fn open_sidebar_exclusive(client: &HerdrClient, target_pane: Option<&str>) -> Re
     let _ = fs::write(&lock_path, my_pid.to_string());
 
     // Re-check under the lock: winner may have opened it since our last check.
-    if client.find_sidebar_pane(None).is_some() {
+    // Scoped to the tab — a sidebar in another tab must not block this one.
+    if client.find_sidebar_pane(tab_id).is_some() {
         let _ = fs::remove_file(&lock_path);
         return Ok(false);
     }
@@ -129,7 +138,7 @@ pub fn run_ensure() -> Result<(), String> {
 
     // 2. Agent present right now → open immediately (anchored to its pane).
     if let Some(pi_pane) = find_pi_pane(&client, tab_id) {
-        open_sidebar_exclusive(&client, Some(&pi_pane))?;
+        open_sidebar_exclusive(&client, Some(&pi_pane), tab_id)?;
         return Ok(());
     }
 
@@ -175,7 +184,7 @@ pub fn run_ensure_watch(tab_id: &str, watch_lock: Option<&std::path::Path>) -> R
 
         if let Some(pi_pane) = find_pi_pane(&client, Some(tab_id)) {
             if client.find_sidebar_pane(Some(tab_id)).is_none() {
-                open_sidebar_exclusive(&client, Some(&pi_pane))?;
+                open_sidebar_exclusive(&client, Some(&pi_pane), Some(tab_id))?;
             }
             return Ok(());
         }

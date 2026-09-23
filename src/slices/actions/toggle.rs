@@ -24,12 +24,12 @@ pub fn run_toggle() -> Result<(), String> {
             let is_tab = ctx
                 .tab_id
                 .as_deref()
-                .map_or(true, |tid| p.tab_id.as_deref() == Some(tid));
+                .is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
             is_tab
                 && (p.agent.as_deref() == Some("pi")
                     || p.terminal_title
                         .as_deref()
-                        .map_or(false, |t| t.contains('π') || t.to_lowercase().contains("pi")))
+                        .is_some_and(|t| t.contains('π') || t.to_lowercase().contains("pi")))
         })
         .map(|p| p.pane_id);
     client.open_plugin_pane(entrypoint, target.as_deref())?;
