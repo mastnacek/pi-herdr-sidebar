@@ -268,6 +268,8 @@ pub fn find_newest_session(cwd: Option<&str>) -> Option<PathBuf> {
         }
     }
 
+    // Cross-project scan below: only use where a wrong-session display is
+    // acceptable (interactive pickers), never for tab-scoped sidebars.
     let mut best: Option<(PathBuf, SystemTime)> = None;
     for dir in fs::read_dir(&base).ok()?.flatten() {
         if dir.path().is_dir() {
@@ -285,6 +287,17 @@ pub fn find_newest_session(cwd: Option<&str>) -> Option<PathBuf> {
         }
     }
     best.map(|(p, _)| p)
+}
+
+/// Newest session JSONL strictly inside the cwd-scoped project folder —
+/// never scans across projects. Use when displaying tab-scoped telemetry:
+/// with multiple agents in a monorepo the cross-project "newest anywhere"
+/// pick can be another agent's session.
+pub fn find_newest_session_scoped(cwd: Option<&str>) -> Option<PathBuf> {
+    let cwd = cwd?;
+    let base = crate::shared::dirs_home()?.join(".pi").join("agent").join("sessions");
+    let slug = session_dir_slug(cwd);
+    newest_session_in(&base.join(&slug), "")
 }
 
 /// Load live telemetry for a Pi pane (session id + cwd from `herdr pane list`).

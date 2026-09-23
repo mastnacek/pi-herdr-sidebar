@@ -1,5 +1,5 @@
 use crate::shared::{
-    find_active_snapshot, snapshot_path_for_pane, HerdrClient, HerdrPaneInfo, PaneSnapshot,
+    snapshot_path_for_pane, HerdrClient, HerdrPaneInfo, PaneSnapshot,
     PluginContext,
 };
 use std::path::PathBuf;
@@ -207,16 +207,33 @@ impl SidebarState {
             let current_tab = self.target_tab_id.as_deref();
             let own_pane = self.own_pane_id.as_deref().unwrap_or("");
 
-            // Find Pi agent in the SAME tab
-            let found_pane = self.panes.iter().find(|p| {
-                let same_tab = current_tab.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
-                let not_self = p.pane_id.as_str() != own_pane;
-                let is_pi = p.agent.as_deref() == Some("pi")
-                    || p.terminal_title
-                        .as_deref()
-                        .is_some_and(|t| t.contains('π') || t.to_lowercase().contains("pi"));
-                same_tab && not_self && is_pi
-            });
+            // Find Pi agent in the SAME tab. Strict detection: the herdr
+            // agent field or the distinctive 'π' glyph pi stamps in its
+            // title. A plain "pi" substring also matched unrelated titles
+            // ("...api...", shell panes whose title shows a ".../pi/..."
+            // project path) and bound the sidebar to a foreign pane — with
+            // multiple agents in a monorepo that displayed the wrong
+            // session.
+            let found_pane = self
+                .panes
+                .iter()
+                .filter(|p| {
+                    let same_tab = current_tab.is_none_or(|tid| p.tab_id.as_deref() == Some(tid));
+                    let not_self = p.pane_id.as_str() != own_pane;
+                    let is_pi = p.agent.as_deref() == Some("pi")
+                        || p.terminal_title_stripped
+                            .as_deref()
+                            .is_some_and(|t| t.contains('π'))
+                        || p.terminal_title
+                            .as_deref()
+                            .is_some_and(|t| t.contains('π'));
+                    same_tab && not_self && is_pi
+                })
+                // Multiple agents can share a tab: prefer the focused pane,
+                // then agent-reported panes.
+                .max_by_key(|p| {
+                    (p.focused.unwrap_or(false), p.agent.as_deref() == Some("pi"))
+                });
 
             if let Some(pi_pane) = found_pane {
                 self.target_pane_id = Some(pi_pane.pane_id.clone());
@@ -229,16 +246,15 @@ impl SidebarState {
                     pi_pane.pane_id
                 );
             } else {
-                // If no Pi agent in this specific tab, check if a global Pi snapshot exists
-                if self.snapshot_path.is_none() || force {
-                    if let Some(fallback) = find_active_snapshot(None) {
-                        self.snapshot_path = Some(fallback);
-                        self.refresh_status = "Auto-fallback (global)".to_string();
-                    } else {
-                        self.refresh_status =
-                            format!("Tab: {} (No Pi session)", current_tab.unwrap_or("?"));
-                    }
-                }
+                // No Pi agent in this tab. Never fall back to a global
+                // snapshot: with multiple agents running in a monorepo the
+                // newest snapshot across all tabs is another agent's
+                // session. Show the waiting state until an agent registers
+                // here.
+                self.target_pane_id = None;
+                self.snapshot_path = None;
+                self.refresh_status =
+                    format!("Tab: {} (No Pi session)", current_tab.unwrap_or("?"));
             }
         }
 
@@ -379,7 +395,11 @@ impl SidebarState {
                 .or_else(|| crate::slices::telemetry::find_newest_session(pane_cwd.as_deref()));
             self.load_live_from(file, &session_id, force);
         } else {
-            let file = crate::slices::telemetry::find_newest_session(pane_cwd.as_deref());
+            // No herdr-reported session id: scope strictly to the bound
+            // pane's project folder. The old cross-project "newest anywhere"
+            // scan displayed another agent's session when multiple agents
+            // run in a monorepo.
+            let file = crate::slices::telemetry::find_newest_session_scoped(pane_cwd.as_deref());
             self.load_live_from(file, "", force);
         }
     }

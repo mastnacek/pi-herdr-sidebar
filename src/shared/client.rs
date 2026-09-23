@@ -13,6 +13,8 @@ pub struct HerdrPaneInfo {
     pub focused: Option<bool>,
     pub agent: Option<String>,
     pub terminal_title: Option<String>,
+    #[serde(rename = "terminal_title_stripped")]
+    pub terminal_title_stripped: Option<String>,
     #[serde(rename = "agentSession")]
     pub agent_session: Option<serde_json::Value>,
 }
