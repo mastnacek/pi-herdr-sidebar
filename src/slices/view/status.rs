@@ -110,6 +110,49 @@ pub fn render_live_status(
                 ]));
             }
         }
+
+        // 1c. Monorepo mode: nested repos discovered from session edit trail
+        if !git.touched_repos.is_empty() {
+            lines.push(Line::raw(""));
+            lines.push(Line::from(vec![Span::styled(
+                "📦 Změněné repozitáře:",
+                Style::default().fg(Color::Cyan).bold(),
+            )]));
+            for repo in git.touched_repos.iter().take(3) {
+                let edited_tag = if repo.touched_files > 0 {
+                    format!(" ●{}", repo.touched_files)
+                } else {
+                    String::new()
+                };
+                lines.push(Line::from(vec![
+                    Span::styled("   ", Style::default()),
+                    Span::styled(
+                        &repo.name,
+                        Style::default().fg(Color::White).bold(),
+                    ),
+                    Span::styled(edited_tag, Style::default().fg(Color::Yellow)),
+                ]));
+                for c in repo.recent_commits.iter().take(2) {
+                    lines.push(Line::from(vec![
+                        Span::styled("      ", Style::default()),
+                        Span::styled(&c.hash, Style::default().fg(Color::Magenta)),
+                        Span::styled(
+                            format!(" ({}) ", c.age),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            if c.message.chars().count() > 30 {
+                                let s: String = c.message.chars().take(28).collect();
+                                format!("{}…", s)
+                            } else {
+                                c.message.clone()
+                            },
+                            Style::default().fg(Color::Gray),
+                        ),
+                    ]));
+                }
+            }
+        }
     }
     lines.push(Line::raw(""));
 

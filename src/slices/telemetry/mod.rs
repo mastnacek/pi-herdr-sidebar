@@ -35,6 +35,22 @@ pub struct GitTelemetry {
     pub unstaged: u32,
     pub untracked: u32,
     pub recent_commits: Vec<GitCommitLog>,
+    /// Repositories discovered from session edit trail (monorepo mode).
+    /// Empty when cwd itself is a repo or no edits yet.
+    pub touched_repos: Vec<RepoTelemetry>,
+}
+
+/// A nested git repository discovered via the session edit trail.
+#[derive(Debug, Clone, Default)]
+pub struct RepoTelemetry {
+    /// Repo root directory name (e.g. "pi-eval-harness").
+    pub name: String,
+    /// Full path to repo root.
+    pub root: PathBuf,
+    /// Number of session-edited files inside this repo.
+    pub touched_files: u32,
+    /// Recent commits (last 2).
+    pub recent_commits: Vec<GitCommitLog>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -285,6 +301,15 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                     t.git_branch = git.branch.clone();
                     t.git_dirty = git.staged + git.unstaged + git.untracked;
                     t.git = Some(git);
+                }
+                // Monorepo mode: cwd itself not a repo → discover nested repos
+                // from the session edit trail (edit/write tool call paths).
+                let cwd_is_repo = t.git.is_some();
+                if !cwd_is_repo {
+                    t.git = Some(git_live::build_monorepo_telemetry(
+                        Path::new(&cwd),
+                        &content,
+                    ));
                 }
             }
         }
