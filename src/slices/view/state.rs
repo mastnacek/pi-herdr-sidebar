@@ -205,7 +205,7 @@ impl SidebarState {
             .find(|p| self.target_pane_id.as_deref() == Some(p.pane_id.as_str()))
             .and_then(|p| p.cwd.as_deref())
             .map(Path::new);
-        self.openrouter_credits = refresh_openrouter(self.live.as_ref(), pane_cwd, force);
+        self.openrouter_credits = refresh_openrouter(pane_cwd, force);
 
         self.refresh_weather(force);
 
