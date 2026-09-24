@@ -12,17 +12,27 @@ use crate::slices::view::state::SidebarState;
 
 fn credit_color(remaining: f64) -> Color {
     if remaining > 10.0 {
-        Color::Rgb(95, 200, 140) // Mint green (> $10)
+        Color::Rgb(95, 200, 140)
     } else if remaining > 2.0 {
-        Color::Rgb(230, 200, 90) // Amber / yellow ($2 - $10)
+        Color::Rgb(230, 200, 90)
     } else {
-        Color::Rgb(241, 108, 117) // Coral red (< $2)
+        Color::Rgb(241, 108, 117)
     }
 }
 
-/// Computes the required height for the shared model banner.
 pub fn shared_banner_height(state: &SidebarState) -> u16 {
-    let base_lines = 4; // Model identity, Turn/Activity, Context bar, Token/Cost
+    let mut base_lines = 4;
+    if let Some(l) = &state.live {
+        let prompt = l.input_tokens + l.cache_read + l.cache_write;
+        if prompt > 0 && l.cache_read > 0 {
+            base_lines += 1;
+        }
+    }
+    if let Some(q) = &state.quota {
+        if q.antigravity.is_some() {
+            base_lines += 1;
+        }
+    }
     let or_lines = if let Some(or) = &state.openrouter_credits {
         if or.accounts.is_empty() {
             0
@@ -34,16 +44,12 @@ pub fn shared_banner_height(state: &SidebarState) -> u16 {
     } else {
         0
     };
-    // 2 for borders (top + bottom) + content lines
     (base_lines + or_lines + 2) as u16
 }
 
-/// Renders the shared model/cost/context/credits banner in the status tab's vivid color style.
-pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &SidebarState) {
-    let mut lines: Vec<Line> = Vec::new();
+fn build_model_and_turns_lines(state: &SidebarState) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
     let live = state.live.as_ref();
-
-    // 1. Model & Engine Identity line
     let spinner = spinner_char(state.anim_tick);
     let is_working = live.map(|l| l.is_working).unwrap_or(false);
     let status_icon = if is_working {
@@ -72,7 +78,10 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
 
     let mut model_line = vec![
         status_icon,
-        Span::styled(format!("({}) ", provider), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("({}) ", provider),
+            Style::default().fg(Color::DarkGray),
+        ),
         Span::styled(model_id, Style::default().fg(Color::Green).bold()),
     ];
 
@@ -87,13 +96,18 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
     }
     lines.push(Line::from(model_line));
 
-    // 2. Turns & Tool Activity summary
     if let Some(l) = live {
         lines.push(Line::from(vec![
             Span::styled("  ⚡ ", Style::default().fg(Color::Yellow)),
-            Span::styled(format!("{} tahů", l.turns_count), Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{} tahů", l.turns_count),
+                Style::default().fg(Color::White),
+            ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{} nástrojů", l.tool_calls_count), Style::default().fg(Color::Cyan)),
+            Span::styled(
+                format!("{} nástrojů", l.tool_calls_count),
+                Style::default().fg(Color::Cyan),
+            ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
             if l.tool_errors_count > 0 {
                 Span::styled(
@@ -110,8 +124,12 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
             Span::styled("čekám na aktivitu…", Style::default().fg(Color::DarkGray)),
         ]));
     }
+    lines
+}
 
-    // 3. Context Window Usage bar
+fn build_context_and_cost_lines(state: &SidebarState) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let live = state.live.as_ref();
     let ctx_tokens = live.map(|l| l.context_tokens).unwrap_or(0);
     let ctx_window = live.map(|l| l.context_window).unwrap_or(0);
     let ctx_pct = live.and_then(|l| l.context_percent).unwrap_or(0.0);
@@ -136,14 +154,16 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
             ),
             Style::default().fg(pct_color),
         ),
-        Span::styled(format!(" {:.1}%", ctx_pct), Style::default().fg(pct_color).bold()),
+        Span::styled(
+            format!(" {:.1}%", ctx_pct),
+            Style::default().fg(pct_color).bold(),
+        ),
         Span::styled(
             format!(" ({}/{})", fmt_tokens(ctx_tokens), fmt_tokens(ctx_window)),
             Style::default().fg(Color::DarkGray),
         ),
     ]));
 
-    // 4. Token & Cost Telemetry
     if let Some(l) = live {
         lines.push(Line::from(vec![
             Span::styled(
@@ -151,17 +171,15 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
                 Style::default().fg(Color::Yellow).bold(),
             ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("⬆️ {}", fmt_tokens(l.input_tokens)), Style::default().fg(Color::Cyan)),
+            Span::styled(
+                format!("⬆️ {}", fmt_tokens(l.input_tokens)),
+                Style::default().fg(Color::Cyan),
+            ),
             Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("⬇️ {}", fmt_tokens(l.output_tokens)), Style::default().fg(Color::Green)),
-            if l.cache_read > 0 {
-                Span::styled(
-                    format!(" │ 📦 {}", fmt_tokens(l.cache_read)),
-                    Style::default().fg(Color::Gray),
-                )
-            } else {
-                Span::raw("")
-            },
+            Span::styled(
+                format!("⬇️ {}", fmt_tokens(l.output_tokens)),
+                Style::default().fg(Color::Green),
+            ),
             if l.reasoning_tokens > 0 {
                 Span::styled(
                     format!(" │ 🧠 {}", fmt_tokens(l.reasoning_tokens)),
@@ -171,13 +189,88 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
                 Span::raw("")
             },
         ]));
+
+        let prompt = l.input_tokens + l.cache_read + l.cache_write;
+        if prompt > 0 && l.cache_read > 0 {
+            let hit_pct = (l.cache_read as f64 / prompt as f64) * 100.0;
+            lines.push(Line::from(vec![
+                Span::styled("📦 Mezipaměť: ", Style::default().fg(Color::Cyan).bold()),
+                Span::styled(
+                    format!("čtení: {} ", fmt_tokens(l.cache_read)),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!("zápis: {} ", fmt_tokens(l.cache_write)),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!("(🎯 úspora {:.0}%)", hit_pct),
+                    Style::default().fg(Color::Green).bold(),
+                ),
+            ]));
+        }
     } else {
-        lines.push(Line::from(vec![
-            Span::styled("💰 $0.00", Style::default().fg(Color::DarkGray)),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "💰 $0.00",
+            Style::default().fg(Color::DarkGray),
+        )]));
+    }
+    lines
+}
+
+fn build_quota_and_credits_lines(state: &SidebarState) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    if let Some(anti) = state.quota.as_ref().and_then(|q| q.antigravity.as_ref()) {
+        let col_lavender = Color::Rgb(170, 160, 220);
+        let col_dim = Color::Rgb(120, 124, 140);
+        let cap_col = |p: u32| {
+            if p > 35 {
+                Color::Rgb(95, 200, 140)
+            } else if p > 15 {
+                Color::Rgb(230, 200, 90)
+            } else {
+                Color::Rgb(241, 108, 117)
+            }
+        };
+
+        let mut spans = vec![Span::styled(
+            "🪐 Antigravity: ",
+            Style::default().fg(Color::Rgb(95, 200, 230)).bold(),
+        )];
+        let mut added = false;
+        if let Some(pct5) = anti.five_hour_pct {
+            spans.push(Span::styled("5h ", Style::default().fg(col_lavender)));
+            spans.push(Span::styled(
+                format!("{}%", pct5),
+                Style::default().fg(cap_col(pct5)).bold(),
+            ));
+            if let Some(t5) = &anti.five_hour_time {
+                spans.push(Span::styled(
+                    format!(" ({})", t5),
+                    Style::default().fg(col_dim),
+                ));
+            }
+            added = true;
+        }
+        if let Some(pct_wk) = anti.weekly_pct {
+            if added {
+                spans.push(Span::styled(" · ", Style::default().fg(col_dim)));
+            }
+            spans.push(Span::styled("Wk ", Style::default().fg(col_lavender)));
+            spans.push(Span::styled(
+                format!("{}%", pct_wk),
+                Style::default().fg(cap_col(pct_wk)).bold(),
+            ));
+            if let Some(tw) = &anti.weekly_time {
+                spans.push(Span::styled(
+                    format!(" ({})", tw),
+                    Style::default().fg(col_dim),
+                ));
+            }
+        }
+        lines.push(Line::from(spans));
     }
 
-    // 5. OpenRouter credits (if any OpenRouter accounts configured)
     if let Some(or) = &state.openrouter_credits {
         if or.accounts.len() == 1 {
             let acc = &or.accounts[0];
@@ -189,31 +282,49 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
                     Style::default().fg(col).bold(),
                 ),
                 Span::styled(
-                    format!(" (vyčerpáno ${:.2} / ${:.2})", acc.total_usage, acc.total_credits),
+                    format!(
+                        " (vyčerpáno ${:.2} / ${:.2})",
+                        acc.total_usage, acc.total_credits
+                    ),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
         } else if or.accounts.len() > 1 {
-            lines.push(Line::from(vec![
-                Span::styled("💳 Kredity OpenRouter:", Style::default().fg(Color::Yellow).bold()),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "💳 Kredity OpenRouter:",
+                Style::default().fg(Color::Yellow).bold(),
+            )]));
             for acc in &or.accounts {
                 let col = credit_color(acc.remaining_credits);
                 lines.push(Line::from(vec![
                     Span::styled("   ● ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(format!("{}: ", acc.label), Style::default().fg(Color::White).bold()),
+                    Span::styled(
+                        format!("{}: ", acc.label),
+                        Style::default().fg(Color::White).bold(),
+                    ),
                     Span::styled(
                         format!("${:.2} zbývá ", acc.remaining_credits),
                         Style::default().fg(col).bold(),
                     ),
                     Span::styled(
-                        format!("(vyčerpáno ${:.2} / ${:.2})", acc.total_usage, acc.total_credits),
+                        format!(
+                            "(vyčerpáno ${:.2} / ${:.2})",
+                            acc.total_usage, acc.total_credits
+                        ),
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]));
             }
         }
     }
+    lines
+}
+
+pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &SidebarState) {
+    let mut lines = Vec::new();
+    lines.extend(build_model_and_turns_lines(state));
+    lines.extend(build_context_and_cost_lines(state));
+    lines.extend(build_quota_and_credits_lines(state));
 
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
