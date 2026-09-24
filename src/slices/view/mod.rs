@@ -1,8 +1,20 @@
+pub mod mcp;
+pub mod openrouter_ui;
+pub mod skills;
+pub mod spai_ui;
 pub mod state;
+pub mod state_model;
+pub mod state_refresh;
+pub mod state_resolver;
+pub mod status;
 pub mod ui;
+pub mod weather_ui;
+pub mod zen;
 
 use crate::shared::{PidLock, TerminalGuard};
-use crossterm::event::{self, Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{
+    self, Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
+};
 use state::{SidebarState, Tab};
 use std::io;
 use std::path::PathBuf;
@@ -38,38 +50,18 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
         if event::poll(tick_rate)? {
             match event::read()? {
                 Event::Key(key) => {
+                    // Windows terminals emit Press AND Release events; react to
+                    // presses only, otherwise 'w' cycles two locations per keystroke.
+                    if key.kind != KeyEventKind::Press {
+                        continue;
+                    }
                     // Quit on q or Esc, or Ctrl+c
-                    if (key.code == KeyCode::Esc && !state.weather_popup)
-                        || key.code == KeyCode::Char('q')
+                    if key.code == KeyCode::Char('q')
+                        || key.code == KeyCode::Esc
                         || (key.modifiers.contains(KeyModifiers::CONTROL)
                             && key.code == KeyCode::Char('c'))
                     {
                         break;
-                    }
-
-                    // Weather popup captures Up/Down/Enter/Esc/j/k when open
-                    if state.weather_popup {
-                        match key.code {
-                            KeyCode::Up | KeyCode::Char('k') => {
-                                state.weather_popup_cursor =
-                                    state.weather_popup_cursor.saturating_sub(1).min(
-                                        crate::slices::telemetry::weather_live::LOCATIONS.len() - 1,
-                                    );
-                            }
-                            KeyCode::Down | KeyCode::Char('j') => {
-                                state.weather_popup_cursor = (state.weather_popup_cursor + 1).min(
-                                    crate::slices::telemetry::weather_live::LOCATIONS.len() - 1,
-                                );
-                            }
-                            KeyCode::Enter => {
-                                let idx = state.weather_popup_cursor;
-                                state.select_weather_location(idx);
-                                state.weather_popup = false;
-                            }
-                            KeyCode::Esc => state.weather_popup = false,
-                            _ => {}
-                        }
-                        continue;
                     }
 
                     match key.code {
@@ -88,9 +80,22 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         KeyCode::Home => state.scroll = 0,
                         KeyCode::Char('r') => state.trigger_manual_refresh(),
                         KeyCode::Char('w') => {
-                            // Weather location popup toggle
-                            state.weather_popup = !state.weather_popup;
-                            state.weather_popup_cursor = state.weather_location_index;
+                            // Rotate to next weather location and refetch
+                            state.cycle_weather_location();
+                        }
+                        KeyCode::Char('c') => {
+                            // Copy full forecast (all locations × all days) to clipboard
+                            let report =
+                                crate::slices::telemetry::weather_live::collect_all_locations_report();
+                            let ok =
+                                crate::slices::telemetry::weather_live::copy_to_clipboard(&report);
+                            state.refresh_status = if ok {
+                                "📋 Předpověď zkopírována do schránky".to_string()
+                            } else {
+                                "Schránka není dostupná".to_string()
+                            };
+                            state.refresh_timer = 8;
+                            state.refresh_progress = 0.0;
                         }
                         _ => {}
                     }
