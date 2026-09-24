@@ -671,6 +671,246 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Span::styled(mcp_text, Style::default().fg(mcp_color)),
     ]));
 
+    // 4. Sliding Quota Indicators (Antigravity upstream quota + Session sliding tokens)
+    lines.push(Line::raw(""));
+
+    // Exact parity with statusline: "🪐 Antigravity: 5h 34% (2h 28m) · Wk 48% (5d 21h)"
+    if let Some(q) = &state.quota {
+        if let Some(anti) = &q.antigravity {
+            let col_cyan = Color::Rgb(95, 200, 230); // Soft cyan
+            let col_lavender = Color::Rgb(170, 160, 220); // Lavender labels
+            let col_dim = Color::Rgb(120, 124, 140); // Dim for timers and dots
+
+            let get_capacity_color = |pct: u32| -> Color {
+                if pct > 35 {
+                    Color::Rgb(95, 200, 140) // Mint green (>35%)
+                } else if pct > 15 {
+                    Color::Rgb(230, 200, 90) // Warning amber/yellow (15%-35%)
+                } else {
+                    Color::Rgb(241, 108, 117) // Coral red (<15%)
+                }
+            };
+
+            let mut anti_spans = vec![Span::styled(
+                "🪐 Antigravity: ",
+                Style::default().fg(col_cyan).bold(),
+            )];
+
+            let mut parts_added = false;
+
+            if let Some(pct5) = anti.five_hour_pct {
+                let col5 = get_capacity_color(pct5);
+                anti_spans.push(Span::styled("5h ", Style::default().fg(col_lavender)));
+                anti_spans.push(Span::styled(
+                    format!("{}%", pct5),
+                    Style::default().fg(col5).bold(),
+                ));
+                if let Some(t5) = &anti.five_hour_time {
+                    anti_spans.push(Span::styled(
+                        format!(" ({})", t5),
+                        Style::default().fg(col_dim),
+                    ));
+                }
+                parts_added = true;
+            }
+
+            if let Some(pct_wk) = anti.weekly_pct {
+                if parts_added {
+                    anti_spans.push(Span::styled(" · ", Style::default().fg(col_dim)));
+                }
+                let col_wk = get_capacity_color(pct_wk);
+                anti_spans.push(Span::styled("Wk ", Style::default().fg(col_lavender)));
+                anti_spans.push(Span::styled(
+                    format!("{}%", pct_wk),
+                    Style::default().fg(col_wk).bold(),
+                ));
+                if let Some(t_wk) = &anti.weekly_time {
+                    anti_spans.push(Span::styled(
+                        format!(" ({})", t_wk),
+                        Style::default().fg(col_dim),
+                    ));
+                }
+            }
+
+            lines.push(Line::from(anti_spans));
+        }
+
+        // Secondary sliding window token metrics line
+        let slide_spans = vec![
+            Span::styled("Okno tok:", Style::default().fg(Color::DarkGray)),
+            Span::raw(" 5m: "),
+            Span::styled(
+                fmt_tokens(q.session_sliding_5m_tokens),
+                Style::default().fg(if q.session_sliding_5m_tokens > 100_000 {
+                    Color::Yellow
+                } else {
+                    Color::Rgb(95, 200, 230)
+                }),
+            ),
+            Span::styled(" │ 1h: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                fmt_tokens(q.session_sliding_1h_tokens),
+                Style::default().fg(Color::Rgb(170, 160, 220)),
+            ),
+            Span::styled(" │ 5h: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                fmt_tokens(q.session_sliding_5h_tokens),
+                Style::default().fg(Color::Gray),
+            ),
+        ];
+        lines.push(Line::from(slide_spans));
+    } else {
+        lines.push(Line::from(vec![
+            Span::styled("Kvóty:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled("načítám stav…", Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+
+    // 5. SPAI Tasks Ledger (with Linkarzu TrueColor Palette from mozek_rust)
+    lines.push(Line::raw(""));
+    let spai_title_spans = vec![Span::styled(
+        "SPAI:    ",
+        Style::default().fg(Color::DarkGray),
+    )];
+
+    if let Some(spai) = &state.spai {
+        let counts = &spai.counts;
+        let mut ribbon_spans = spai_title_spans;
+
+        // Render multi-segment ribbon: done (mint) | working (yellow) | waiting (violet) | todo (pink) | cancelled (slate)
+        let ribbon_len = 16usize;
+        let total = counts.total_tasks;
+
+        if total > 0 {
+            let seg = |count: usize| -> usize {
+                ((count as f64 / total as f64) * ribbon_len as f64).round() as usize
+            };
+
+            let s_done = seg(counts.done);
+            let s_work = seg(counts.working);
+            let s_wait = seg(counts.waiting);
+            let s_cancel = seg(counts.cancelled);
+            let s_todo = ribbon_len.saturating_sub(s_done + s_work + s_wait + s_cancel);
+
+            // Truecolors from SPAI Linkarzu Palette
+            let col_done = Color::Rgb(55, 244, 153); // #37f499 neon mint
+            let col_work = Color::Rgb(241, 252, 121); // #f1fc79 electric yellow
+            let col_wait = Color::Rgb(152, 122, 251); // #987afb neon violet
+            let col_todo = Color::Rgb(249, 77, 255); // #f94dff vivid pink
+            let col_cancel = Color::Rgb(135, 145, 170); // #8791aa slate
+
+            if s_done > 0 {
+                ribbon_spans.push(Span::styled(
+                    "█".repeat(s_done),
+                    Style::default().fg(col_done),
+                ));
+            }
+            if s_work > 0 {
+                ribbon_spans.push(Span::styled(
+                    "█".repeat(s_work),
+                    Style::default().fg(col_work),
+                ));
+            }
+            if s_wait > 0 {
+                ribbon_spans.push(Span::styled(
+                    "█".repeat(s_wait),
+                    Style::default().fg(col_wait),
+                ));
+            }
+            if s_todo > 0 {
+                ribbon_spans.push(Span::styled(
+                    "█".repeat(s_todo),
+                    Style::default().fg(col_todo),
+                ));
+            }
+            if s_cancel > 0 {
+                ribbon_spans.push(Span::styled(
+                    "░".repeat(s_cancel),
+                    Style::default().fg(col_cancel),
+                ));
+            }
+
+            let pct = (counts.done as f64 / total as f64 * 100.0).round() as usize;
+            ribbon_spans.push(Span::styled(
+                format!(" [{}/{}] {}%", counts.done, total, pct),
+                Style::default().fg(col_done).bold(),
+            ));
+            lines.push(Line::from(ribbon_spans));
+
+            // Breakdown counts
+            let mut stat_spans = vec![Span::raw("         ")];
+            if counts.working > 0 {
+                stat_spans.push(Span::styled(
+                    format!("◐ {} běží  ", counts.working),
+                    Style::default().fg(col_work),
+                ));
+            }
+            if counts.waiting > 0 {
+                stat_spans.push(Span::styled(
+                    format!("⏳ {} čeká  ", counts.waiting),
+                    Style::default().fg(col_wait),
+                ));
+            }
+            if counts.todo > 0 {
+                stat_spans.push(Span::styled(
+                    format!("○ {} úkolů  ", counts.todo),
+                    Style::default().fg(col_todo),
+                ));
+            }
+            if counts.ideas > 0 {
+                stat_spans.push(Span::styled(
+                    format!("💡 {} nápadů", counts.ideas),
+                    Style::default().fg(Color::Rgb(4, 209, 249)), // Cyan
+                ));
+            }
+            lines.push(Line::from(stat_spans));
+
+            // List 2-3 most recent or working tasks
+            let mut shown = 0;
+            // Prioritize working, waiting, and open todo
+            for r in spai.index.records.iter().rev() {
+                let st = r.status.to_lowercase();
+                if st == "working" || st == "waiting" || st == "todo" {
+                    let (icon, color) = match st.as_str() {
+                        "working" => ("◐", col_work),
+                        "waiting" => ("⏳", col_wait),
+                        _ => ("○", col_todo),
+                    };
+
+                    let title = if r.title.len() > 36 {
+                        format!("{}…", &r.title[..36])
+                    } else {
+                        r.title.clone()
+                    };
+
+                    lines.push(Line::from(vec![
+                        Span::raw("         "),
+                        Span::styled(format!("{} ", icon), Style::default().fg(color).bold()),
+                        Span::styled(format!("{}: ", r.id), Style::default().fg(Color::DarkGray)),
+                        Span::styled(title, Style::default().fg(Color::Gray)),
+                    ]));
+                    shown += 1;
+                    if shown >= 3 {
+                        break;
+                    }
+                }
+            }
+        } else {
+            ribbon_spans.push(Span::styled(
+                "žádné úkoly v docs/spai",
+                Style::default().fg(Color::DarkGray),
+            ));
+            lines.push(Line::from(ribbon_spans));
+        }
+    } else {
+        let mut no_spai_spans = spai_title_spans;
+        no_spai_spans.push(Span::styled(
+            "bez docs/spai ledgeru",
+            Style::default().fg(Color::DarkGray),
+        ));
+        lines.push(Line::from(no_spai_spans));
+    }
+
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray))

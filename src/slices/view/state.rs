@@ -63,6 +63,11 @@ pub struct SidebarState {
     pub mcp: Option<crate::slices::telemetry::mcp_live::McpTelemetry>,
     pub mcp_mtime: Option<SystemTime>,
     pub last_mcp_calls_count: u64,
+    /// Live SPAI task ledger parsed directly from `docs/spai/.index.json`.
+    pub spai: Option<crate::slices::telemetry::spai_live::SpaiTelemetry>,
+    pub spai_mtime: Option<SystemTime>,
+    /// Sliding window quota telemetry (5m/1h/5h session sliding tokens + upstream provider quota).
+    pub quota: Option<crate::slices::telemetry::quota_live::QuotaTelemetry>,
 }
 
 impl SidebarState {
@@ -103,6 +108,9 @@ impl SidebarState {
             mcp: None,
             mcp_mtime: None,
             last_mcp_calls_count: 0,
+            spai: None,
+            spai_mtime: None,
+            quota: None,
         };
 
         state.refresh(true);
@@ -271,6 +279,8 @@ impl SidebarState {
         self.refresh_live(force);
         self.refresh_skills(force);
         self.refresh_mcp(force);
+        self.refresh_spai(force);
+        self.refresh_quota(force);
 
         // Auto-switch to MCP tab when MCP server is actively used
         let (should_switch_mcp, new_total_calls) = if let Some(mcp) = &self.mcp {
@@ -381,6 +391,54 @@ impl SidebarState {
             }
         }
         self.mcp = None;
+    }
+
+    /// Refresh SPAI task ledger directly from `docs/spai/.index.json`.
+    fn refresh_spai(&mut self, force: bool) {
+        let cwd = self.live.as_ref().map(|l| l.cwd.as_str()).or_else(|| {
+            self.panes
+                .iter()
+                .find(|p| self.target_pane_id.as_deref() == Some(p.pane_id.as_str()))
+                .and_then(|p| p.cwd.as_deref())
+        });
+
+        let index_path = crate::slices::telemetry::spai_live::find_spai_index_path(cwd);
+        let Some(path) = index_path else {
+            self.spai = None;
+            return;
+        };
+
+        let Ok(meta) = std::fs::metadata(&path) else {
+            self.spai = None;
+            return;
+        };
+        let mtime = meta.modified().ok();
+        if !force && self.spai.is_some() && mtime == self.spai_mtime {
+            return; // unchanged
+        }
+        self.spai_mtime = mtime;
+        self.spai = crate::slices::telemetry::spai_live::parse_spai_index(&path);
+    }
+
+    /// Refresh sliding window quota indicators.
+    fn refresh_quota(&mut self, _force: bool) {
+        let mut q = crate::slices::telemetry::quota_live::QuotaTelemetry::default();
+
+        // 1. Fetch live Antigravity quota from upstream
+        q.antigravity = crate::slices::telemetry::quota_live::fetch_antigravity_live_quota();
+
+        // 2. Compute session sliding token consumption windows
+        if let Some(t) = &self.live {
+            if let Some(f) = &t.session_file {
+                let (w5m, w1h, w5h) =
+                    crate::slices::telemetry::quota_live::compute_session_sliding_windows(f);
+                q.session_sliding_5m_tokens = w5m;
+                q.session_sliding_1h_tokens = w1h;
+                q.session_sliding_5h_tokens = w5h;
+            }
+        }
+
+        self.quota = Some(q);
     }
 
     /// Apply a freshly-read snapshot and detect session lifecycle transitions

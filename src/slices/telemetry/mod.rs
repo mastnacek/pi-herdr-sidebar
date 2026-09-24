@@ -5,8 +5,10 @@ use std::sync::Mutex;
 use std::time::SystemTime;
 
 pub mod mcp_live;
+pub mod quota_live;
 pub mod skills;
 pub mod skills_live;
+pub mod spai_live;
 
 #[derive(Debug, Clone, Default)]
 pub struct GitTelemetry {
