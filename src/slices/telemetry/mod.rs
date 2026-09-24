@@ -185,17 +185,14 @@ type Catalog = Vec<(String, Vec<ModelEntry>)>;
 
 /// Process-level catalog cache keyed by both files' mtimes — parse_session
 /// runs every refresh tick, and models-store.json is ~400 KB.
-static CATALOG: Mutex<Option<(Option<SystemTime>, Option<SystemTime>, Catalog)>> =
-    Mutex::new(None);
+static CATALOG: Mutex<Option<(Option<SystemTime>, Option<SystemTime>, Catalog)>> = Mutex::new(None);
 
 fn catalog_mtimes() -> (Option<SystemTime>, Option<SystemTime>) {
     let home = match crate::shared::dirs_home() {
         Some(h) => h,
         None => return (None, None),
     };
-    let mtime = |p: PathBuf| {
-        fs::metadata(p).and_then(|m| m.modified()).ok()
-    };
+    let mtime = |p: PathBuf| fs::metadata(p).and_then(|m| m.modified()).ok();
     (
         mtime(home.join(".pi").join("agent").join("models.json")),
         mtime(home.join(".pi").join("agent").join("models-store.json")),
@@ -217,17 +214,18 @@ fn load_catalog() -> Catalog {
         // models.json first: user config overrides the fetched store.
         for (path, providers_key) in [
             (home.join(".pi").join("agent").join("models.json"), true),
-            (home.join(".pi").join("agent").join("models-store.json"), false),
+            (
+                home.join(".pi").join("agent").join("models-store.json"),
+                false,
+            ),
         ] {
             let Ok(text) = fs::read_to_string(&path) else {
                 continue;
             };
             let providers = if providers_key {
-                serde_json::from_str::<ProvidersFile>(&text)
-                    .map(|f| f.providers)
+                serde_json::from_str::<ProvidersFile>(&text).map(|f| f.providers)
             } else {
-                serde_json::from_str::<TopLevelFile>(&text)
-                    .map(|f| f.providers)
+                serde_json::from_str::<TopLevelFile>(&text).map(|f| f.providers)
             };
             if let Ok(providers) = providers {
                 for (name, cfg) in providers {
@@ -553,12 +551,18 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                         // carry it directly; earlier entries inherit the
                         // session's last known model.
                         let prov = if msg.role.as_deref() == Some("assistant") {
-                            msg.provider.as_deref().filter(|s| !s.is_empty()).or(Some(last_model_provider.as_str()))
+                            msg.provider
+                                .as_deref()
+                                .filter(|s| !s.is_empty())
+                                .or(Some(last_model_provider.as_str()))
                         } else {
                             Some(last_model_provider.as_str())
                         };
                         let mid = if msg.role.as_deref() == Some("assistant") {
-                            msg.model.as_deref().filter(|s| !s.is_empty()).or(Some(last_model_id.as_str()))
+                            msg.model
+                                .as_deref()
+                                .filter(|s| !s.is_empty())
+                                .or(Some(last_model_id.as_str()))
                         } else {
                             Some(last_model_id.as_str())
                         };
@@ -704,7 +708,13 @@ mod tests {
 mod cost_tests {
     use super::*;
 
-    fn usage(input: u64, output: u64, cache_read: u64, cache_write: u64, cache_write_1h: u64) -> Usage {
+    fn usage(
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_write: u64,
+        cache_write_1h: u64,
+    ) -> Usage {
         Usage {
             input,
             output,

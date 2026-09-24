@@ -60,12 +60,12 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let selected_index = state.active_tab.to_index();
 
     let live_indicator = if state.snapshot.as_ref().is_some_and(|s| s.live) {
-        Span::styled(" ● LIVE ", Style::default().fg(Color::Green).bold())
+        Span::styled(" ● ŽIVĚ ", Style::default().fg(Color::Green).bold())
     } else if state.snapshot.is_some() {
         // Snapshot exists but live=false: Pi session is reloading/restarting
-        Span::styled(" ⟳ RELOAD ", Style::default().fg(Color::Yellow).bold())
+        Span::styled(" ⟳ OBNOVA ", Style::default().fg(Color::Yellow).bold())
     } else {
-        Span::styled(" ○ IDLE ", Style::default().fg(Color::DarkGray))
+        Span::styled(" ○ NEČINNÝ ", Style::default().fg(Color::DarkGray))
     };
 
     let title_line = Line::from(vec![
@@ -151,7 +151,7 @@ fn render_live_status(
                 Style::default().fg(Color::Red),
             )
         } else {
-            Span::styled(" ○clean", Style::default().fg(Color::Green))
+            Span::styled(" ○čistý", Style::default().fg(Color::Green))
         };
         lines.push(Line::from(vec![
             Span::styled("🌿 ", Style::default()),
@@ -250,7 +250,7 @@ fn render_live_status(
     // Footer diagnostics: session id + freshness
     lines.push(Line::raw(""));
     lines.push(Line::from(vec![
-        Span::styled("⚡ live session ", Style::default().fg(Color::DarkGray)),
+        Span::styled("⚡ živá relace ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             t.session_id.chars().take(8).collect::<String>(),
             Style::default().fg(Color::Magenta),
@@ -260,7 +260,7 @@ fn render_live_status(
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Cyan))
-        .title(" Telemetry & Status [live] ");
+        .title(" Telemetrie & Stav [živě] ");
 
     let paragraph = Paragraph::new(Text::from(lines))
         .block(block)
@@ -390,7 +390,7 @@ fn render_skills_live(
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Green))
-            .title(" Skills & Compliance HUD ");
+            .title(" HUD skilů & souladu ");
         frame.render_widget(
             Paragraph::new(Text::from(lines))
                 .block(block)
@@ -403,13 +403,13 @@ fn render_skills_live(
 
     // Header: active skill + counters
     lines.push(Line::from(Span::styled(
-        format!("🎯 {}", state.active_skill.as_deref().unwrap_or("no skill")),
+        format!("🎯 {}", state.active_skill.as_deref().unwrap_or("žádný skill")),
         Style::default().fg(Color::Yellow).bold(),
     )));
     let elapsed = elapsed_label(state.last_update_time.saturating_sub(state.start_time));
     lines.push(Line::from(Span::styled(
         format!(
-            "{} refs · {} · {} turns",
+            "{} refů · {} · {} tahů",
             state.references.len(),
             elapsed,
             state.turn_count
@@ -420,12 +420,12 @@ fn render_skills_live(
 
     // Loaded guidance
     lines.push(Line::from(Span::styled(
-        "📖 Guidance",
+        "📖 Pokyny",
         Style::default().fg(Color::Cyan),
     )));
     if state.references.is_empty() {
         lines.push(Line::from(Span::styled(
-            "  (none yet)",
+            "  (zatím nic)",
             Style::default().fg(Color::DarkGray),
         )));
     } else {
@@ -445,12 +445,12 @@ fn render_skills_live(
 
     // Agent focus — most recent actions
     lines.push(Line::from(Span::styled(
-        "⚡ Focus",
+        "⚡ Fokus",
         Style::default().fg(Color::Cyan),
     )));
     if state.actions.is_empty() {
         lines.push(Line::from(Span::styled(
-            "  (idle)",
+            "  (nečinný)",
             Style::default().fg(Color::DarkGray),
         )));
     } else {
@@ -494,13 +494,13 @@ fn render_skills_live(
     };
     lines.push(Line::from(vec![
         Span::styled("🛡 ", Style::default()),
-        Span::styled("Gates ", Style::default().fg(Color::Cyan)),
+        Span::styled("Brány ", Style::default().fg(Color::Cyan)),
         Span::styled(score_text, Style::default().fg(score_color).bold()),
     ]));
 
     if total == 0 {
         lines.push(Line::from(Span::styled(
-            "  awaiting code mutations",
+            "  čekám na změny kódu",
             Style::default().fg(Color::DarkGray),
         )));
     } else {
@@ -529,13 +529,13 @@ fn render_skills_live(
     // Status footer
     if state.in_turn {
         lines.push(Line::from(Span::styled(
-            "● running",
+            "● běží",
             Style::default().fg(Color::Cyan),
         )));
     } else {
         lines.push(Line::from(Span::styled(
             format!(
-                "✓ settled · {} read · {} written",
+                "✓ klid · {} čtení · {} zápisů",
                 state.inspected_count, state.modified_count
             ),
             Style::default().fg(Color::Green),
@@ -545,7 +545,7 @@ fn render_skills_live(
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Green))
-        .title(" Skills & Compliance HUD ");
+        .title(" HUD skilů & souladu ");
 
     let paragraph = Paragraph::new(Text::from(lines))
         .block(block)
@@ -572,7 +572,7 @@ fn render_skills_face(
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Green))
         .title(format!(
-            " Skills & Compliance HUD [rev {}] ",
+            " HUD skilů & souladu [rev {}] ",
             snapshot.revision
         ));
 
@@ -596,14 +596,14 @@ fn render_skills_face(
     } else {
         let fallback_text = vec![
             Line::raw(""),
-            Line::from(Span::styled("🎯 No Active Skill Running", Style::default().fg(Color::Yellow).bold())),
+            Line::from(Span::styled("🎯 Žádný aktivní skill neběží", Style::default().fg(Color::Yellow).bold())),
             Line::raw(""),
-            Line::from("The Skills HUD displays active skill guidance, reference checklists,"),
-            Line::from("focus paths, and compliance gates when an agent skill is active."),
+            Line::from("HUD skilů zobrazuje pokyny aktivního skillu, kontrolní seznamy,"),
+            Line::from("fokusní cesty a kontrolní brány, když je nějaký skill aktivní."),
             Line::raw(""),
             Line::from(vec![
                 Span::styled("Tip: ", Style::default().fg(Color::Cyan).bold()),
-                Span::raw("Activate a skill like 'herdr-plugin-dev' or 'spai-tasks' to view live tracking."),
+                Span::raw("Aktivuj skill (např. 'herdr-plugin-dev' nebo 'spai-tasks') a sleduj živý průběh."),
             ]),
         ];
         let paragraph = Paragraph::new(fallback_text).block(block);
@@ -619,20 +619,20 @@ fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
         .unwrap_or_else(|| "~/.pi/agent/sessions".to_string());
     let text = vec![
         Line::from(Span::styled(
-            "Waiting for Pi Agent Telemetry…",
+            "Čekám na telemetrii pi agenta…",
             Style::default().fg(Color::Yellow).bold(),
         )),
         Line::raw(""),
-        Line::from("The sidebar reads telemetry directly from Pi session logs:"),
+        Line::from("Sidebar čte telemetrii přímo z logů pi relací:"),
         Line::from(Span::styled(sessions_dir, Style::default().fg(Color::Cyan))),
         Line::raw(""),
-        Line::from("1. Launch Pi in Herdr: 'pi'"),
-        Line::from("2. Run any turn — telemetry streams here automatically."),
-        Line::from("3. No '/sidebar on' required for the Status face (snapshot"),
-        Line::from("   is only needed for the Skills face)."),
+        Line::from("1. Spusť pi v herdr: 'pi'"),
+        Line::from("2. Proved' libovolný tah — telemetrie se streamuje automaticky."),
+        Line::from("3. Pro pohled Status není potřeba '/sidebar on' (snapshot"),
+        Line::from("   je potřeba jen pro pohled Skilly)."),
         Line::raw(""),
         Line::from(vec![
-            Span::raw("Snapshot dir (legacy): "),
+            Span::raw("Adresář snapshotů (legacy): "),
             Span::styled(
                 dir.display().to_string(),
                 Style::default().fg(Color::DarkGray),
@@ -640,7 +640,7 @@ fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
         ]),
         Line::raw(""),
         Line::from(vec![
-            Span::raw("Target pane: "),
+            Span::raw("Cílový panel: "),
             Span::styled(
                 state.target_pane_id.as_deref().unwrap_or("none"),
                 Style::default().fg(Color::Magenta),
@@ -649,14 +649,14 @@ fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Line::raw(""),
         Line::from(vec![
             Span::styled("Tip: ", Style::default().fg(Color::Green).bold()),
-            Span::raw("Press [3] or Tab to inspect Herdr Panes in this workspace."),
+            Span::raw("Stiskni [3] nebo Tab a prohlédni herdr panely v tomto workspace."),
         ]),
     ];
 
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray))
-        .title(" Telemetry Offline ");
+        .title(" Telemetrie Offline ");
 
     let paragraph = Paragraph::new(text).block(block);
     frame.render_widget(paragraph, area);
@@ -664,11 +664,11 @@ fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
 fn render_herdr_panes(frame: &mut Frame, area: Rect, panes: &[HerdrPaneInfo]) {
     let header = Row::new(vec![
-        Cell::from("Pane ID").style(Style::default().fg(Color::Cyan).bold()),
+        Cell::from("ID panelu").style(Style::default().fg(Color::Cyan).bold()),
         Cell::from("Tab").style(Style::default().fg(Color::Cyan).bold()),
         Cell::from("Workspace").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("Label").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("Active").style(Style::default().fg(Color::Cyan).bold()),
+        Cell::from("Popisek").style(Style::default().fg(Color::Cyan).bold()),
+        Cell::from("Aktivní").style(Style::default().fg(Color::Cyan).bold()),
         Cell::from("CWD").style(Style::default().fg(Color::Cyan).bold()),
     ])
     .bottom_margin(1);
@@ -678,9 +678,9 @@ fn render_herdr_panes(frame: &mut Frame, area: Rect, panes: &[HerdrPaneInfo]) {
         .map(|p| {
             let is_focused = p.focused.unwrap_or(false);
             let focus_cell = if is_focused {
-                Cell::from("● YES").style(Style::default().fg(Color::Green).bold())
+                Cell::from("● ANO").style(Style::default().fg(Color::Green).bold())
             } else {
-                Cell::from("○ no").style(Style::default().fg(Color::DarkGray))
+                Cell::from("○ ne").style(Style::default().fg(Color::DarkGray))
             };
 
             Row::new(vec![
@@ -707,7 +707,7 @@ fn render_herdr_panes(frame: &mut Frame, area: Rect, panes: &[HerdrPaneInfo]) {
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Magenta))
-        .title(format!(" Herdr Workspace Panes ({}) ", panes.len()));
+        .title(format!(" Herdr panely workspaceu ({}) ", panes.len()));
 
     let table = Table::new(rows, widths)
         .header(header)
@@ -720,15 +720,15 @@ fn render_herdr_panes(frame: &mut Frame, area: Rect, panes: &[HerdrPaneInfo]) {
 fn render_footer(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let footer_text = Line::from(vec![
         Span::styled(" [Tab/1/2/3] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Face  "),
+        Span::raw("Pohled  "),
         Span::styled(" [↑/↓/j/k] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Scroll  "),
+        Span::raw("Posun  "),
         Span::styled(" [r] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Reload  "),
+        Span::raw("Obnovit  "),
         Span::styled(" [q] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Quit  "),
+        Span::raw("Konec  "),
         Span::styled(
-            format!("(Offset: {})", state.scroll),
+            format!("(Posun: {})", state.scroll),
             Style::default().fg(Color::DarkGray),
         ),
     ]);

@@ -83,7 +83,7 @@ impl SidebarState {
             explicit_snapshot: explicit,
             refresh_timer: 0,
             refresh_progress: 1.0,
-            refresh_status: "Ready".to_string(),
+            refresh_status: "Připraveno".to_string(),
             last_live: None,
             last_revision: 0,
             last_key: String::new(),
@@ -108,7 +108,7 @@ impl SidebarState {
     pub fn tick_animation(&mut self) {
         if self.refresh_timer > 0 {
             self.refresh_timer -= 1;
-            let total = if self.refresh_status.contains("reloading") {
+            let total = if self.refresh_status.contains("obnovuje") {
                 24.0
             } else {
                 10.0
@@ -249,7 +249,7 @@ impl SidebarState {
                 self.target_pane_id = None;
                 self.snapshot_path = None;
                 self.refresh_status =
-                    format!("Tab: {} (No Pi session)", current_tab.unwrap_or("?"));
+                    format!("Tab: {} (bez pi relace)", current_tab.unwrap_or("?"));
             }
         }
 
@@ -281,7 +281,7 @@ impl SidebarState {
                     self.snapshot = None;
                     self.last_mtime = None;
                     self.last_live = None;
-                    self.refresh_status = "Snapshot cleared (reload?)".to_string();
+                    self.refresh_status = "Snapshot smazán (reload?)".to_string();
                 }
             }
         }
@@ -355,12 +355,12 @@ impl SidebarState {
             // /reload or session end: keep last frame, animate the header
             self.refresh_timer = 24;
             self.refresh_progress = 0.0;
-            self.refresh_status = "Pi session reloading…".to_string();
+            self.refresh_status = "Pi relace se obnovuje…".to_string();
         } else if came_back || restarted {
             // New session instance took over: pulse the header and reset scroll
             self.refresh_timer = 12;
             self.refresh_progress = 0.0;
-            self.refresh_status = "Session restored — refreshed".to_string();
+            self.refresh_status = "Relace obnovena — načteno znovu".to_string();
             self.scroll = 0;
         }
 
