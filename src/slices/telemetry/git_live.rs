@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use super::GitTelemetry;
+use super::{GitCommitLog, GitTelemetry};
 
 pub fn git_info(cwd: &Path) -> Option<GitTelemetry> {
     // 1. Status with branch info in porcelain format
@@ -59,26 +59,28 @@ pub fn git_info(cwd: &Path) -> Option<GitTelemetry> {
         }
     }
 
-    // 2. Latest commit details
+    // 2. Recent commits protocol (last 3 commits)
     let log_out = Command::new("git")
         .arg("-C")
         .arg(cwd)
-        .args(["log", "-1", "--format=%h|%cr|%s"])
+        .args(["log", "-3", "--format=%h|%cr|%s"])
         .output()
         .ok();
 
-    let mut commit_hash = String::new();
-    let mut commit_age = String::new();
-    let mut commit_msg = String::new();
+    let mut recent_commits = Vec::new();
 
     if let Some(lo) = log_out {
         if lo.status.success() {
-            let log_line = String::from_utf8_lossy(&lo.stdout);
-            let parts: Vec<&str> = log_line.trim().splitn(3, '|').collect();
-            if parts.len() >= 3 {
-                commit_hash = parts[0].to_string();
-                commit_age = parts[1].to_string();
-                commit_msg = parts[2].to_string();
+            let log_text = String::from_utf8_lossy(&lo.stdout);
+            for line in log_text.lines() {
+                let parts: Vec<&str> = line.trim().splitn(3, '|').collect();
+                if parts.len() >= 3 {
+                    recent_commits.push(GitCommitLog {
+                        hash: parts[0].to_string(),
+                        age: parts[1].to_string(),
+                        message: parts[2].to_string(),
+                    });
+                }
             }
         }
     }
@@ -90,8 +92,6 @@ pub fn git_info(cwd: &Path) -> Option<GitTelemetry> {
         staged,
         unstaged,
         untracked,
-        commit_hash,
-        commit_msg,
-        commit_age,
+        recent_commits,
     })
 }

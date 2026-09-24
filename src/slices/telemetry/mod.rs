@@ -20,6 +20,13 @@ use model_catalog::{catalog_cost, context_window_for};
 pub use session_finder::{find_newest_session, find_newest_session_scoped, find_session_file};
 
 #[derive(Debug, Clone, Default)]
+pub struct GitCommitLog {
+    pub hash: String,
+    pub age: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct GitTelemetry {
     pub branch: String,
     pub ahead: u32,
@@ -27,9 +34,7 @@ pub struct GitTelemetry {
     pub staged: u32,
     pub unstaged: u32,
     pub untracked: u32,
-    pub commit_hash: String,
-    pub commit_msg: String,
-    pub commit_age: String,
+    pub recent_commits: Vec<GitCommitLog>,
 }
 
 #[derive(Debug, Clone, Default)]

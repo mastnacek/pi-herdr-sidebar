@@ -111,10 +111,7 @@ pub fn refresh_quota(live: Option<&LiveTelemetry>) -> QuotaTelemetry {
     q
 }
 
-pub fn refresh_openrouter(
-    cwd: Option<&Path>,
-    force: bool,
-) -> Option<OpenRouterCreditTelemetry> {
+pub fn refresh_openrouter(cwd: Option<&Path>, force: bool) -> Option<OpenRouterCreditTelemetry> {
     let telemetry = crate::slices::telemetry::openrouter_live::fetch_openrouter_credits(cwd, force);
     if telemetry.accounts.is_empty() {
         None

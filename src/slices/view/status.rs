@@ -63,25 +63,6 @@ pub fn render_live_status(
             }
         }
         lines.push(Line::from(status_spans));
-
-        if !git.commit_hash.is_empty() {
-            lines.push(Line::from(vec![
-                Span::styled("   commit: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&git.commit_hash, Style::default().fg(Color::Magenta).bold()),
-                Span::styled(
-                    format!(" ({}) ", git.commit_age),
-                    Style::default().fg(Color::DarkGray),
-                ),
-                Span::styled(
-                    if git.commit_msg.len() > 32 {
-                        format!("{}…", &git.commit_msg[..32])
-                    } else {
-                        git.commit_msg.clone()
-                    },
-                    Style::default().fg(Color::Gray),
-                ),
-            ]));
-        }
     } else if !t.git_branch.is_empty() {
         let state_icon = if t.git_dirty > 0 {
             Span::styled(
@@ -99,6 +80,36 @@ pub fn render_live_status(
             ),
             state_icon,
         ]));
+    }
+
+    // 1b. Recent commits protocol (last 3 commits)
+    if let Some(git) = &t.git {
+        if !git.recent_commits.is_empty() {
+            lines.push(Line::raw(""));
+            lines.push(Line::from(vec![Span::styled(
+                "📜 Poslední commity:",
+                Style::default().fg(Color::Cyan).bold(),
+            )]));
+            for c in git.recent_commits.iter().take(3) {
+                lines.push(Line::from(vec![
+                    Span::styled("   ", Style::default()),
+                    Span::styled(&c.hash, Style::default().fg(Color::Magenta).bold()),
+                    Span::styled(
+                        format!(" ({}) ", c.age),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        if c.message.chars().count() > 34 {
+                            let s: String = c.message.chars().take(32).collect();
+                            format!("{}…", s)
+                        } else {
+                            c.message.clone()
+                        },
+                        Style::default().fg(Color::Gray),
+                    ),
+                ]));
+            }
+        }
     }
     lines.push(Line::raw(""));
 
