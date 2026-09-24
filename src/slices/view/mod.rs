@@ -52,6 +52,7 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         KeyCode::BackTab => state.prev_tab(),
                         KeyCode::Left | KeyCode::Char('h') => state.prev_tab(),
                         KeyCode::Right | KeyCode::Char('l') => state.next_tab(),
+                        KeyCode::Char('0') => state.set_tab(Tab::Zen),
                         KeyCode::Char('1') => state.set_tab(Tab::Status),
                         KeyCode::Char('2') => state.set_tab(Tab::Skills),
                         KeyCode::Char('3') => state.set_tab(Tab::Mcp),

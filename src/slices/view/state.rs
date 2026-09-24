@@ -6,16 +6,18 @@ use std::time::SystemTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
-    Status = 0,
-    Skills = 1,
-    Mcp = 2,
+    Zen = 0,
+    Status = 1,
+    Skills = 2,
+    Mcp = 3,
 }
 
 impl Tab {
     pub fn from_index(index: usize) -> Self {
         match index {
-            1 => Tab::Skills,
-            2 => Tab::Mcp,
+            0 => Tab::Zen,
+            2 => Tab::Skills,
+            3 => Tab::Mcp,
             _ => Tab::Status,
         }
     }
@@ -72,7 +74,7 @@ impl SidebarState {
         let target_tab_id = ctx.tab_id.clone();
 
         let mut state = Self {
-            active_tab: Tab::Status,
+            active_tab: Tab::Zen,
             scroll: 0,
             snapshot_path: target_snapshot,
             snapshot: None,
@@ -143,7 +145,7 @@ impl SidebarState {
             let tab_id = match tab {
                 Tab::Status => "status",
                 Tab::Skills => "skills",
-                Tab::Mcp => return,
+                Tab::Zen | Tab::Mcp => return,
             };
 
             let col = if let Some(snap) = &self.snapshot {
@@ -171,13 +173,13 @@ impl SidebarState {
     }
 
     pub fn next_tab(&mut self) {
-        let next = (self.active_tab.to_index() + 1) % 3;
+        let next = (self.active_tab.to_index() + 1) % 4;
         self.set_tab(Tab::from_index(next));
     }
 
     pub fn prev_tab(&mut self) {
         let prev = if self.active_tab.to_index() == 0 {
-            2
+            3
         } else {
             self.active_tab.to_index() - 1
         };
@@ -194,11 +196,13 @@ impl SidebarState {
 
     pub fn handle_mouse_click(&mut self, col: u16, row: u16) {
         if row <= 3 {
-            if col < 14 {
+            if col < 11 {
+                self.set_tab(Tab::Zen);
+            } else if col < 24 {
                 self.set_tab(Tab::Status);
-            } else if col < 28 {
+            } else if col < 37 {
                 self.set_tab(Tab::Skills);
-            } else if col < 45 {
+            } else if col < 50 {
                 self.set_tab(Tab::Mcp);
             }
         }

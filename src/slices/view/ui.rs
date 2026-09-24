@@ -64,6 +64,9 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let selected_index = state.active_tab.to_index();
     let spinner = spinner_char(state.anim_tick);
 
+    // 0. Zen tab: calm, serene indicator
+    let zen_spans = vec![Span::raw(" 0: Zen ")];
+
     // 1. Status tab indicator: spinner ONLY when agent is actively working/executing
     let is_agent_working = state.live.as_ref().map(|l| l.is_working).unwrap_or(false);
     let status_spans = if is_agent_working {
@@ -107,6 +110,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     };
 
     let titles: Vec<Line> = vec![
+        Line::from(zen_spans),
         Line::from(status_spans),
         Line::from(skills_spans),
         Line::from(mcp_spans),
@@ -160,6 +164,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
 fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
     match state.active_tab {
+        Tab::Zen => render_zen_face(frame, area, state),
         Tab::Mcp => render_mcp_face(frame, area, state),
         Tab::Status => {
             if let Some(t) = &state.live {
@@ -447,6 +452,168 @@ fn render_live_status(
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Cyan))
         .title(" Telemetrie & Stav ");
+
+    let paragraph = Paragraph::new(Text::from(lines))
+        .block(block)
+        .scroll((state.scroll, 0))
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Serene, low-dopamine Zen view: complete model and context data, gentle tones.
+fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
+    let mut lines: Vec<Line> = Vec::new();
+
+    let live = state.live.as_ref();
+    let mcp = state.mcp.as_ref();
+    let skill_state = state.skills.as_ref().and_then(|s| s.state.as_ref());
+
+    lines.push(Line::raw(""));
+
+    // 1. Model & Engine Identity (complete details)
+    let model_str = live
+        .map(|l| {
+            if l.model_id.is_empty() {
+                "neznámý model".to_string()
+            } else {
+                l.model_id.clone()
+            }
+        })
+        .unwrap_or_else(|| "offline".to_string());
+
+    let provider_str = live
+        .map(|l| l.provider.clone())
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| "pi".to_string());
+
+    let thinking_str = live
+        .map(|l| l.thinking_level.clone())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| "default".to_string());
+
+    lines.push(Line::from(vec![
+        Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(model_str, Style::default().fg(Color::White).bold()),
+        Span::styled(format!("  ({})", provider_str), Style::default().fg(Color::DarkGray)),
+    ]));
+
+    lines.push(Line::from(vec![
+        Span::styled("Myšlení: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(thinking_str, Style::default().fg(Color::Gray)),
+    ]));
+    lines.push(Line::raw(""));
+
+    // 2. Complete Context Window Telemetry
+    let ctx_tokens = live.map(|l| l.context_tokens).unwrap_or(0);
+    let ctx_window = live.map(|l| l.context_window).unwrap_or(0);
+    let ctx_pct = live.and_then(|l| l.context_percent).unwrap_or(0.0);
+
+    lines.push(Line::from(vec![
+        Span::styled("Kontext: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{} / {} tok", fmt_tokens(ctx_tokens), fmt_tokens(ctx_window)),
+            Style::default().fg(Color::White),
+        ),
+        Span::styled(format!("  ({:.1}%)", ctx_pct), Style::default().fg(Color::Gray)),
+    ]));
+
+    // Subtle 12-cell bar
+    let bar_len = 16usize;
+    let filled = ((ctx_pct.min(100.0) / 100.0) * bar_len as f64).round() as usize;
+    let pct_color = if ctx_pct >= 90.0 {
+        Color::Red
+    } else if ctx_pct >= 70.0 {
+        Color::Yellow
+    } else {
+        Color::DarkGray
+    };
+
+    lines.push(Line::from(vec![
+        Span::raw("         "),
+        Span::styled("█".repeat(filled), Style::default().fg(pct_color)),
+        Span::styled("░".repeat(bar_len.saturating_sub(filled)), Style::default().fg(Color::DarkGray)),
+    ]));
+
+    // Detailed prompt token breakdown
+    if let Some(l) = live {
+        let prompt_total = l.input_tokens + l.cache_read + l.cache_write;
+        lines.push(Line::from(vec![
+            Span::styled("Tokeny:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("vstup: {} ", fmt_tokens(l.input_tokens)), Style::default().fg(Color::Gray)),
+            Span::styled(format!("výstup: {} ", fmt_tokens(l.output_tokens)), Style::default().fg(Color::Gray)),
+            if l.cache_read > 0 {
+                Span::styled(format!("keš: {} ", fmt_tokens(l.cache_read)), Style::default().fg(Color::DarkGray))
+            } else {
+                Span::raw("")
+            },
+            if l.reasoning_tokens > 0 {
+                Span::styled(format!("reasoning: {}", fmt_tokens(l.reasoning_tokens)), Style::default().fg(Color::DarkGray))
+            } else {
+                Span::raw("")
+            },
+        ]));
+
+        lines.push(Line::from(vec![
+            Span::styled("Náklady: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(fmt_cost(l.total_cost), Style::default().fg(Color::Gray)),
+            if prompt_total > 0 && l.cache_read > 0 {
+                let hit_ratio = (l.cache_read as f64 / prompt_total as f64) * 100.0;
+                Span::styled(format!("  (keš {:.0}%)", hit_ratio), Style::default().fg(Color::DarkGray))
+            } else {
+                Span::raw("")
+            },
+        ]));
+    }
+    lines.push(Line::raw(""));
+
+    // 3. Compact overview of other domains
+    // Git
+    if let Some(git) = live.and_then(|l| l.git.as_ref()) {
+        let is_clean = git.staged == 0 && git.unstaged == 0 && git.untracked == 0;
+        let mut git_spans = vec![
+            Span::styled("Větev:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&git.branch, Style::default().fg(Color::Gray)),
+        ];
+        if is_clean {
+            git_spans.push(Span::styled(" (čistý)", Style::default().fg(Color::DarkGray)));
+        } else {
+            git_spans.push(Span::styled(
+                format!(" (+{} ~{} ?{})", git.staged, git.unstaged, git.untracked),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+        lines.push(Line::from(git_spans));
+    }
+
+    // Active skill
+    let skill_name = skill_state
+        .and_then(|s| s.active_skill.as_deref())
+        .unwrap_or("žádný");
+    lines.push(Line::from(vec![
+        Span::styled("Skill:   ", Style::default().fg(Color::DarkGray)),
+        Span::styled(skill_name, Style::default().fg(Color::Gray)),
+    ]));
+
+    // MCP status
+    let mcp_count = mcp.map(|m| m.total_calls).unwrap_or(0);
+    let mcp_tok = mcp.map(|m| m.total_tokens).unwrap_or(0);
+    lines.push(Line::from(vec![
+        Span::styled("MCP:     ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            if mcp_count > 0 {
+                format!("{} volání (~{} tok)", mcp_count, fmt_tokens(mcp_tok))
+            } else {
+                "klid".to_string()
+            },
+            Style::default().fg(Color::Gray),
+        ),
+    ]));
+
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::DarkGray))
+        .title(" Zen ");
 
     let paragraph = Paragraph::new(Text::from(lines))
         .block(block)
