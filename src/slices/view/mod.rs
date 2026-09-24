@@ -1,5 +1,5 @@
 pub mod mcp;
-pub mod openrouter_ui;
+pub mod shared_banner;
 pub mod skills;
 pub mod spai_ui;
 pub mod state;

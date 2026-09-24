@@ -1,5 +1,5 @@
-//! Zen face — serene model/context/git/skill/MCP/quota overview.
-use crate::slices::telemetry::{fmt_cost, fmt_tokens};
+//! Zen face — serene git, skill, MCP, quota, SPAI, and weather overview.
+use crate::slices::telemetry::fmt_tokens;
 use crate::slices::view::state::SidebarState;
 use ratatui::{
     layout::Rect,
@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-/// Serene, low-dopamine Zen view: complete model and context data, gentle tones.
+/// Serene, low-dopamine Zen view: secondary domains (Git, Skill, MCP, Quota, SPAI, Weather).
 pub fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let mut lines: Vec<Line> = Vec::new();
 
@@ -19,137 +19,7 @@ pub fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
     lines.push(Line::raw(""));
 
-    // 1. Model & Engine Identity (complete details)
-    let model_str = live
-        .map(|l| {
-            if l.model_id.is_empty() {
-                "neznámý model".to_string()
-            } else {
-                l.model_id.clone()
-            }
-        })
-        .unwrap_or_else(|| "offline".to_string());
-
-    let provider_str = live
-        .map(|l| l.provider.clone())
-        .filter(|p| !p.is_empty())
-        .unwrap_or_else(|| "pi".to_string());
-
-    let thinking_str = live
-        .map(|l| l.thinking_level.clone())
-        .filter(|t| !t.is_empty())
-        .unwrap_or_else(|| "default".to_string());
-
-    lines.push(Line::from(vec![
-        Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(model_str, Style::default().fg(Color::White).bold()),
-        Span::styled(
-            format!("  ({})", provider_str),
-            Style::default().fg(Color::DarkGray),
-        ),
-    ]));
-
-    lines.push(Line::from(vec![
-        Span::styled("Myšlení: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(thinking_str, Style::default().fg(Color::Gray)),
-    ]));
-    lines.push(Line::raw(""));
-
-    // 2. Complete Context Window Telemetry
-    let ctx_tokens = live.map(|l| l.context_tokens).unwrap_or(0);
-    let ctx_window = live.map(|l| l.context_window).unwrap_or(0);
-    let ctx_pct = live.and_then(|l| l.context_percent).unwrap_or(0.0);
-
-    lines.push(Line::from(vec![
-        Span::styled("Kontext: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!(
-                "{} / {} tok",
-                fmt_tokens(ctx_tokens),
-                fmt_tokens(ctx_window)
-            ),
-            Style::default().fg(Color::White),
-        ),
-        Span::styled(
-            format!("  ({:.1}%)", ctx_pct),
-            Style::default().fg(Color::Gray),
-        ),
-    ]));
-
-    // Subtle 12-cell bar
-    let bar_len = 16usize;
-    let filled = ((ctx_pct.min(100.0) / 100.0) * bar_len as f64).round() as usize;
-    let pct_color = if ctx_pct >= 90.0 {
-        Color::Red
-    } else if ctx_pct >= 70.0 {
-        Color::Yellow
-    } else {
-        Color::DarkGray
-    };
-
-    lines.push(Line::from(vec![
-        Span::raw("         "),
-        Span::styled("█".repeat(filled), Style::default().fg(pct_color)),
-        Span::styled(
-            "░".repeat(bar_len.saturating_sub(filled)),
-            Style::default().fg(Color::DarkGray),
-        ),
-    ]));
-
-    // Detailed prompt token breakdown
-    if let Some(l) = live {
-        let prompt_total = l.input_tokens + l.cache_read + l.cache_write;
-        lines.push(Line::from(vec![
-            Span::styled("Tokeny:  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("vstup: {} ", fmt_tokens(l.input_tokens)),
-                Style::default().fg(Color::Gray),
-            ),
-            Span::styled(
-                format!("výstup: {} ", fmt_tokens(l.output_tokens)),
-                Style::default().fg(Color::Gray),
-            ),
-            if l.cache_read > 0 {
-                Span::styled(
-                    format!("keš: {} ", fmt_tokens(l.cache_read)),
-                    Style::default().fg(Color::DarkGray),
-                )
-            } else {
-                Span::raw("")
-            },
-            if l.reasoning_tokens > 0 {
-                Span::styled(
-                    format!("reasoning: {}", fmt_tokens(l.reasoning_tokens)),
-                    Style::default().fg(Color::DarkGray),
-                )
-            } else {
-                Span::raw("")
-            },
-        ]));
-
-        lines.push(Line::from(vec![
-            Span::styled("Náklady: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(fmt_cost(l.total_cost), Style::default().fg(Color::Gray)),
-            if prompt_total > 0 && l.cache_read > 0 {
-                let hit_ratio = (l.cache_read as f64 / prompt_total as f64) * 100.0;
-                Span::styled(
-                    format!("  (keš {:.0}%)", hit_ratio),
-                    Style::default().fg(Color::DarkGray),
-                )
-            } else {
-                Span::raw("")
-            },
-        ]));
-
-        if let Some(or_credits) = &state.openrouter_credits {
-            lines.extend(super::openrouter_ui::render_zen_openrouter_lines(
-                or_credits,
-            ));
-        }
-    }
-    lines.push(Line::raw(""));
-
-    // 3. Compact overview of other domains with subtle calm activity colors
+    // 1. Compact overview of other domains with subtle calm activity colors
     // Git
     if let Some(git) = live.and_then(|l| l.git.as_ref()) {
         let is_clean = git.staged == 0 && git.unstaged == 0 && git.untracked == 0;
@@ -221,23 +91,22 @@ pub fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Span::styled(mcp_text, Style::default().fg(mcp_color)),
     ]));
 
-    // 4. Sliding Quota Indicators (Antigravity upstream quota + Session sliding tokens)
+    // 2. Sliding Quota Indicators (Antigravity upstream quota + Session sliding tokens)
     lines.push(Line::raw(""));
 
-    // Exact parity with statusline: "🪐 Antigravity: 5h 34% (2h 28m) · Wk 48% (5d 21h)"
     if let Some(q) = &state.quota {
         if let Some(anti) = &q.antigravity {
-            let col_cyan = Color::Rgb(95, 200, 230); // Soft cyan
-            let col_lavender = Color::Rgb(170, 160, 220); // Lavender labels
-            let col_dim = Color::Rgb(120, 124, 140); // Dim for timers and dots
+            let col_cyan = Color::Rgb(95, 200, 230);
+            let col_lavender = Color::Rgb(170, 160, 220);
+            let col_dim = Color::Rgb(120, 124, 140);
 
             let get_capacity_color = |pct: u32| -> Color {
                 if pct > 35 {
-                    Color::Rgb(95, 200, 140) // Mint green (>35%)
+                    Color::Rgb(95, 200, 140)
                 } else if pct > 15 {
-                    Color::Rgb(230, 200, 90) // Warning amber/yellow (15%-35%)
+                    Color::Rgb(230, 200, 90)
                 } else {
-                    Color::Rgb(241, 108, 117) // Coral red (<15%)
+                    Color::Rgb(241, 108, 117)
                 }
             };
 
@@ -285,7 +154,6 @@ pub fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
             lines.push(Line::from(anti_spans));
         }
 
-        // Secondary sliding window token metrics line
         let slide_spans = vec![
             Span::styled("Okno tok:", Style::default().fg(Color::DarkGray)),
             Span::raw(" 5m: "),
@@ -318,7 +186,7 @@ pub fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
     lines.extend(super::spai_ui::render_spai_lines(state));
 
-    // 6. Weather (yr.no Locationforecast 2.0) — current + 10-day
+    // 3. Weather (yr.no Locationforecast 2.0)
     lines.push(Line::raw(""));
     lines.extend(super::weather_ui::render_weather_lines(state));
 

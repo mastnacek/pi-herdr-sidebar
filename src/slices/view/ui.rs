@@ -16,6 +16,7 @@ pub(super) fn spinner_char(tick: u64) -> &'static str {
 
 pub fn render(frame: &mut Frame, state: &SidebarState) {
     let area = frame.area();
+    let banner_h = super::shared_banner::shared_banner_height(state);
 
     if state.refresh_timer > 0 {
         let chunks = Layout::default()
@@ -23,6 +24,7 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
             .constraints([
                 Constraint::Length(3),
                 Constraint::Length(1),
+                Constraint::Length(banner_h),
                 Constraint::Fill(1),
                 Constraint::Length(1),
             ])
@@ -40,21 +42,24 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
                 Style::default().fg(Color::Yellow).bold(),
             ));
         frame.render_widget(gauge, chunks[1]);
-        render_body(frame, chunks[2], state);
-        render_footer(frame, chunks[3], state);
+        super::shared_banner::render_shared_model_banner(frame, chunks[2], state);
+        render_body(frame, chunks[3], state);
+        render_footer(frame, chunks[4], state);
     } else {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
+                Constraint::Length(banner_h),
                 Constraint::Fill(1),
                 Constraint::Length(1),
             ])
             .split(area);
 
         render_header(frame, chunks[0], state);
-        render_body(frame, chunks[1], state);
-        render_footer(frame, chunks[2], state);
+        super::shared_banner::render_shared_model_banner(frame, chunks[1], state);
+        render_body(frame, chunks[2], state);
+        render_footer(frame, chunks[3], state);
     }
 }
 

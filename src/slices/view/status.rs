@@ -1,6 +1,5 @@
-//! Status faces — native LiveTelemetry statusline-parity + snapshot fallback.
-use super::ui::spinner_char;
-use crate::slices::telemetry::{fmt_cost, fmt_tokens};
+//! Status faces — git tree, session tokens/cache, quota, diagnostics.
+use crate::slices::telemetry::fmt_tokens;
 use crate::slices::view::state::SidebarState;
 use ansi_to_tui::IntoText;
 use ratatui::layout::Rect;
@@ -9,7 +8,8 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
 use ratatui::Frame;
 
-/// Native statusline-parity face rendered straight from LiveTelemetry.
+/// Native statusline-parity face rendered straight from LiveTelemetry:
+/// Git working tree, cache breakdown, session timing, and detailed diagnostics.
 pub fn render_live_status(
     frame: &mut Frame,
     area: Rect,
@@ -17,67 +17,9 @@ pub fn render_live_status(
     state: &SidebarState,
 ) {
     let mut lines: Vec<Line> = Vec::new();
-
-    // 1. Model & Engine Identity
-    let spinner = spinner_char(state.anim_tick);
-    let status_icon = if t.is_working {
-        Span::styled(
-            format!("{} ", spinner),
-            Style::default().fg(Color::Cyan).bold(),
-        )
-    } else {
-        Span::styled("● ", Style::default().fg(Color::Green))
-    };
-
-    let mut model_line = vec![
-        status_icon,
-        Span::styled(
-            format!("({}) ", t.provider),
-            Style::default().fg(Color::DarkGray),
-        ),
-        Span::styled(
-            if t.model_id.is_empty() {
-                "neznámý model".to_string()
-            } else {
-                t.model_id.clone()
-            },
-            Style::default().fg(Color::Green).bold(),
-        ),
-    ];
-    if !t.thinking_level.is_empty() {
-        model_line.push(Span::styled(" • 🧠 ", Style::default().fg(Color::DarkGray)));
-        model_line.push(Span::styled(
-            t.thinking_level.clone(),
-            Style::default().fg(Color::Cyan),
-        ));
-    }
-    lines.push(Line::from(model_line));
-
-    // Session Turn & Tool Activity summary
-    lines.push(Line::from(vec![
-        Span::styled("  ⚡ ", Style::default().fg(Color::Yellow)),
-        Span::styled(
-            format!("{} tahů", t.turns_count),
-            Style::default().fg(Color::White),
-        ),
-        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("{} nástrojů", t.tool_calls_count),
-            Style::default().fg(Color::Cyan),
-        ),
-        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-        if t.tool_errors_count > 0 {
-            Span::styled(
-                format!("⚠️ {} chyb", t.tool_errors_count),
-                Style::default().fg(Color::Red).bold(),
-            )
-        } else {
-            Span::styled("✓ 0 chyb", Style::default().fg(Color::Green))
-        },
-    ]));
     lines.push(Line::raw(""));
 
-    // 2. Git Status Section
+    // 1. Git Status Section
     if let Some(git) = &t.git {
         lines.push(Line::from(vec![
             Span::styled("🌿 Git: ", Style::default().fg(Color::Cyan).bold()),
@@ -93,7 +35,6 @@ pub fn render_live_status(
             },
         ]));
 
-        // Working tree details: staged, unstaged, untracked
         let is_clean = git.staged == 0 && git.unstaged == 0 && git.untracked == 0;
         let mut status_spans = vec![Span::raw("   ")];
         if is_clean {
@@ -123,7 +64,6 @@ pub fn render_live_status(
         }
         lines.push(Line::from(status_spans));
 
-        // Latest commit info
         if !git.commit_hash.is_empty() {
             lines.push(Line::from(vec![
                 Span::styled("   commit: ", Style::default().fg(Color::DarkGray)),
@@ -162,74 +102,12 @@ pub fn render_live_status(
     }
     lines.push(Line::raw(""));
 
-    // 3. Context Window Usage
-    if let Some(pct) = t.context_percent {
-        let bar_w = 16usize;
-        let filled = ((pct.min(100.0) / 100.0) * bar_w as f64).round() as usize;
-        let pct_color = if pct >= 90.0 {
-            Color::Red
-        } else if pct >= 60.0 {
-            Color::Yellow
-        } else {
-            Color::Green
-        };
-        lines.push(Line::from(vec![
-            Span::styled("📊 Kontext: ", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(
-                format!(
-                    "{}{}",
-                    "█".repeat(filled),
-                    "░".repeat(bar_w.saturating_sub(filled))
-                ),
-                Style::default().fg(pct_color),
-            ),
-            Span::styled(
-                format!(" {:.1}%", pct),
-                Style::default().fg(pct_color).bold(),
-            ),
-            Span::styled(
-                format!(
-                    " ({}/{})",
-                    fmt_tokens(t.context_tokens),
-                    fmt_tokens(t.context_window)
-                ),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]));
-    }
-
-    // 4. Token & Cost Telemetry
-    lines.push(Line::from(vec![
-        Span::styled(
-            format!("💰 {}", fmt_cost(t.total_cost)),
-            Style::default().fg(Color::Yellow).bold(),
-        ),
-        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("⬆️  {}", fmt_tokens(t.input_tokens)),
-            Style::default().fg(Color::Cyan),
-        ),
-        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("⬇️ {}", fmt_tokens(t.output_tokens)),
-            Style::default().fg(Color::Green),
-        ),
-        if t.reasoning_tokens > 0 {
-            Span::styled(
-                format!(" │ 🧠 {}", fmt_tokens(t.reasoning_tokens)),
-                Style::default().fg(Color::Magenta),
-            )
-        } else {
-            Span::raw("")
-        },
-    ]));
-
-    // Cache hits & ratio
+    // 2. Cache hits & prompt efficiency breakdown
     let prompt = t.input_tokens + t.cache_read + t.cache_write;
     if prompt > 0 {
         let hit_pct = (t.cache_read as f64 / prompt as f64) * 100.0;
         lines.push(Line::from(vec![
-            Span::styled("📦 Mezipaměť: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("📦 Mezipaměť: ", Style::default().fg(Color::Cyan).bold()),
             Span::styled(
                 format!("čtení: {} ", fmt_tokens(t.cache_read)),
                 Style::default().fg(Color::Gray),
@@ -245,11 +123,32 @@ pub fn render_live_status(
         ]));
     }
 
-    if let Some(or_credits) = &state.openrouter_credits {
+    // 3. Sliding window token consumption
+    if let Some(q) = &state.quota {
         lines.push(Line::raw(""));
-        lines.extend(super::openrouter_ui::render_status_openrouter_lines(
-            or_credits,
-        ));
+        let slide_spans = vec![
+            Span::styled("⏳ Posuvné okno:", Style::default().fg(Color::Cyan).bold()),
+            Span::raw(" 5m: "),
+            Span::styled(
+                fmt_tokens(q.session_sliding_5m_tokens),
+                Style::default().fg(if q.session_sliding_5m_tokens > 100_000 {
+                    Color::Yellow
+                } else {
+                    Color::Rgb(95, 200, 230)
+                }),
+            ),
+            Span::styled(" │ 1h: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                fmt_tokens(q.session_sliding_1h_tokens),
+                Style::default().fg(Color::Rgb(170, 160, 220)),
+            ),
+            Span::styled(" │ 5h: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                fmt_tokens(q.session_sliding_5h_tokens),
+                Style::default().fg(Color::Gray),
+            ),
+        ];
+        lines.push(Line::from(slide_spans));
     }
 
     // Footer diagnostics: session id + timestamp
@@ -280,7 +179,7 @@ pub fn render_live_status(
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Cyan))
-        .title(" Telemetrie & Stav ");
+        .title(" Detailní stav & Git ");
 
     let paragraph = Paragraph::new(Text::from(lines))
         .block(block)
