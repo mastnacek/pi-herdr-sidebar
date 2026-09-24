@@ -54,7 +54,7 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         KeyCode::Right | KeyCode::Char('l') => state.next_tab(),
                         KeyCode::Char('1') => state.set_tab(Tab::Status),
                         KeyCode::Char('2') => state.set_tab(Tab::Skills),
-                        KeyCode::Char('3') => state.set_tab(Tab::Herdr),
+                        KeyCode::Char('3') => state.set_tab(Tab::Mcp),
                         KeyCode::Up | KeyCode::Char('k') => state.scroll_up(1),
                         KeyCode::Down | KeyCode::Char('j') => state.scroll_down(1),
                         KeyCode::PageUp => state.scroll_up(10),

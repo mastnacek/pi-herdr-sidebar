@@ -1,4 +1,3 @@
-use crate::shared::HerdrPaneInfo;
 use crate::slices::telemetry::{fmt_cost, fmt_tokens};
 use crate::slices::view::state::{SidebarState, Tab};
 use ansi_to_tui::IntoText;
@@ -7,9 +6,15 @@ use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     symbols,
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Cell, LineGauge, Paragraph, Row, Table, Tabs, Wrap},
+    widgets::{Block, BorderType, LineGauge, Paragraph, Tabs, Wrap},
     Frame,
 };
+
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+fn spinner_char(tick: u64) -> &'static str {
+    SPINNER_FRAMES[(tick as usize) % SPINNER_FRAMES.len()]
+}
 
 pub fn render(frame: &mut Frame, state: &SidebarState) {
     let area = frame.area();
@@ -56,13 +61,66 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
 }
 
 fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
-    let titles = Tab::titles();
     let selected_index = state.active_tab.to_index();
+    let spinner = spinner_char(state.anim_tick);
 
-    let live_indicator = if state.snapshot.as_ref().is_some_and(|s| s.live) {
-        Span::styled(" ● ŽIVĚ ", Style::default().fg(Color::Green).bold())
+    // 1. Status tab indicator: spinner ONLY when agent is actively working/executing
+    let is_agent_working = state.live.as_ref().map(|l| l.is_working).unwrap_or(false);
+    let status_spans = if is_agent_working {
+        vec![
+            Span::raw(" 1: Status "),
+            Span::styled(spinner, Style::default().fg(Color::Cyan).bold()),
+            Span::raw(" "),
+        ]
+    } else {
+        vec![Span::raw(" 1: Status ")]
+    };
+
+    // 2. Skills tab indicator: spinner ONLY when skill is active AND in-turn
+    let is_skill_working = state
+        .skills
+        .as_ref()
+        .and_then(|f| f.state.as_ref())
+        .map(|s| s.in_turn && s.active_skill.is_some())
+        .unwrap_or(false);
+
+    let skills_spans = if is_skill_working {
+        vec![
+            Span::raw(" 2: Skills "),
+            Span::styled(spinner, Style::default().fg(Color::Yellow).bold()),
+            Span::raw(" "),
+        ]
+    } else {
+        vec![Span::raw(" 2: Skills ")]
+    };
+
+    // 3. MCP tab indicator: spinner when MCP calls are in flight
+    let is_mcp_in_flight = state.mcp.as_ref().map(|m| m.in_flight).unwrap_or(false);
+    let mcp_spans = if is_mcp_in_flight {
+        vec![
+            Span::raw(" 3: MCP "),
+            Span::styled(spinner, Style::default().fg(Color::Magenta).bold()),
+            Span::raw(" "),
+        ]
+    } else {
+        vec![Span::raw(" 3: MCP ")]
+    };
+
+    let titles: Vec<Line> = vec![
+        Line::from(status_spans),
+        Line::from(skills_spans),
+        Line::from(mcp_spans),
+    ];
+
+    // Top status indicator: static dot when idle, animated spinner ONLY when agent is running
+    let live_indicator = if is_agent_working {
+        Span::styled(
+            format!(" {} BĚŽÍ ", spinner),
+            Style::default().fg(Color::Yellow).bold(),
+        )
+    } else if state.live.is_some() || state.snapshot.as_ref().is_some_and(|s| s.live) {
+        Span::styled(" ● PŘIPRAVEN ", Style::default().fg(Color::Green).bold())
     } else if state.snapshot.is_some() {
-        // Snapshot exists but live=false: Pi session is reloading/restarting
         Span::styled(" ⟳ OBNOVA ", Style::default().fg(Color::Yellow).bold())
     } else {
         Span::styled(" ○ NEČINNÝ ", Style::default().fg(Color::DarkGray))
@@ -85,7 +143,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         .border_style(Style::default().fg(Color::Cyan))
         .title(title_line);
 
-    let tabs = Tabs::new(titles.to_vec())
+    let tabs = Tabs::new(titles)
         .block(block)
         .select(selected_index)
         .style(Style::default().fg(Color::Gray))
@@ -102,12 +160,10 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
 fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
     match state.active_tab {
-        Tab::Herdr => render_herdr_panes(frame, area, &state.panes),
+        Tab::Mcp => render_mcp_face(frame, area, state),
         Tab::Status => {
-            // Prefer live telemetry parsed from the Pi session JSONL — always
-            // fresher than the snapshot and independent of the TS extension.
             if let Some(t) = &state.live {
-                render_live_status(frame, area, t, state.scroll);
+                render_live_status(frame, area, t, state);
             } else if let Some(snapshot) = &state.snapshot {
                 render_status_face(frame, area, snapshot, state.scroll);
             } else {
@@ -115,11 +171,8 @@ fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
             }
         }
         Tab::Skills => {
-            // Prefer the structured sidecar (raw pi-plugin-dev state) so the
-            // Rust renderer paints Gates/Focus/Guidance itself. Fall back to
-            // the snapshot's pre-rendered skill lines when it's absent.
             if let Some(skills) = &state.skills {
-                render_skills_live(frame, area, skills, state.scroll);
+                render_skills_live(frame, area, skills, state);
             } else if let Some(snapshot) = &state.snapshot {
                 render_skills_face(frame, area, snapshot, state.scroll);
             } else {
@@ -134,17 +187,135 @@ fn render_live_status(
     frame: &mut Frame,
     area: Rect,
     t: &crate::slices::telemetry::LiveTelemetry,
-    scroll: u16,
+    state: &SidebarState,
 ) {
     let mut lines: Vec<Line> = Vec::new();
 
-    // CWD + git badge
-    if let Some(f) = &t.session_file {
-        if let Some(cwd) = f.parent().map(|p| p.to_path_buf()) {
-            let _ = cwd; // session folder is not the pane cwd; git shown below
-        }
+    // 1. Model & Engine Identity
+    let spinner = spinner_char(state.anim_tick);
+    let status_icon = if t.is_working {
+        Span::styled(
+            format!("{} ", spinner),
+            Style::default().fg(Color::Cyan).bold(),
+        )
+    } else {
+        Span::styled("● ", Style::default().fg(Color::Green))
+    };
+
+    let mut model_line = vec![
+        status_icon,
+        Span::styled(
+            format!("({}) ", t.provider),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            if t.model_id.is_empty() {
+                "neznámý model".to_string()
+            } else {
+                t.model_id.clone()
+            },
+            Style::default().fg(Color::Green).bold(),
+        ),
+    ];
+    if !t.thinking_level.is_empty() {
+        model_line.push(Span::styled(" • 🧠 ", Style::default().fg(Color::DarkGray)));
+        model_line.push(Span::styled(
+            t.thinking_level.clone(),
+            Style::default().fg(Color::Cyan),
+        ));
     }
-    if !t.git_branch.is_empty() {
+    lines.push(Line::from(model_line));
+
+    // Session Turn & Tool Activity summary
+    lines.push(Line::from(vec![
+        Span::styled("  ⚡ ", Style::default().fg(Color::Yellow)),
+        Span::styled(
+            format!("{} tahů", t.turns_count),
+            Style::default().fg(Color::White),
+        ),
+        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{} nástrojů", t.tool_calls_count),
+            Style::default().fg(Color::Cyan),
+        ),
+        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+        if t.tool_errors_count > 0 {
+            Span::styled(
+                format!("⚠️ {} chyb", t.tool_errors_count),
+                Style::default().fg(Color::Red).bold(),
+            )
+        } else {
+            Span::styled("✓ 0 chyb", Style::default().fg(Color::Green))
+        },
+    ]));
+    lines.push(Line::raw(""));
+
+    // 2. Git Status Section
+    if let Some(git) = &t.git {
+        lines.push(Line::from(vec![
+            Span::styled("🌿 Git: ", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(&git.branch, Style::default().fg(Color::White).bold()),
+            Span::raw(" "),
+            if git.ahead > 0 || git.behind > 0 {
+                Span::styled(
+                    format!("[⇡{} ⇣{}]", git.ahead, git.behind),
+                    Style::default().fg(Color::Yellow).bold(),
+                )
+            } else {
+                Span::styled("[synced]", Style::default().fg(Color::Green))
+            },
+        ]));
+
+        // Working tree details: staged, unstaged, untracked
+        let is_clean = git.staged == 0 && git.unstaged == 0 && git.untracked == 0;
+        let mut status_spans = vec![Span::raw("   ")];
+        if is_clean {
+            status_spans.push(Span::styled(
+                "✓ pracovní strom čistý",
+                Style::default().fg(Color::Green),
+            ));
+        } else {
+            if git.staged > 0 {
+                status_spans.push(Span::styled(
+                    format!("● připraveno: {} ", git.staged),
+                    Style::default().fg(Color::Green),
+                ));
+            }
+            if git.unstaged > 0 {
+                status_spans.push(Span::styled(
+                    format!("● změněno: {} ", git.unstaged),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
+            if git.untracked > 0 {
+                status_spans.push(Span::styled(
+                    format!("? nesledováno: {}", git.untracked),
+                    Style::default().fg(Color::Red),
+                ));
+            }
+        }
+        lines.push(Line::from(status_spans));
+
+        // Latest commit info
+        if !git.commit_hash.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled("   commit: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(&git.commit_hash, Style::default().fg(Color::Magenta).bold()),
+                Span::styled(
+                    format!(" ({}) ", git.commit_age),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    if git.commit_msg.len() > 32 {
+                        format!("{}…", &git.commit_msg[..32])
+                    } else {
+                        git.commit_msg.clone()
+                    },
+                    Style::default().fg(Color::Gray),
+                ),
+            ]));
+        }
+    } else if !t.git_branch.is_empty() {
         let state_icon = if t.git_dirty > 0 {
             Span::styled(
                 format!(" ●{}", t.git_dirty),
@@ -162,10 +333,11 @@ fn render_live_status(
             state_icon,
         ]));
     }
+    lines.push(Line::raw(""));
 
-    // Context gauge (10 cells, like the statusline bar)
+    // 3. Context Window Usage
     if let Some(pct) = t.context_percent {
-        let bar_w = 10usize;
+        let bar_w = 16usize;
         let filled = ((pct.min(100.0) / 100.0) * bar_w as f64).round() as usize;
         let pct_color = if pct >= 90.0 {
             Color::Red
@@ -175,9 +347,13 @@ fn render_live_status(
             Color::Green
         };
         lines.push(Line::from(vec![
-            Span::styled("📊 ", Style::default()),
+            Span::styled("📊 Kontext: ", Style::default().fg(Color::Cyan).bold()),
             Span::styled(
-                format!("{}{}", "█".repeat(filled), "░".repeat(10 - filled)),
+                format!(
+                    "{}{}",
+                    "█".repeat(filled),
+                    "░".repeat(bar_w.saturating_sub(filled))
+                ),
                 Style::default().fg(pct_color),
             ),
             Span::styled(
@@ -185,18 +361,21 @@ fn render_live_status(
                 Style::default().fg(pct_color).bold(),
             ),
             Span::styled(
-                format!("/{}", fmt_tokens(t.context_window)),
+                format!(
+                    " ({}/{})",
+                    fmt_tokens(t.context_tokens),
+                    fmt_tokens(t.context_window)
+                ),
                 Style::default().fg(Color::DarkGray),
             ),
-            Span::styled(" (auto)", Style::default().fg(Color::DarkGray)),
         ]));
     }
 
-    // Cost + token totals
+    // 4. Token & Cost Telemetry
     lines.push(Line::from(vec![
         Span::styled(
             format!("💰 {}", fmt_cost(t.total_cost)),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(Color::Yellow).bold(),
         ),
         Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
         Span::styled(
@@ -208,63 +387,212 @@ fn render_live_status(
             format!("⬇️ {}", fmt_tokens(t.output_tokens)),
             Style::default().fg(Color::Green),
         ),
+        if t.reasoning_tokens > 0 {
+            Span::styled(
+                format!(" │ 🧠 {}", fmt_tokens(t.reasoning_tokens)),
+                Style::default().fg(Color::Magenta),
+            )
+        } else {
+            Span::raw("")
+        },
     ]));
 
-    // Cache
+    // Cache hits & ratio
     let prompt = t.input_tokens + t.cache_read + t.cache_write;
     if prompt > 0 {
         let hit_pct = (t.cache_read as f64 / prompt as f64) * 100.0;
         lines.push(Line::from(vec![
-            Span::styled("📦 ", Style::default()),
-            Span::styled(fmt_tokens(t.cache_read), Style::default().fg(Color::Gray)),
+            Span::styled("📦 Mezipaměť: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!(" (w:{}) ", fmt_tokens(t.cache_write)),
+                format!("čtení: {} ", fmt_tokens(t.cache_read)),
+                Style::default().fg(Color::Gray),
+            ),
+            Span::styled(
+                format!("zápis: {} ", fmt_tokens(t.cache_write)),
                 Style::default().fg(Color::DarkGray),
             ),
             Span::styled(
-                format!("🎯{:.0}%", hit_pct),
-                Style::default().fg(Color::Green),
+                format!("(🎯 úspora {:.0}%)", hit_pct),
+                Style::default().fg(Color::Green).bold(),
             ),
         ]));
     }
 
-    // Model + provider + thinking
-    if !t.model_id.is_empty() {
-        let mut model_line = vec![
-            Span::styled(
-                format!("({}) ", t.provider),
-                Style::default().fg(Color::Gray),
-            ),
-            Span::styled(t.model_id.clone(), Style::default().fg(Color::Green).bold()),
-        ];
-        if !t.thinking_level.is_empty() {
-            model_line.push(Span::styled(" • 🧠 ", Style::default().fg(Color::DarkGray)));
-            model_line.push(Span::styled(
-                t.thinking_level.clone(),
-                Style::default().fg(Color::Cyan),
-            ));
-        }
-        lines.push(Line::from(model_line));
-    }
-
-    // Footer diagnostics: session id + freshness
+    // Footer diagnostics: session id + timestamp
     lines.push(Line::raw(""));
-    lines.push(Line::from(vec![
-        Span::styled("⚡ živá relace ", Style::default().fg(Color::DarkGray)),
+    let mut footer_spans = vec![
+        Span::styled("⚡ relace: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
             t.session_id.chars().take(8).collect::<String>(),
-            Style::default().fg(Color::Magenta),
+            Style::default().fg(Color::Magenta).bold(),
         ),
-    ]));
+    ];
+    if !t.last_entry_ts.is_empty() {
+        let time_part = t
+            .last_entry_ts
+            .split('T')
+            .nth(1)
+            .and_then(|s| s.split('.').next())
+            .unwrap_or("");
+        if !time_part.is_empty() {
+            footer_spans.push(Span::styled(
+                format!(" @ {}", time_part),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+    }
+    lines.push(Line::from(footer_spans));
 
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Cyan))
-        .title(" Telemetrie & Stav [živě] ");
+        .title(" Telemetrie & Stav ");
 
     let paragraph = Paragraph::new(Text::from(lines))
         .block(block)
-        .scroll((scroll, 0))
+        .scroll((state.scroll, 0))
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// MCP Servers & Calls inspection face.
+fn render_mcp_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
+    let spinner = spinner_char(state.anim_tick);
+
+    let Some(mcp) = &state.mcp else {
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Magenta))
+            .title(" MCP Servery ");
+        let text = vec![
+            Line::raw(""),
+            Line::from(Span::styled(
+                "🔌 Žádná aktivita MCP serverů",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::raw(""),
+            Line::from("Sidebar sleduje MCP volání (Knowledge Base, LSP, OpenRouter, atd.)"),
+            Line::from("přímo ze zdrojového protokolu pi relace."),
+        ];
+        frame.render_widget(
+            Paragraph::new(text)
+                .block(block)
+                .scroll((state.scroll, 0))
+                .wrap(Wrap { trim: false }),
+            area,
+        );
+        return;
+    };
+
+    let status_badge = if mcp.in_flight {
+        Span::styled(
+            format!("{} V BĚHU", spinner),
+            Style::default().fg(Color::Yellow).bold(),
+        )
+    } else {
+        Span::styled("● KLID", Style::default().fg(Color::Green).bold())
+    };
+
+    let header_line = Line::from(vec![
+        Span::styled(
+            "🔌 MCP Aktivita: ",
+            Style::default().fg(Color::Magenta).bold(),
+        ),
+        status_badge,
+        Span::raw("  "),
+        Span::styled(
+            format!("{} volání celkem", mcp.total_calls),
+            Style::default().fg(Color::White),
+        ),
+        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+        if mcp.total_errors > 0 {
+            Span::styled(
+                format!("⚠️ {} chyb", mcp.total_errors),
+                Style::default().fg(Color::Red).bold(),
+            )
+        } else {
+            Span::styled("✓ 0 chyb", Style::default().fg(Color::Green))
+        },
+    ]);
+
+    let mut lines = vec![header_line, Line::raw("")];
+
+    // Configured / active servers
+    lines.push(Line::from(Span::styled(
+        "📦 Použité servery:",
+        Style::default().fg(Color::Cyan).bold(),
+    )));
+    if mcp.servers_used.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "   (zatím žádný server nepoužit)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        let mut server_spans = vec![Span::raw("   ")];
+        for s in &mcp.servers_used {
+            server_spans.push(Span::styled(
+                format!("[{}] ", s),
+                Style::default().fg(Color::Green).bold(),
+            ));
+        }
+        lines.push(Line::from(server_spans));
+    }
+    lines.push(Line::raw(""));
+
+    // Recent calls list
+    lines.push(Line::from(Span::styled(
+        "⚡ Nedávná volání nástrojů:",
+        Style::default().fg(Color::Cyan).bold(),
+    )));
+    if mcp.recent_calls.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "   (žádná zaznamenaná volání)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for call in mcp.recent_calls.iter().rev().take(8) {
+            let status = if call.is_error {
+                Span::styled("✗ ", Style::default().fg(Color::Red).bold())
+            } else {
+                Span::styled("✓ ", Style::default().fg(Color::Green))
+            };
+
+            let badge_color = match call.badge.as_str() {
+                "KB" => Color::Blue,
+                "LSP" => Color::Magenta,
+                "OR" => Color::Yellow,
+                _ => Color::Cyan,
+            };
+
+            let mut row = vec![
+                Span::raw("   "),
+                status,
+                Span::styled(
+                    format!("[{}] ", call.badge),
+                    Style::default().fg(badge_color).bold(),
+                ),
+                Span::styled(&call.tool, Style::default().fg(Color::White).bold()),
+            ];
+
+            if !call.summary.is_empty() {
+                row.push(Span::styled(
+                    format!(" — {}", call.summary),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+            lines.push(Line::from(row));
+        }
+    }
+
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Magenta))
+        .title(" MCP Servery & Protokol ");
+
+    let paragraph = Paragraph::new(Text::from(lines))
+        .block(block)
+        .scroll((state.scroll, 0))
         .wrap(Wrap { trim: false });
 
     frame.render_widget(paragraph, area);
@@ -276,13 +604,11 @@ fn partition_snapshot_lines(lines: &[String]) -> (Vec<String>, Vec<String>) {
     let mut in_status = false;
 
     for (i, line) in lines.iter().enumerate() {
-        // Skip first 2 lines if they are old ASCII tab headers
         if i < 2 && (line.contains("Status") && line.contains("Skills") || line.contains("──────"))
         {
             continue;
         }
 
-        // Status telemetry marker: starts at CWD / branch / context bar
         if line.contains("📁") || line.contains("🌿") || line.contains("📊") {
             in_status = true;
         }
@@ -332,15 +658,12 @@ fn render_status_face(
     let chosen_raw = if !status_raw.is_empty() {
         status_raw
     } else {
-        // Fallback to all non-tab-bar lines
         snapshot.lines.iter().skip(2).cloned().collect()
     };
 
     let mut parsed_lines = parse_to_ratatui_lines(&chosen_raw);
 
     if !snapshot.live {
-        // /reload in progress: banner on top of the retained frame so the user
-        // sees the header/sidebar is about to refresh, not stale data.
         parsed_lines.insert(
             0,
             Line::from(Span::styled(
@@ -371,20 +694,20 @@ fn render_skills_live(
     frame: &mut Frame,
     area: Rect,
     file: &crate::slices::telemetry::skills::SkillSnapshotFile,
-    scroll: u16,
+    state: &SidebarState,
 ) {
     use crate::slices::telemetry::skills::{action_icon, elapsed_label, gate_badge};
 
     let mut lines: Vec<Line> = Vec::new();
 
-    let Some(state) = &file.state else {
+    let Some(sk_state) = &file.state else {
         lines.push(Line::from(Span::styled(
-            "🎯 no skill",
+            "🎯 Žádný aktivní skill",
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::raw(""));
         lines.push(Line::from(Span::styled(
-            "No active skill — activate one (e.g. 'herdr-plugin-dev')",
+            "Žádný aktivní skill — načti skill (např. 'herdr-plugin-dev')",
             Style::default().fg(Color::DarkGray),
         )));
         let block = Block::bordered()
@@ -394,117 +717,107 @@ fn render_skills_live(
         frame.render_widget(
             Paragraph::new(Text::from(lines))
                 .block(block)
-                .scroll((scroll, 0))
+                .scroll((state.scroll, 0))
                 .wrap(Wrap { trim: false }),
             area,
         );
         return;
     };
 
-    // Header: active skill + counters
-    lines.push(Line::from(Span::styled(
-        format!("🎯 {}", state.active_skill.as_deref().unwrap_or("žádný skill")),
-        Style::default().fg(Color::Yellow).bold(),
-    )));
-    let elapsed = elapsed_label(state.last_update_time.saturating_sub(state.start_time));
+    // Header: active skill + animated status indicator
+    let spinner = spinner_char(state.anim_tick);
+    let run_badge = if sk_state.in_turn {
+        Span::styled(
+            format!("{} V BĚHU", spinner),
+            Style::default().fg(Color::Cyan).bold(),
+        )
+    } else {
+        Span::styled("● KLID", Style::default().fg(Color::Green).bold())
+    };
+
+    lines.push(Line::from(vec![
+        Span::styled("🎯 ", Style::default()),
+        Span::styled(
+            sk_state.active_skill.as_deref().unwrap_or("žádný skill"),
+            Style::default().fg(Color::Yellow).bold(),
+        ),
+        Span::raw("  "),
+        run_badge,
+    ]));
+
+    let elapsed = elapsed_label(
+        sk_state
+            .last_update_time
+            .saturating_sub(sk_state.start_time),
+    );
     lines.push(Line::from(Span::styled(
         format!(
-            "{} refů · {} · {} tahů",
-            state.references.len(),
+            "   {} refů · čas: {} · {} tahů",
+            sk_state.references.len(),
             elapsed,
-            state.turn_count
+            sk_state.turn_count
         ),
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::raw(""));
 
-    // Loaded guidance
-    lines.push(Line::from(Span::styled(
-        "📖 Pokyny",
-        Style::default().fg(Color::Cyan),
-    )));
-    if state.references.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  (zatím nic)",
-            Style::default().fg(Color::DarkGray),
-        )));
-    } else {
-        for r in state.references.iter().rev().take(6) {
-            let text = if r.summary.is_empty() {
-                format!("  ✓ {}", r.name)
-            } else {
-                format!("  ✓ {} — {}", r.name, r.summary)
-            };
-            lines.push(Line::from(Span::styled(
-                text,
-                Style::default().fg(Color::Green),
-            )));
-        }
-    }
-    lines.push(Line::raw(""));
-
-    // Agent focus — most recent actions
-    lines.push(Line::from(Span::styled(
-        "⚡ Fokus",
-        Style::default().fg(Color::Cyan),
-    )));
-    if state.actions.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "  (nečinný)",
-            Style::default().fg(Color::DarkGray),
-        )));
-    } else {
-        for a in state.actions.iter().rev().take(3) {
-            let text = if a.summary.is_empty() {
-                format!("  {} {}", action_icon(&a.kind), a.target)
-            } else {
-                format!("  {} {} — {}", action_icon(&a.kind), a.target, a.summary)
-            };
-            lines.push(Line::from(Span::styled(
-                text,
-                Style::default().fg(Color::Gray),
-            )));
-        }
-    }
-    lines.push(Line::raw(""));
-
-    // Compliance scorecard (Gates)
-    let passed = state
+    // Compliance scorecard (Gates) with visual progress bar
+    let passed = sk_state
         .compliance
         .iter()
         .filter(|c| c.status == "pass")
         .count();
-    let failed = state
+    let failed = sk_state
         .compliance
         .iter()
         .filter(|c| c.status == "fail")
         .count();
-    let total = state.compliance.len();
-    let score_text = if total > 0 {
-        format!("{}/{}", passed, total)
-    } else {
-        "n/a".to_string()
-    };
+    let total = sk_state.compliance.len();
+
     let score_color = if failed > 0 {
         Color::Red
     } else if total > 0 && passed == total {
         Color::Green
     } else {
-        Color::DarkGray
+        Color::Yellow
     };
+
+    // Mini gauge for compliance
+    let (ratio, bar_str) = if total > 0 {
+        let r = passed as f64 / total as f64;
+        let filled = (r * 12.0).round() as usize;
+        (
+            r,
+            format!(
+                "{}{}",
+                "█".repeat(filled),
+                "░".repeat(12usize.saturating_sub(filled))
+            ),
+        )
+    } else {
+        (0.0, "░".repeat(12))
+    };
+
     lines.push(Line::from(vec![
-        Span::styled("🛡 ", Style::default()),
-        Span::styled("Brány ", Style::default().fg(Color::Cyan)),
-        Span::styled(score_text, Style::default().fg(score_color).bold()),
+        Span::styled("🛡 Brány souladu: ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(bar_str, Style::default().fg(score_color)),
+        Span::styled(
+            if total > 0 {
+                format!(" {}/{} ({:.0}%)", passed, total, ratio * 100.0)
+            } else {
+                " (0)".to_string()
+            },
+            Style::default().fg(score_color).bold(),
+        ),
     ]));
 
     if total == 0 {
         lines.push(Line::from(Span::styled(
-            "  čekám na změny kódu",
+            "   čekám na změny kódu k validaci…",
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        for c in state.compliance.iter().rev().take(6) {
+        for c in sk_state.compliance.iter().rev().take(6) {
             let color = match c.status.as_str() {
                 "pass" => Color::Green,
                 "fail" => Color::Red,
@@ -516,6 +829,7 @@ fn render_skills_live(
                 format!("{} — {}", c.label, c.details)
             };
             lines.push(Line::from(vec![
+                Span::raw("   "),
                 Span::styled(
                     format!("[{}] ", gate_badge(&c.status)),
                     Style::default().fg(color).bold(),
@@ -526,21 +840,64 @@ fn render_skills_live(
     }
     lines.push(Line::raw(""));
 
-    // Status footer
-    if state.in_turn {
+    // Loaded guidance (Pokyny)
+    lines.push(Line::from(Span::styled(
+        "📖 Pokyny a reference:",
+        Style::default().fg(Color::Cyan).bold(),
+    )));
+    if sk_state.references.is_empty() {
         lines.push(Line::from(Span::styled(
-            "● běží",
-            Style::default().fg(Color::Cyan),
+            "   (zatím nenačteny žádné reference)",
+            Style::default().fg(Color::DarkGray),
         )));
     } else {
-        lines.push(Line::from(Span::styled(
-            format!(
-                "✓ klid · {} čtení · {} zápisů",
-                state.inspected_count, state.modified_count
-            ),
-            Style::default().fg(Color::Green),
-        )));
+        for r in sk_state.references.iter().rev().take(5) {
+            let text = if r.summary.is_empty() {
+                format!("   ✓ {}", r.name)
+            } else {
+                format!("   ✓ {} — {}", r.name, r.summary)
+            };
+            lines.push(Line::from(Span::styled(
+                text,
+                Style::default().fg(Color::Green),
+            )));
+        }
     }
+    lines.push(Line::raw(""));
+
+    // Agent focus (Poslední akce)
+    lines.push(Line::from(Span::styled(
+        "⚡ Fokus & akce agenta:",
+        Style::default().fg(Color::Cyan).bold(),
+    )));
+    if sk_state.actions.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "   (žádné nedávné akce)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for a in sk_state.actions.iter().rev().take(4) {
+            let text = if a.summary.is_empty() {
+                format!("   {} {}", action_icon(&a.kind), a.target)
+            } else {
+                format!("   {} {} — {}", action_icon(&a.kind), a.target, a.summary)
+            };
+            lines.push(Line::from(Span::styled(
+                text,
+                Style::default().fg(Color::Gray),
+            )));
+        }
+    }
+    lines.push(Line::raw(""));
+
+    // Summary footer counters
+    lines.push(Line::from(Span::styled(
+        format!(
+            "📊 Souhrn aktivity: {} čtení · {} zápisů kódu",
+            sk_state.inspected_count, sk_state.modified_count
+        ),
+        Style::default().fg(Color::DarkGray),
+    )));
 
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
@@ -549,7 +906,7 @@ fn render_skills_live(
 
     let paragraph = Paragraph::new(Text::from(lines))
         .block(block)
-        .scroll((scroll, 0))
+        .scroll((state.scroll, 0))
         .wrap(Wrap { trim: false });
 
     frame.render_widget(paragraph, area);
@@ -571,10 +928,7 @@ fn render_skills_face(
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Green))
-        .title(format!(
-            " HUD skilů & souladu [rev {}] ",
-            snapshot.revision
-        ));
+        .title(format!(" HUD skilů & souladu [rev {}] ", snapshot.revision));
 
     if has_content {
         let mut parsed_lines = parse_to_ratatui_lines(&skills_raw);
@@ -596,7 +950,10 @@ fn render_skills_face(
     } else {
         let fallback_text = vec![
             Line::raw(""),
-            Line::from(Span::styled("🎯 Žádný aktivní skill neběží", Style::default().fg(Color::Yellow).bold())),
+            Line::from(Span::styled(
+                "🎯 Žádný aktivní skill neběží",
+                Style::default().fg(Color::Yellow).bold(),
+            )),
             Line::raw(""),
             Line::from("HUD skilů zobrazuje pokyny aktivního skillu, kontrolní seznamy,"),
             Line::from("fokusní cesty a kontrolní brány, když je nějaký skill aktivní."),
@@ -646,11 +1003,6 @@ fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
                 Style::default().fg(Color::Magenta),
             ),
         ]),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("Tip: ", Style::default().fg(Color::Green).bold()),
-            Span::raw("Stiskni [3] nebo Tab a prohlédni herdr panely v tomto workspace."),
-        ]),
     ];
 
     let block = Block::bordered()
@@ -660,61 +1012,6 @@ fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
     let paragraph = Paragraph::new(text).block(block);
     frame.render_widget(paragraph, area);
-}
-
-fn render_herdr_panes(frame: &mut Frame, area: Rect, panes: &[HerdrPaneInfo]) {
-    let header = Row::new(vec![
-        Cell::from("ID panelu").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("Tab").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("Workspace").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("Popisek").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("Aktivní").style(Style::default().fg(Color::Cyan).bold()),
-        Cell::from("CWD").style(Style::default().fg(Color::Cyan).bold()),
-    ])
-    .bottom_margin(1);
-
-    let rows: Vec<Row> = panes
-        .iter()
-        .map(|p| {
-            let is_focused = p.focused.unwrap_or(false);
-            let focus_cell = if is_focused {
-                Cell::from("● ANO").style(Style::default().fg(Color::Green).bold())
-            } else {
-                Cell::from("○ ne").style(Style::default().fg(Color::DarkGray))
-            };
-
-            Row::new(vec![
-                Cell::from(p.pane_id.clone()).style(Style::default().fg(Color::Yellow)),
-                Cell::from(p.tab_id.clone().unwrap_or_else(|| "-".to_string())),
-                Cell::from(p.workspace_id.clone().unwrap_or_else(|| "-".to_string())),
-                Cell::from(p.label.clone().unwrap_or_else(|| "-".to_string())),
-                focus_cell,
-                Cell::from(p.cwd.clone().unwrap_or_else(|| "-".to_string()))
-                    .style(Style::default().dim()),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Length(10),
-        Constraint::Length(10),
-        Constraint::Length(10),
-        Constraint::Length(14),
-        Constraint::Length(8),
-        Constraint::Fill(1),
-    ];
-
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Magenta))
-        .title(format!(" Herdr panely workspaceu ({}) ", panes.len()));
-
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(block)
-        .column_spacing(1);
-
-    frame.render_widget(table, area);
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, state: &SidebarState) {

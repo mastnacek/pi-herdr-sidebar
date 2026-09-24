@@ -536,7 +536,7 @@ fn strip_comments(source: &str) -> String {
 }
 
 /// RFC3339 UTC timestamp (`2026-09-23T21:02:02.995Z`) → epoch milliseconds.
-fn iso_to_epoch_ms(s: &str) -> Option<u64> {
+pub fn iso_to_epoch_ms(s: &str) -> Option<u64> {
     let s = s.trim();
     let bytes = s.as_bytes();
     if bytes.len() < 19 || bytes[4] != b'-' || bytes[7] != b'-' || bytes[10] != b'T' {

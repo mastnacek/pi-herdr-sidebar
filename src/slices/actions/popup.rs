@@ -3,6 +3,12 @@ use std::process::Command;
 
 pub fn run_popup() -> Result<(), String> {
     let client = HerdrClient::new();
+    let entrypoint = if cfg!(windows) {
+        "sidebar-popup-win"
+    } else {
+        "sidebar-popup"
+    };
+
     let status = Command::new(&client.bin_path)
         .args([
             "plugin",
@@ -11,7 +17,7 @@ pub fn run_popup() -> Result<(), String> {
             "--plugin",
             "pi.herdr-sidebar",
             "--entrypoint",
-            "sidebar-popup",
+            entrypoint,
         ])
         .status()
         .map_err(|e| e.to_string())?;

@@ -4,8 +4,22 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+pub mod mcp_live;
 pub mod skills;
 pub mod skills_live;
+
+#[derive(Debug, Clone, Default)]
+pub struct GitTelemetry {
+    pub branch: String,
+    pub ahead: u32,
+    pub behind: u32,
+    pub staged: u32,
+    pub unstaged: u32,
+    pub untracked: u32,
+    pub commit_hash: String,
+    pub commit_msg: String,
+    pub commit_age: String,
+}
 
 /// Live telemetry parsed directly from the Pi session JSONL file.
 /// No TS extension required — the session log IS the source of truth.
@@ -26,8 +40,14 @@ pub struct LiveTelemetry {
     pub output_tokens: u64,
     pub cache_read: u64,
     pub cache_write: u64,
+    pub reasoning_tokens: u64,
+    pub turns_count: u64,
+    pub tool_calls_count: u64,
+    pub tool_errors_count: u64,
+    pub git: Option<GitTelemetry>,
     pub git_branch: String,
     pub git_dirty: u32,
+    pub is_working: bool,
     pub last_entry_ts: String,
 }
 
@@ -308,6 +328,8 @@ struct Usage {
     #[serde(default)]
     totalTokens: u64,
     #[serde(default)]
+    reasoning: u64,
+    #[serde(default)]
     cost: Option<UsageCost>,
 }
 
@@ -316,6 +338,10 @@ struct MessageBody {
     role: Option<String>,
     provider: Option<String>,
     model: Option<String>,
+    #[serde(default, rename = "isError")]
+    is_error: Option<bool>,
+    #[serde(default)]
+    content: Option<serde_json::Value>,
     #[serde(default)]
     usage: Option<Usage>,
 }
@@ -469,37 +495,101 @@ pub fn load_newest(cwd: Option<&str>) -> Option<LiveTelemetry> {
     parse_session(&file, "")
 }
 
-fn git_info(cwd: &Path) -> (String, u32) {
+fn git_info(cwd: &Path) -> Option<GitTelemetry> {
     use std::process::Command;
+    // 1. Status with branch info in porcelain format
     let out = Command::new("git")
         .arg("-C")
         .arg(cwd)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output();
-    let branch = out
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
+        .args(["status", "--porcelain=v2", "--branch"])
+        .output()
+        .ok()?;
 
-    let dirty = Command::new("git")
+    if !out.status.success() {
+        return None;
+    }
+
+    let status_str = String::from_utf8_lossy(&out.stdout);
+    let mut branch = String::new();
+    let mut ahead = 0u32;
+    let mut behind = 0u32;
+    let mut staged = 0u32;
+    let mut unstaged = 0u32;
+    let mut untracked = 0u32;
+
+    for line in status_str.lines() {
+        if let Some(rest) = line.strip_prefix("# branch.head ") {
+            branch = rest.trim().to_string();
+        } else if let Some(rest) = line.strip_prefix("# branch.ab ") {
+            // e.g. "+5 -0"
+            let mut parts = rest.split_whitespace();
+            if let Some(p) = parts.next() {
+                if let Some(n) = p.strip_prefix('+').and_then(|s| s.parse::<u32>().ok()) {
+                    ahead = n;
+                }
+            }
+            if let Some(p) = parts.next() {
+                if let Some(n) = p.strip_prefix('-').and_then(|s| s.parse::<u32>().ok()) {
+                    behind = n;
+                }
+            }
+        } else if line.starts_with("1 ") || line.starts_with("2 ") {
+            // 1 <XY> ... or 2 <XY> ...
+            let bytes = line.as_bytes();
+            if bytes.len() >= 4 {
+                let x = bytes[2];
+                let y = bytes[3];
+                if x != b'.' {
+                    staged += 1;
+                }
+                if y != b'.' {
+                    unstaged += 1;
+                }
+            }
+        } else if line.starts_with("? ") {
+            untracked += 1;
+        } else if line.starts_with("u ") {
+            // unmerged
+            staged += 1;
+            unstaged += 1;
+        }
+    }
+
+    // 2. Latest commit details
+    let log_out = Command::new("git")
         .arg("-C")
         .arg(cwd)
-        .args(["status", "--porcelain"])
+        .args(["log", "-1", "--format=%h|%cr|%s"])
         .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).lines().count() as u32)
-        .unwrap_or(0);
+        .ok();
 
-    (branch_display(&branch, &cwd_display(cwd)), dirty)
-}
+    let mut commit_hash = String::new();
+    let mut commit_age = String::new();
+    let mut commit_msg = String::new();
 
-fn branch_display(branch: &str, _cwd: &str) -> String {
-    branch.to_string()
-}
+    if let Some(lo) = log_out {
+        if lo.status.success() {
+            let log_line = String::from_utf8_lossy(&lo.stdout);
+            let parts: Vec<&str> = log_line.trim().splitn(3, '|').collect();
+            if parts.len() >= 3 {
+                commit_hash = parts[0].to_string();
+                commit_age = parts[1].to_string();
+                commit_msg = parts[2].to_string();
+            }
+        }
+    }
 
-fn cwd_display(cwd: &Path) -> String {
-    cwd.display().to_string()
+    Some(GitTelemetry {
+        branch,
+        ahead,
+        behind,
+        staged,
+        unstaged,
+        untracked,
+        commit_hash,
+        commit_msg,
+        commit_age,
+    })
 }
 
 /// Parse a pi session JSONL into telemetry. Tolerant: partial/unknown entries skipped.
@@ -514,7 +604,9 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
     let mut last_model_provider = String::new();
     let mut last_model_id = String::new();
     let mut last_thinking = String::new();
+    let mut in_turn = false;
 
+    // Parse message counts and tool usage
     for line in content.lines() {
         let Ok(entry) = serde_json::from_str::<Entry>(line) else {
             continue;
@@ -546,6 +638,34 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
             }
             "message" => {
                 if let Some(msg) = &entry.message {
+                    if msg.role.as_deref() == Some("user") {
+                        t.turns_count += 1;
+                        in_turn = true;
+                    }
+                    if msg.role.as_deref() == Some("toolResult") {
+                        in_turn = true;
+                        if msg.is_error.unwrap_or(false) {
+                            t.tool_errors_count += 1;
+                        }
+                    }
+                    if msg.role.as_deref() == Some("assistant") {
+                        let mut has_tool_calls = false;
+                        if let Some(serde_json::Value::Array(blocks)) = &msg.content {
+                            for b in blocks {
+                                if b.get("type").and_then(|v| v.as_str()) == Some("toolCall") {
+                                    t.tool_calls_count += 1;
+                                    has_tool_calls = true;
+                                }
+                            }
+                        }
+                        if has_tool_calls {
+                            in_turn = true;
+                        } else {
+                            // Settled turn ends with plain assistant message
+                            in_turn = false;
+                        }
+                    }
+
                     if let Some(u) = &msg.usage {
                         // Model identity BEFORE cost math: assistant messages
                         // carry it directly; earlier entries inherit the
@@ -570,6 +690,7 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                         t.output_tokens += u.output;
                         t.cache_read += u.cacheRead;
                         t.cache_write += u.cacheWrite;
+                        t.reasoning_tokens += u.reasoning;
                         add_usage_cost(&mut t, u, prov, mid);
                         // Assistant usage reflects the full prompt size -> context
                         if msg.role.as_deref() == Some("assistant") && u.totalTokens > 0 {
@@ -594,6 +715,7 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                     t.output_tokens += u.output;
                     t.cache_read += u.cacheRead;
                     t.cache_write += u.cacheWrite;
+                    t.reasoning_tokens += u.reasoning;
                     add_usage_cost(
                         &mut t,
                         u,
@@ -632,12 +754,16 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
     if let Some(header_line) = content.lines().next() {
         if let Ok(header) = serde_json::from_str::<SessionHeader>(header_line) {
             if let Some(cwd) = header.cwd {
-                let (branch, dirty) = git_info(Path::new(&cwd));
-                t.git_branch = branch;
-                t.git_dirty = dirty;
+                if let Some(git) = git_info(Path::new(&cwd)) {
+                    t.git_branch = git.branch.clone();
+                    t.git_dirty = git.staged + git.unstaged + git.untracked;
+                    t.git = Some(git);
+                }
             }
         }
     }
+
+    t.is_working = in_turn;
 
     Some(t)
 }
@@ -722,6 +848,7 @@ mod cost_tests {
             cacheWrite: cache_write,
             cache_write_1h,
             totalTokens: 0,
+            reasoning: 0,
             cost: None,
         }
     }

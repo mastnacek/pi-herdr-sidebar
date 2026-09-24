@@ -8,24 +8,20 @@ use std::time::SystemTime;
 pub enum Tab {
     Status = 0,
     Skills = 1,
-    Herdr = 2,
+    Mcp = 2,
 }
 
 impl Tab {
     pub fn from_index(index: usize) -> Self {
         match index {
             1 => Tab::Skills,
-            2 => Tab::Herdr,
+            2 => Tab::Mcp,
             _ => Tab::Status,
         }
     }
 
     pub fn to_index(self) -> usize {
         self as usize
-    }
-
-    pub fn titles() -> [&'static str; 3] {
-        [" 1: Status ", " 2: Skills ", " 3: Herdr "]
     }
 }
 
@@ -49,6 +45,9 @@ pub struct SidebarState {
     pub last_revision: u64,
     pub last_key: String,
     pub missing_ticks: u8,
+    pub anim_tick: u64,
+    /// Last detected active skill name to trigger auto-switch on skill activation
+    pub last_active_skill: Option<String>,
     /// Live telemetry parsed directly from the Pi session JSONL (no TS ext needed).
     pub live: Option<crate::slices::telemetry::LiveTelemetry>,
     pub live_session_id: Option<String>,
@@ -58,6 +57,10 @@ pub struct SidebarState {
     /// Fallback: TS sidecar (`<pane>.skills.json`) when no session file exists.
     pub skills: Option<crate::slices::telemetry::skills::SkillSnapshotFile>,
     pub skills_mtime: Option<SystemTime>,
+    /// Live MCP server telemetry parsed from the Pi session JSONL.
+    pub mcp: Option<crate::slices::telemetry::mcp_live::McpTelemetry>,
+    pub mcp_mtime: Option<SystemTime>,
+    pub last_mcp_calls_count: u64,
 }
 
 impl SidebarState {
@@ -88,11 +91,16 @@ impl SidebarState {
             last_revision: 0,
             last_key: String::new(),
             missing_ticks: 0,
+            anim_tick: 0,
+            last_active_skill: None,
             live: None,
             live_session_id: None,
             live_session_mtime: None,
             skills: None,
             skills_mtime: None,
+            mcp: None,
+            mcp_mtime: None,
+            last_mcp_calls_count: 0,
         };
 
         state.refresh(true);
@@ -106,6 +114,7 @@ impl SidebarState {
     }
 
     pub fn tick_animation(&mut self) {
+        self.anim_tick = self.anim_tick.wrapping_add(1);
         if self.refresh_timer > 0 {
             self.refresh_timer -= 1;
             let total = if self.refresh_status.contains("obnovuje") {
@@ -134,7 +143,7 @@ impl SidebarState {
             let tab_id = match tab {
                 Tab::Status => "status",
                 Tab::Skills => "skills",
-                Tab::Herdr => return,
+                Tab::Mcp => return,
             };
 
             let col = if let Some(snap) = &self.snapshot {
@@ -190,7 +199,7 @@ impl SidebarState {
             } else if col < 28 {
                 self.set_tab(Tab::Skills);
             } else if col < 45 {
-                self.set_tab(Tab::Herdr);
+                self.set_tab(Tab::Mcp);
             }
         }
     }
@@ -257,6 +266,22 @@ impl SidebarState {
         // 4. Refresh live telemetry from the session JSONL (independent of snapshot)
         self.refresh_live(force);
         self.refresh_skills(force);
+        self.refresh_mcp(force);
+
+        // Auto-switch to MCP tab when MCP server is actively used
+        let (should_switch_mcp, new_total_calls) = if let Some(mcp) = &self.mcp {
+            let active = mcp.in_flight || mcp.total_calls > self.last_mcp_calls_count;
+            let switch = active && self.last_mcp_calls_count > 0 && self.active_tab != Tab::Mcp;
+            (switch, mcp.total_calls)
+        } else {
+            (false, 0)
+        };
+        if new_total_calls > 0 {
+            self.last_mcp_calls_count = new_total_calls;
+        }
+        if should_switch_mcp {
+            self.set_tab(Tab::Mcp);
+        }
         if let Some(path) = &self.snapshot_path {
             if let Ok(meta) = std::fs::metadata(path) {
                 if let Ok(mtime) = meta.modified() {
@@ -335,6 +360,23 @@ impl SidebarState {
         self.skills_mtime = mtime;
         self.skills =
             crate::slices::telemetry::skills::SkillSnapshotFile::read_from_file(&skills_path);
+    }
+
+    /// Refresh MCP server usage telemetry from Pi session JSONL
+    fn refresh_mcp(&mut self, force: bool) {
+        if let Some(t) = &self.live {
+            if let Some(f) = &t.session_file {
+                if let Ok(meta) = std::fs::metadata(f) {
+                    let mtime = meta.modified().ok();
+                    if force || self.mcp_mtime != mtime || self.mcp.is_none() {
+                        self.mcp_mtime = mtime;
+                        self.mcp = crate::slices::telemetry::mcp_live::parse_mcp_session(f);
+                    }
+                    return;
+                }
+            }
+        }
+        self.mcp = None;
     }
 
     /// Apply a freshly-read snapshot and detect session lifecycle transitions
