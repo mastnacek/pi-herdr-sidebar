@@ -1054,6 +1054,15 @@ fn render_weather_lines(state: &SidebarState) -> Vec<Line<'static>> {
         )));
         for day in &w.days {
             let (r, g, b) = day.color;
+            // "2026-09-25" → "25.9."
+            let date_parts: Vec<&str> = day.date.split('-').collect();
+            let date_label = if date_parts.len() == 3 {
+                let m = date_parts[1].trim_start_matches('0');
+                let d = date_parts[2].trim_start_matches('0');
+                format!("{}.{}. ", d, m)
+            } else {
+                String::new()
+            };
             let precip_note = if day.precip_mm >= 0.2 {
                 format!(" 💧{:.1}", day.precip_mm)
             } else {
@@ -1064,6 +1073,10 @@ fn render_weather_lines(state: &SidebarState) -> Vec<Line<'static>> {
                 Span::styled(
                     format!("{} ", day.weekday),
                     Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!("{} ", date_label),
+                    Style::default().fg(Color::DarkGray),
                 ),
                 Span::styled(
                     format!("{} ", day.icon),

@@ -421,9 +421,9 @@ fn parse_forecast(
     };
     t.updated_at = root.properties.updated_at.unwrap_or_default();
 
-    let now_ms = SystemTime::now()
+    let now_secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
+        .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
 
     // Convert UTC epoch to local epoch (CEST = UTC+2; CST winter = UTC+1 —
@@ -446,7 +446,7 @@ fn parse_forecast(
 
     for ts in &root.properties.timeseries {
         let epoch = crate::slices::telemetry::skills_live::iso_to_epoch_ms(&ts.time)
-            .map(|ms| ms as i64)
+            .map(|ms| ms as i64 / 1000) // epoch SECONDS (iso_to_epoch_ms yields ms)
             .unwrap_or(0);
         let d = &ts.data;
         entries.push(Entry {
@@ -486,7 +486,7 @@ fn parse_forecast(
     // ---- Current conditions: nearest entry not in the future ----
     let current_entry = entries
         .iter()
-        .filter(|e| e.epoch <= now_ms / 1000)
+        .filter(|e| e.epoch <= now_secs)
         .max_by_key(|e| e.epoch)
         .or_else(|| entries.first());
 
@@ -522,7 +522,7 @@ fn parse_forecast(
     }
 
     // Anchor: local "today" (day containing now).
-    let today = (now_ms / 1000 + LOCAL_OFFSET_SECS).div_euclid(86_400);
+    let today = (now_secs + LOCAL_OFFSET_SECS).div_euclid(86_400);
 
     for (day, list) in days.iter().take(8) {
         if *day < today || t.days.len() >= 7 {
