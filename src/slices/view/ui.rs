@@ -64,12 +64,14 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let selected_index = state.active_tab.to_index();
     let spinner = spinner_char(state.anim_tick);
 
+    let is_zen = state.active_tab == Tab::Zen;
+
     // 0. Zen tab: calm, serene indicator
     let zen_spans = vec![Span::raw(" 0: Zen ")];
 
-    // 1. Status tab indicator: spinner ONLY when agent is actively working/executing
+    // 1. Status tab indicator: spinner ONLY when agent is actively working/executing (and not in Zen tab)
     let is_agent_working = state.live.as_ref().map(|l| l.is_working).unwrap_or(false);
-    let status_spans = if is_agent_working {
+    let status_spans = if is_agent_working && !is_zen {
         vec![
             Span::raw(" 1: Status "),
             Span::styled(spinner, Style::default().fg(Color::Cyan).bold()),
@@ -79,7 +81,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         vec![Span::raw(" 1: Status ")]
     };
 
-    // 2. Skills tab indicator: spinner ONLY when skill is active AND in-turn
+    // 2. Skills tab indicator: spinner ONLY when skill is active AND in-turn (and not in Zen tab)
     let is_skill_working = state
         .skills
         .as_ref()
@@ -87,7 +89,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         .map(|s| s.in_turn && s.active_skill.is_some())
         .unwrap_or(false);
 
-    let skills_spans = if is_skill_working {
+    let skills_spans = if is_skill_working && !is_zen {
         vec![
             Span::raw(" 2: Skills "),
             Span::styled(spinner, Style::default().fg(Color::Yellow).bold()),
@@ -97,9 +99,9 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         vec![Span::raw(" 2: Skills ")]
     };
 
-    // 3. MCP tab indicator: spinner when MCP calls are in flight
+    // 3. MCP tab indicator: spinner when MCP calls are in flight (and not in Zen tab)
     let is_mcp_in_flight = state.mcp.as_ref().map(|m| m.in_flight).unwrap_or(false);
-    let mcp_spans = if is_mcp_in_flight {
+    let mcp_spans = if is_mcp_in_flight && !is_zen {
         vec![
             Span::raw(" 3: MCP "),
             Span::styled(spinner, Style::default().fg(Color::Magenta).bold()),
@@ -116,12 +118,14 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Line::from(mcp_spans),
     ];
 
-    // Top status indicator: static dot when idle, animated spinner ONLY when agent is running
-    let live_indicator = if is_agent_working {
+    // Top status indicator: static dot in Zen tab or when idle; animated ONLY when agent is running in active tabs
+    let live_indicator = if is_agent_working && !is_zen {
         Span::styled(
             format!(" {} BĚŽÍ ", spinner),
             Style::default().fg(Color::Yellow).bold(),
         )
+    } else if is_agent_working && is_zen {
+        Span::styled(" ● BĚŽÍ ", Style::default().fg(Color::Yellow))
     } else if state.live.is_some() || state.snapshot.as_ref().is_some_and(|s| s.live) {
         Span::styled(" ● PŘIPRAVEN ", Style::default().fg(Color::Green).bold())
     } else if state.snapshot.is_some() {
