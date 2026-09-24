@@ -39,12 +39,37 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
             match event::read()? {
                 Event::Key(key) => {
                     // Quit on q or Esc, or Ctrl+c
-                    if key.code == KeyCode::Char('q')
-                        || key.code == KeyCode::Esc
+                    if (key.code == KeyCode::Esc && !state.weather_popup)
+                        || key.code == KeyCode::Char('q')
                         || (key.modifiers.contains(KeyModifiers::CONTROL)
                             && key.code == KeyCode::Char('c'))
                     {
                         break;
+                    }
+
+                    // Weather popup captures Up/Down/Enter/Esc/j/k when open
+                    if state.weather_popup {
+                        match key.code {
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                state.weather_popup_cursor =
+                                    state.weather_popup_cursor.saturating_sub(1).min(
+                                        crate::slices::telemetry::weather_live::LOCATIONS.len() - 1,
+                                    );
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                state.weather_popup_cursor = (state.weather_popup_cursor + 1).min(
+                                    crate::slices::telemetry::weather_live::LOCATIONS.len() - 1,
+                                );
+                            }
+                            KeyCode::Enter => {
+                                let idx = state.weather_popup_cursor;
+                                state.select_weather_location(idx);
+                                state.weather_popup = false;
+                            }
+                            KeyCode::Esc => state.weather_popup = false,
+                            _ => {}
+                        }
+                        continue;
                     }
 
                     match key.code {
@@ -62,6 +87,11 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         KeyCode::PageDown => state.scroll_down(10),
                         KeyCode::Home => state.scroll = 0,
                         KeyCode::Char('r') => state.trigger_manual_refresh(),
+                        KeyCode::Char('w') => {
+                            // Weather location popup toggle
+                            state.weather_popup = !state.weather_popup;
+                            state.weather_popup_cursor = state.weather_location_index;
+                        }
                         _ => {}
                     }
                 }

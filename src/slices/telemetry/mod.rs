@@ -9,6 +9,7 @@ pub mod quota_live;
 pub mod skills;
 pub mod skills_live;
 pub mod spai_live;
+pub mod weather_live;
 
 #[derive(Debug, Clone, Default)]
 pub struct GitTelemetry {

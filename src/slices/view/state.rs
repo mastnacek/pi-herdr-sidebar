@@ -68,6 +68,15 @@ pub struct SidebarState {
     pub spai_mtime: Option<SystemTime>,
     /// Sliding window quota telemetry (5m/1h/5h session sliding tokens + upstream provider quota).
     pub quota: Option<crate::slices::telemetry::quota_live::QuotaTelemetry>,
+    /// Live weather telemetry (yr.no Locationforecast 2.0) for the selected location.
+    pub weather: Option<crate::slices::telemetry::weather_live::WeatherTelemetry>,
+    /// Index into `weather_live::LOCATIONS` (0 = Otovice u Broumova).
+    pub weather_location_index: usize,
+    /// Weather location popup open + cursor position.
+    pub weather_popup: bool,
+    pub weather_popup_cursor: usize,
+    /// Epoch secs of last weather fetch attempt (throttle background refresh).
+    pub weather_last_fetch: u64,
 }
 
 impl SidebarState {
@@ -111,6 +120,12 @@ impl SidebarState {
             spai: None,
             spai_mtime: None,
             quota: None,
+            weather: None,
+            weather_location_index: crate::slices::telemetry::weather_live::load_selected_location(
+            ),
+            weather_popup: false,
+            weather_popup_cursor: 0,
+            weather_last_fetch: 0,
         };
 
         state.refresh(true);
@@ -281,6 +296,7 @@ impl SidebarState {
         self.refresh_mcp(force);
         self.refresh_spai(force);
         self.refresh_quota(force);
+        self.refresh_weather(force);
 
         // Auto-switch to MCP tab when MCP server is actively used
         let (should_switch_mcp, new_total_calls) = if let Some(mcp) = &self.mcp {
@@ -418,6 +434,40 @@ impl SidebarState {
         }
         self.spai_mtime = mtime;
         self.spai = crate::slices::telemetry::spai_live::parse_spai_index(&path);
+    }
+
+    /// Refresh weather telemetry. Fetch is throttled to ~15 min by the disk
+    /// cache TTL inside `weather_live`; the epoch check here only avoids a
+    /// curl spawn on every tick after a failure.
+    fn refresh_weather(&mut self, force: bool) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        if !force && now.saturating_sub(self.weather_last_fetch) < 60 {
+            return; // at most one fetch attempt per minute
+        }
+        self.weather_last_fetch = now;
+        self.weather = Some(crate::slices::telemetry::weather_live::refresh_weather(
+            self.weather_location_index,
+            force,
+        ));
+    }
+
+    /// Rotate to the next preset location and refetch (click-to-rotate groundwork).
+    pub fn cycle_weather_location(&mut self) {
+        self.weather_location_index = (self.weather_location_index + 1)
+            % crate::slices::telemetry::weather_live::LOCATIONS.len();
+        crate::slices::telemetry::weather_live::save_selected_location(self.weather_location_index);
+        self.weather_popup_cursor = self.weather_location_index;
+        self.refresh_weather(true);
+    }
+
+    pub fn select_weather_location(&mut self, index: usize) {
+        self.weather_location_index =
+            index % crate::slices::telemetry::weather_live::LOCATIONS.len();
+        crate::slices::telemetry::weather_live::save_selected_location(self.weather_location_index);
+        self.refresh_weather(true);
     }
 
     /// Refresh sliding window quota indicators.

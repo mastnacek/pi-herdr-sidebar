@@ -58,6 +58,60 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
         render_body(frame, chunks[1], state);
         render_footer(frame, chunks[2], state);
     }
+
+    if state.weather_popup {
+        render_weather_popup(frame, area, state);
+    }
+}
+
+/// Centered location selector popup (↑/↓/j/k, Enter, Esc).
+fn render_weather_popup(frame: &mut Frame, area: Rect, state: &SidebarState) {
+    use ratatui::widgets::Clear;
+
+    let width = 32u16.min(area.width.saturating_sub(2));
+    let height = (crate::slices::telemetry::weather_live::LOCATIONS.len() as u16 + 2)
+        .min(area.height.saturating_sub(2));
+
+    let popup = Rect {
+        x: area.x + (area.width.saturating_sub(width)) / 2,
+        y: area.y + (area.height.saturating_sub(height)) / 2,
+        width,
+        height,
+    };
+
+    frame.render_widget(Clear, popup);
+
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(" Vybrat lokalitu ");
+
+    let rows: Vec<Line> = crate::slices::telemetry::weather_live::LOCATIONS
+        .iter()
+        .enumerate()
+        .map(|(i, loc)| {
+            let is_cursor = i == state.weather_popup_cursor;
+            let is_selected = i == state.weather_location_index;
+            let marker = if is_cursor { "▶" } else { " " };
+            let check = if is_selected { " ●" } else { "" };
+            let style = if is_cursor {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .bg(Color::Rgb(30, 35, 55))
+                    .bold()
+            } else if is_selected {
+                Style::default().fg(Color::Cyan).bold()
+            } else {
+                Style::default().fg(Color::Gray)
+            };
+            Line::from(Span::styled(
+                format!("{} {}{}", marker, loc.name, check),
+                style,
+            ))
+        })
+        .collect();
+
+    frame.render_widget(Paragraph::new(rows).block(block), popup);
 }
 
 fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
@@ -911,6 +965,10 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         lines.push(Line::from(no_spai_spans));
     }
 
+    // 6. Weather (yr.no Locationforecast 2.0) — current + 7-day
+    lines.push(Line::raw(""));
+    lines.extend(render_weather_lines(state));
+
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray))
@@ -922,6 +980,105 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         .wrap(Wrap { trim: false });
 
     frame.render_widget(paragraph, area);
+}
+
+/// Weather face lines: current conditions + 7-day forecast row list.
+/// Source: MET Norway (yr.no) Locationforecast 2.0 — no API key, User-Agent identified.
+fn render_weather_lines(state: &SidebarState) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    let Some(w) = &state.weather else {
+        lines.push(Line::from(vec![
+            Span::styled("Počasí:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled("načítám…", Style::default().fg(Color::DarkGray)),
+        ]));
+        return lines;
+    };
+
+    if let Some(err) = &w.error {
+        lines.push(Line::from(vec![
+            Span::styled("Počasí:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled(err.clone(), Style::default().fg(Color::Red)),
+        ]));
+        return lines;
+    }
+
+    // Header: location + selected marker + key hint
+    let loc_name = w.location_name.clone();
+    let idx = w.location_index;
+    let total = crate::slices::telemetry::weather_live::LOCATIONS.len();
+    lines.push(Line::from(vec![
+        Span::styled("Počasí:   ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("[{} / {}] ", idx + 1, total),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(loc_name, Style::default().fg(Color::Cyan).bold()),
+        Span::styled("  (w=vybrat)", Style::default().fg(Color::DarkGray)),
+    ]));
+
+    // Current conditions: big icon + temp + wind + humidity
+    if let Some(cur) = &w.current {
+        let (r, g, b) = cur.color;
+        let mut cur_line = vec![
+            Span::raw("         "),
+            Span::styled(
+                format!("{} ", cur.icon),
+                Style::default().fg(Color::Rgb(r, g, b)).bold(),
+            ),
+            Span::styled(
+                format!("{:.1}°C", cur.temp_c),
+                Style::default().fg(Color::White).bold(),
+            ),
+        ];
+        if cur.wind_ms > 0.0 {
+            cur_line.push(Span::styled(
+                format!("  💨 {:.1} m/s", cur.wind_ms),
+                Style::default().fg(Color::Gray),
+            ));
+        }
+        if let Some(h) = cur.humidity {
+            cur_line.push(Span::styled(
+                format!("  💧 {:.0}%", h),
+                Style::default().fg(Color::Rgb(4, 209, 249)),
+            ));
+        }
+        lines.push(Line::from(cur_line));
+    }
+
+    // 7-day forecast: today first
+    if !w.days.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "Týden:    ".to_string(),
+            Style::default().fg(Color::DarkGray),
+        )));
+        for day in &w.days {
+            let (r, g, b) = day.color;
+            let precip_note = if day.precip_mm >= 0.2 {
+                format!(" 💧{:.1}", day.precip_mm)
+            } else {
+                String::new()
+            };
+            lines.push(Line::from(vec![
+                Span::raw("         "),
+                Span::styled(
+                    format!("{} ", day.weekday),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!("{} ", day.icon),
+                    Style::default().fg(Color::Rgb(r, g, b)),
+                ),
+                Span::styled(
+                    format!("{:.0}°/{:.0}°", day.temp_min, day.temp_max),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(precip_note, Style::default().fg(Color::Rgb(4, 209, 249))),
+            ]));
+        }
+    }
+
+    lines
 }
 
 /// MCP Servers & Calls inspection face.
