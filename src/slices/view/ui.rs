@@ -495,7 +495,10 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
     lines.push(Line::from(vec![
         Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
         Span::styled(model_str, Style::default().fg(Color::White).bold()),
-        Span::styled(format!("  ({})", provider_str), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("  ({})", provider_str),
+            Style::default().fg(Color::DarkGray),
+        ),
     ]));
 
     lines.push(Line::from(vec![
@@ -512,10 +515,17 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
     lines.push(Line::from(vec![
         Span::styled("Kontext: ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            format!("{} / {} tok", fmt_tokens(ctx_tokens), fmt_tokens(ctx_window)),
+            format!(
+                "{} / {} tok",
+                fmt_tokens(ctx_tokens),
+                fmt_tokens(ctx_window)
+            ),
             Style::default().fg(Color::White),
         ),
-        Span::styled(format!("  ({:.1}%)", ctx_pct), Style::default().fg(Color::Gray)),
+        Span::styled(
+            format!("  ({:.1}%)", ctx_pct),
+            Style::default().fg(Color::Gray),
+        ),
     ]));
 
     // Subtle 12-cell bar
@@ -532,7 +542,10 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
     lines.push(Line::from(vec![
         Span::raw("         "),
         Span::styled("█".repeat(filled), Style::default().fg(pct_color)),
-        Span::styled("░".repeat(bar_len.saturating_sub(filled)), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "░".repeat(bar_len.saturating_sub(filled)),
+            Style::default().fg(Color::DarkGray),
+        ),
     ]));
 
     // Detailed prompt token breakdown
@@ -540,15 +553,27 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         let prompt_total = l.input_tokens + l.cache_read + l.cache_write;
         lines.push(Line::from(vec![
             Span::styled("Tokeny:  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("vstup: {} ", fmt_tokens(l.input_tokens)), Style::default().fg(Color::Gray)),
-            Span::styled(format!("výstup: {} ", fmt_tokens(l.output_tokens)), Style::default().fg(Color::Gray)),
+            Span::styled(
+                format!("vstup: {} ", fmt_tokens(l.input_tokens)),
+                Style::default().fg(Color::Gray),
+            ),
+            Span::styled(
+                format!("výstup: {} ", fmt_tokens(l.output_tokens)),
+                Style::default().fg(Color::Gray),
+            ),
             if l.cache_read > 0 {
-                Span::styled(format!("keš: {} ", fmt_tokens(l.cache_read)), Style::default().fg(Color::DarkGray))
+                Span::styled(
+                    format!("keš: {} ", fmt_tokens(l.cache_read)),
+                    Style::default().fg(Color::DarkGray),
+                )
             } else {
                 Span::raw("")
             },
             if l.reasoning_tokens > 0 {
-                Span::styled(format!("reasoning: {}", fmt_tokens(l.reasoning_tokens)), Style::default().fg(Color::DarkGray))
+                Span::styled(
+                    format!("reasoning: {}", fmt_tokens(l.reasoning_tokens)),
+                    Style::default().fg(Color::DarkGray),
+                )
             } else {
                 Span::raw("")
             },
@@ -559,7 +584,10 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
             Span::styled(fmt_cost(l.total_cost), Style::default().fg(Color::Gray)),
             if prompt_total > 0 && l.cache_read > 0 {
                 let hit_ratio = (l.cache_read as f64 / prompt_total as f64) * 100.0;
-                Span::styled(format!("  (keš {:.0}%)", hit_ratio), Style::default().fg(Color::DarkGray))
+                Span::styled(
+                    format!("  (keš {:.0}%)", hit_ratio),
+                    Style::default().fg(Color::DarkGray),
+                )
             } else {
                 Span::raw("")
             },
@@ -567,47 +595,76 @@ fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
     }
     lines.push(Line::raw(""));
 
-    // 3. Compact overview of other domains
+    // 3. Compact overview of other domains with subtle calm activity colors
     // Git
     if let Some(git) = live.and_then(|l| l.git.as_ref()) {
         let is_clean = git.staged == 0 && git.unstaged == 0 && git.untracked == 0;
         let mut git_spans = vec![
             Span::styled("Větev:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&git.branch, Style::default().fg(Color::Gray)),
+            Span::styled(
+                &git.branch,
+                Style::default().fg(if is_clean { Color::Gray } else { Color::Cyan }),
+            ),
         ];
         if is_clean {
-            git_spans.push(Span::styled(" (čistý)", Style::default().fg(Color::DarkGray)));
+            git_spans.push(Span::styled(
+                " (čistý)",
+                Style::default().fg(Color::DarkGray),
+            ));
         } else {
             git_spans.push(Span::styled(
                 format!(" (+{} ~{} ?{})", git.staged, git.unstaged, git.untracked),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Yellow),
             ));
         }
         lines.push(Line::from(git_spans));
     }
 
-    // Active skill
-    let skill_name = skill_state
-        .and_then(|s| s.active_skill.as_deref())
-        .unwrap_or("žádný");
+    // Active skill: subtle green when loaded, gentle yellow when actively in-turn
+    let has_skill = skill_state.and_then(|s| s.active_skill.as_deref());
+    let skill_in_turn = skill_state.map(|s| s.in_turn).unwrap_or(false);
+    let (skill_label, skill_color) = match (has_skill, skill_in_turn) {
+        (Some(name), true) => (name, Color::Yellow),
+        (Some(name), false) => (name, Color::Green),
+        (None, _) => ("žádný", Color::DarkGray),
+    };
+
     lines.push(Line::from(vec![
         Span::styled("Skill:   ", Style::default().fg(Color::DarkGray)),
-        Span::styled(skill_name, Style::default().fg(Color::Gray)),
+        Span::styled(skill_label, Style::default().fg(skill_color)),
+        if skill_in_turn {
+            Span::styled(" (aktivní)", Style::default().fg(Color::Yellow))
+        } else {
+            Span::raw("")
+        },
     ]));
 
-    // MCP status
+    // MCP status: magenta/cyan when in-flight, gray when idle
     let mcp_count = mcp.map(|m| m.total_calls).unwrap_or(0);
     let mcp_tok = mcp.map(|m| m.total_tokens).unwrap_or(0);
+    let mcp_in_flight = mcp.map(|m| m.in_flight).unwrap_or(false);
+
+    let (mcp_text, mcp_color) = if mcp_in_flight {
+        (
+            format!(
+                "{} volání (~{} tok) [přenáší…]",
+                mcp_count,
+                fmt_tokens(mcp_tok)
+            ),
+            Color::Magenta,
+        )
+    } else if mcp_count > 0 {
+        (
+            format!("{} volání (~{} tok)", mcp_count, fmt_tokens(mcp_tok)),
+            Color::Gray,
+        )
+    } else {
+        ("klid".to_string(), Color::DarkGray)
+    };
+
     lines.push(Line::from(vec![
         Span::styled("MCP:     ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            if mcp_count > 0 {
-                format!("{} volání (~{} tok)", mcp_count, fmt_tokens(mcp_tok))
-            } else {
-                "klid".to_string()
-            },
-            Style::default().fg(Color::Gray),
-        ),
+        Span::styled(mcp_text, Style::default().fg(mcp_color)),
     ]));
 
     let block = Block::bordered()
