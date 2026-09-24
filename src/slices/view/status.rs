@@ -102,30 +102,8 @@ pub fn render_live_status(
     }
     lines.push(Line::raw(""));
 
-    // 2. Cache hits & prompt efficiency breakdown
-    let prompt = t.input_tokens + t.cache_read + t.cache_write;
-    if prompt > 0 {
-        let hit_pct = (t.cache_read as f64 / prompt as f64) * 100.0;
-        lines.push(Line::from(vec![
-            Span::styled("📦 Mezipaměť: ", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(
-                format!("čtení: {} ", fmt_tokens(t.cache_read)),
-                Style::default().fg(Color::Gray),
-            ),
-            Span::styled(
-                format!("zápis: {} ", fmt_tokens(t.cache_write)),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                format!("(🎯 úspora {:.0}%)", hit_pct),
-                Style::default().fg(Color::Green).bold(),
-            ),
-        ]));
-    }
-
-    // 3. Sliding window token consumption
+    // 2. Sliding window token consumption
     if let Some(q) = &state.quota {
-        lines.push(Line::raw(""));
         let slide_spans = vec![
             Span::styled("⏳ Posuvné okno:", Style::default().fg(Color::Cyan).bold()),
             Span::raw(" 5m: "),
