@@ -4,18 +4,21 @@ use std::path::Path;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct McpCallItem {
+    pub call_id: String,
     pub server: String,
     pub badge: String,
     pub tool: String,
     pub is_error: bool,
     pub timestamp_ms: u64,
     pub summary: String,
+    pub payload_tokens: u64,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct McpTelemetry {
     pub total_calls: u64,
     pub total_errors: u64,
+    pub total_tokens: u64,
     pub active_calls_count: u64,
     pub servers_used: Vec<String>,
     pub recent_calls: Vec<McpCallItem>,
@@ -86,6 +89,11 @@ pub fn classify_mcp_tool(tool_name: &str, known_servers: &[String]) -> Option<(S
     None
 }
 
+/// Estimate tokens from response text length (chars / 4).
+pub fn estimate_tokens_from_len(len_chars: usize) -> u64 {
+    (len_chars as u64).div_ceil(4)
+}
+
 /// Parse MCP telemetry directly from session JSONL content.
 pub fn parse_mcp_session(path: &Path) -> Option<McpTelemetry> {
     let content = fs::read_to_string(path).ok()?;
@@ -127,10 +135,18 @@ pub fn parse_mcp_session(path: &Path) -> Option<McpTelemetry> {
                                 .map(|args| {
                                     if let Some(q) = args.get("query").and_then(|v| v.as_str()) {
                                         format!("\"{}\"", q)
+                                    } else if let Some(claim) =
+                                        args.get("claim").and_then(|v| v.as_str())
+                                    {
+                                        format!("\"{}\"", claim)
                                     } else if let Some(p) =
                                         args.get("path").and_then(|v| v.as_str())
                                     {
                                         p.to_string()
+                                    } else if let Some(sf) =
+                                        args.get("source_file").and_then(|v| v.as_str())
+                                    {
+                                        sf.to_string()
                                     } else {
                                         String::new()
                                     }
@@ -138,12 +154,14 @@ pub fn parse_mcp_session(path: &Path) -> Option<McpTelemetry> {
                                 .unwrap_or_default();
 
                             let item = McpCallItem {
+                                call_id: call_id.to_string(),
                                 server: server.clone(),
                                 badge,
                                 tool,
                                 is_error: false,
                                 timestamp_ms: ts_ms,
                                 summary,
+                                payload_tokens: 0,
                             };
                             if !t.servers_used.contains(&server) {
                                 t.servers_used.push(server);
@@ -164,18 +182,34 @@ pub fn parse_mcp_session(path: &Path) -> Option<McpTelemetry> {
                 .get("isError")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+
+            // Compute payload size from content
+            let mut payload_chars = 0usize;
+            if let Some(serde_json::Value::Array(blocks)) = msg.get("content") {
+                for b in blocks {
+                    if let Some(txt) = b.get("text").and_then(|v| v.as_str()) {
+                        payload_chars += txt.len();
+                    }
+                }
+            }
+            let est_tokens = estimate_tokens_from_len(payload_chars);
+
             if let Some(mut item) = pending_calls.remove(tool_id) {
+                item.payload_tokens = est_tokens;
+                t.total_tokens += est_tokens;
                 if is_err {
                     t.total_errors += 1;
                     item.is_error = true;
-                    if let Some(last) = t
-                        .recent_calls
-                        .iter_mut()
-                        .rev()
-                        .find(|c| c.tool == item.tool && c.server == item.server)
-                    {
-                        last.is_error = true;
-                    }
+                }
+                // Update in recent calls
+                if let Some(found) = t
+                    .recent_calls
+                    .iter_mut()
+                    .rev()
+                    .find(|c| c.call_id == tool_id)
+                {
+                    found.payload_tokens = est_tokens;
+                    found.is_error = item.is_error;
                 }
             }
         }

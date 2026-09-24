@@ -502,8 +502,13 @@ fn render_mcp_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         status_badge,
         Span::raw("  "),
         Span::styled(
-            format!("{} volání celkem", mcp.total_calls),
+            format!("{} volání", mcp.total_calls),
             Style::default().fg(Color::White),
+        ),
+        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("📦 ~{} tok", fmt_tokens(mcp.total_tokens)),
+            Style::default().fg(Color::Cyan).bold(),
         ),
         Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
         if mcp.total_errors > 0 {
@@ -574,6 +579,13 @@ fn render_mcp_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
                 ),
                 Span::styled(&call.tool, Style::default().fg(Color::White).bold()),
             ];
+
+            if call.payload_tokens > 0 {
+                row.push(Span::styled(
+                    format!(" ({})", fmt_tokens(call.payload_tokens)),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
 
             if !call.summary.is_empty() {
                 row.push(Span::styled(
