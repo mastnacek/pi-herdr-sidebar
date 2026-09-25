@@ -2,7 +2,9 @@
 //! `TestBackend` so layout, content and the modal backdrop are asserted on real
 //! cells.
 use super::*;
+use crate::slices::shortcuts::modal::document::PanelDocuments;
 use crate::slices::shortcuts::usage::model::{Counted, PluginUsage};
+use crate::slices::shortcuts::usage::state::Panel;
 use crate::slices::shortcuts::usage::UsageStats;
 use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
 
@@ -83,6 +85,15 @@ fn document_text(doc: &[Line]) -> String {
         .join("\n")
 }
 
+fn all_documents_text(docs: &PanelDocuments) -> String {
+    let mut out = String::new();
+    for panel in Panel::ALL {
+        out.push_str(&document_text(docs.get(panel)));
+        out.push('\n');
+    }
+    out
+}
+
 fn backdrop_cells(buffer: &Buffer) -> usize {
     let area = buffer.area;
     let mut count = 0;
@@ -99,7 +110,8 @@ fn backdrop_cells(buffer: &Buffer) -> usize {
 #[test]
 fn document_contains_every_item_and_truncates_nothing() {
     let stats = stats_with(30, 30, 30, 40);
-    let text = document_text(&document(&stats));
+    let docs = documents(&stats);
+    let text = all_documents_text(&docs);
 
     for i in 0..30 {
         assert!(
@@ -121,7 +133,8 @@ fn document_contains_every_item_and_truncates_nothing() {
 #[test]
 fn document_has_a_header_per_section_with_counts() {
     let stats = stats_with(4, 3, 2, 5);
-    let text = document_text(&document(&stats));
+    let docs = documents(&stats);
+    let text = all_documents_text(&docs);
     assert!(text.contains("Pluginy (4)"));
     assert!(text.contains("Skilly (3)"));
     assert!(text.contains("Příkazy (2)"));
@@ -144,7 +157,7 @@ fn viewport_scrolls_to_reach_the_last_item() {
         bottom.contains("plugin-39"),
         "last item reachable by scrolling"
     );
-    assert!(bottom.contains("řádky"), "footer reports the position");
+    assert!(bottom.contains("Pluginy"), "footer reports the panel");
 }
 
 #[test]
@@ -152,29 +165,33 @@ fn paging_walks_the_whole_document() {
     let mut state = state_with(stats_with(60, 0, 0, 0));
     render_panel(&mut state, 100, 20);
 
-    assert_eq!(state.scroll, 0);
+    assert_eq!(state.panel_state(Panel::Plugins).scroll, 0);
     // A page is one screen minus the overlap row, where the screen height comes
     // from the layout (title 3 + footer 2 are subtracted from the window).
-    let page = state.view_h - 1;
+    let page = state.panel_state(Panel::Plugins).view_h - 1;
     state.page(true);
-    assert_eq!(state.scroll, page);
+    assert_eq!(state.panel_state(Panel::Plugins).scroll, page);
 
     let mut seen = 0;
-    while state.scroll < state.max_scroll() {
+    while state.panel_state(Panel::Plugins).scroll < state.max_scroll() {
         state.page(true);
         seen += 1;
         assert!(seen < 200, "paging must terminate");
     }
-    assert_eq!(state.scroll, state.max_scroll(), "reaches the very end");
+    assert_eq!(
+        state.panel_state(Panel::Plugins).scroll,
+        state.max_scroll(),
+        "reaches the very end"
+    );
 }
 
 #[test]
 fn rendering_keeps_the_scroll_inside_the_document() {
     let mut state = state_with(stats_with(5, 0, 0, 0));
-    state.scroll = 9_999;
+    state.panel_state_mut(Panel::Plugins).scroll = 9_999;
     render_panel(&mut state, 100, 20);
     assert!(
-        state.scroll <= state.max_scroll(),
+        state.panel_state(Panel::Plugins).scroll <= state.max_scroll(),
         "a stale scroll offset is clamped on render"
     );
 }
@@ -200,12 +217,12 @@ fn panel_fills_the_window_with_the_backdrop() {
 
 #[test]
 fn scroll_position_stays_visible_on_a_narrow_pane() {
-    // The totals string alone used to fill the footer and push the position
-    // indicator off-screen; it now lives in its own right-aligned column.
+    // The position indicator for the focused panel must survive a narrow footer.
     let mut state = state_with(stats_with(40, 10, 10, 20));
     let text = buffer_text(&render_panel(&mut state, 80, 20));
+    // The footer now shows: "Pluginy 1–15 / 41" format
     assert!(
-        text.contains("řádky"),
+        text.contains("Pluginy") && text.contains("–") && text.contains("/"),
         "position indicator must survive a narrow footer:\n{text}"
     );
 }

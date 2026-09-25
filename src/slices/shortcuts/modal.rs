@@ -13,9 +13,9 @@
 //! and therefore makes scrolling and paging exact.
 mod document;
 
-use super::usage::state::UsageOverview;
+use super::usage::state::{Panel, UsageOverview};
 use crate::shared::theme;
-pub use document::document;
+use document::documents;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
@@ -24,10 +24,10 @@ use ratatui::{
     Frame,
 };
 
-/// Renders the overview across the whole given area.
+/// Renders the overview across the whole given area with four side-by-side panels.
 ///
 /// Takes `&mut` because it caches the document geometry (`rows`, `view_h`) back
-/// into the state so paging and `End` are exact.
+/// into the state so paging and `End` are exact for each panel.
 pub fn render_usage_panel(frame: &mut Frame, area: Rect, state: &mut UsageOverview) {
     theme::paint_backdrop(frame, area);
 
@@ -35,36 +35,86 @@ pub fn render_usage_panel(frame: &mut Frame, area: Rect, state: &mut UsageOvervi
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // title
-            Constraint::Min(5),    // scrolling document
+            Constraint::Min(5),    // panel area
             Constraint::Length(2), // footer
         ])
         .split(area);
 
     render_title(frame, rows[0], state);
 
-    // Read what we need up front so the state is free to be mutated below.
-    let doc = state.stats.as_ref().map(document);
     let progress = state
         .scan_progress()
         .map(|p| (p.done(), p.total(), p.ratio()));
-    let body_h = rows[1].height;
+    let panel_area = rows[1];
 
-    state.view_h = body_h;
-    match (progress, doc) {
-        (Some((done, total, ratio)), _) => {
-            state.rows = 0;
-            state.scroll = 0;
-            render_progress(frame, rows[1], done, total, ratio);
+    match progress {
+        Some((done, total, ratio)) => {
+            // During scanning, show progress in the center of the panel area
+            render_progress(frame, panel_area, done, total, ratio);
+            // Reset all panel states
+            for panel in Panel::ALL {
+                let ps = state.panel_state_mut(panel);
+                ps.rows = 0;
+                ps.view_h = panel_area.height;
+                ps.scroll = 0;
+            }
         }
-        (None, Some(doc)) => {
-            state.rows = doc.len() as u16;
-            state.scroll = state.scroll.min(state.max_scroll());
-            frame.render_widget(Paragraph::new(doc).scroll((state.scroll, 0)), rows[1]);
-        }
-        (None, None) => {
-            state.rows = 0;
-            state.scroll = 0;
-            render_empty(frame, rows[1], state);
+        None => {
+            if let Some(stats) = state.stats.as_ref() {
+                let docs = documents(stats);
+                // Calculate panel widths - equal distribution with minimum width
+                let panel_width = panel_area.width / Panel::COUNT as u16;
+                let extra = panel_area.width % Panel::COUNT as u16;
+
+                let focus = state.focus();
+                let mut x = panel_area.x;
+                for (i, panel) in Panel::ALL.iter().enumerate() {
+                    let w = panel_width + if (i as u16) < extra { 1 } else { 0 };
+                    let panel_rect = Rect {
+                        x,
+                        y: panel_area.y,
+                        width: w,
+                        height: panel_area.height,
+                    };
+                    x += w;
+
+                    let doc = docs.get(*panel);
+                    let ps = state.panel_state_mut(*panel);
+                    let block = Block::bordered().border_type(BorderType::Rounded);
+                    let inner = block.inner(panel_rect);
+                    ps.view_h = inner.height;
+                    ps.rows = doc.len() as u16;
+                    ps.scroll = ps.scroll.min(ps.rows.saturating_sub(ps.view_h));
+
+                    let is_focused = *panel == focus;
+                    let block = Block::bordered()
+                        .border_type(BorderType::Rounded)
+                        .border_style(if is_focused {
+                            Style::default().fg(theme::MODAL_ACCENT)
+                        } else {
+                            Style::default().fg(Color::Rgb(80, 80, 100))
+                        })
+                        .style(Style::default().bg(theme::MODAL_BG))
+                        .title(Span::styled(
+                            format!(" {} ", panel.title()),
+                            Style::default().fg(theme::MODAL_ACCENT).bold(),
+                        ));
+
+                    let inner = block.inner(panel_rect);
+                    frame.render_widget(block, panel_rect);
+                    frame.render_widget(Paragraph::new(doc.clone()).scroll((ps.scroll, 0)), inner);
+                }
+            } else {
+                // No data yet - show empty state centered
+                let inner = theme::centered_percent(panel_area, 70, 40);
+                for panel in Panel::ALL {
+                    let ps = state.panel_state_mut(panel);
+                    ps.rows = 0;
+                    ps.view_h = panel_area.height;
+                    ps.scroll = 0;
+                }
+                render_empty(frame, inner, state);
+            }
         }
     }
 
@@ -183,18 +233,18 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &UsageOverview) {
         })
         .unwrap_or_else(|| "  žádná data".to_string());
 
-    // The scroll position is the one thing needed *while* scrolling, so it gets
-    // its own right-aligned column: on a narrow pane the long totals string may
-    // clip, but the position never does.
-    let position = if state.rows > state.view_h {
+    // The scroll position is for the currently focused panel.
+    let ps = state.panel_state(state.focus());
+    let position = if ps.rows > ps.view_h {
         format!(
-            "řádky {}–{} / {}  ",
-            state.scroll + 1,
-            (state.scroll + state.view_h).min(state.rows),
-            state.rows
+            "{} {}–{} / {}  ",
+            state.focus().title(),
+            ps.scroll + 1,
+            (ps.scroll + ps.view_h).min(ps.rows),
+            ps.rows
         )
     } else {
-        format!("{} řádků  ", state.rows)
+        format!("{} {} řádků  ", state.focus().title(), ps.rows)
     };
 
     let rows = Layout::default()
@@ -203,7 +253,7 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &UsageOverview) {
         .split(area);
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(16), Constraint::Length(24)])
+        .constraints([Constraint::Min(16), Constraint::Length(32)])
         .split(rows[0]);
 
     frame.render_widget(
@@ -220,7 +270,9 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &UsageOverview) {
     );
 
     let keys = Line::from(vec![
-        Span::styled("  [↑/↓]", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("  [←/→]", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(" panel  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[↑/↓]", Style::default().fg(Color::Cyan).bold()),
         Span::styled(" posun  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[PgUp/PgDn]", Style::default().fg(Color::Cyan).bold()),
         Span::styled(" stránka  ", Style::default().fg(Color::DarkGray)),

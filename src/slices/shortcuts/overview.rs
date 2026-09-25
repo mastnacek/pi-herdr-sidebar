@@ -13,7 +13,7 @@ use std::time::Duration;
 
 /// Runs the overview until the user closes it.
 ///
-/// Keys: `↑/↓` (`k`/`j`) scroll a row, `PgUp/PgDn` (or `Space`) a screen,
+/// Keys: `←/→` switch panel, `↑/↓` (`k`/`j`) scroll a row, `PgUp/PgDn` (or `Space`) a screen,
 /// `Home/End` (`g`/`G`) jump to the bounds, `r` rescans, `Esc`/`q` closes.
 pub fn run_overview() -> io::Result<()> {
     let mut state = UsageOverview::new();
@@ -37,6 +37,8 @@ pub fn run_overview() -> io::Result<()> {
                 Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
                     KeyCode::Char('r') => state.ensure_scan(true),
+                    KeyCode::Left => state.focus_prev(),
+                    KeyCode::Right => state.focus_next(),
                     KeyCode::Up | KeyCode::Char('k') => state.scroll_by(-1),
                     KeyCode::Down | KeyCode::Char('j') => state.scroll_by(1),
                     KeyCode::PageUp => state.page(false),

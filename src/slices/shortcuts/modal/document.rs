@@ -1,4 +1,4 @@
-//! Builds the overview document: one `Line` per row, no truncation.
+//! Builds the overview documents: one `Line` per row per panel, no truncation.
 //!
 //! Kept apart from the rendering in the parent module so each stays small.
 //! Rows never wrap, which keeps the row count independent of the terminal
@@ -6,6 +6,7 @@
 use super::format_count;
 use crate::shared::theme;
 use crate::slices::shortcuts::usage::model::{plugin_of, Counted, PluginUsage};
+use crate::slices::shortcuts::usage::state::Panel;
 use crate::slices::shortcuts::usage::UsageStats;
 use crate::slices::shortcuts::view::truncate;
 use ratatui::{
@@ -18,10 +19,37 @@ const BAR: usize = 12;
 /// Width of the item-name column.
 const NAME_W: usize = 22;
 
-/// Builds the whole document, one `Line` per row.
-pub fn document(stats: &UsageStats) -> Vec<Line<'static>> {
-    let mut lines: Vec<Line<'static>> = Vec::new();
+/// Documents for all four panels.
+pub struct PanelDocuments {
+    pub plugins: Vec<Line<'static>>,
+    pub skills: Vec<Line<'static>>,
+    pub commands: Vec<Line<'static>>,
+    pub tools: Vec<Line<'static>>,
+}
 
+impl PanelDocuments {
+    pub fn get(&self, panel: Panel) -> &Vec<Line<'static>> {
+        match panel {
+            Panel::Plugins => &self.plugins,
+            Panel::Skills => &self.skills,
+            Panel::Commands => &self.commands,
+            Panel::Tools => &self.tools,
+        }
+    }
+}
+
+/// Builds documents for all four panels.
+pub fn documents(stats: &UsageStats) -> PanelDocuments {
+    PanelDocuments {
+        plugins: build_plugins(stats),
+        skills: build_skills(stats),
+        commands: build_commands(stats),
+        tools: build_tools(stats),
+    }
+}
+
+fn build_plugins(stats: &UsageStats) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
     let plugins = stats.ranked_plugins();
     section(
         &mut lines,
@@ -44,7 +72,11 @@ pub fn document(stats: &UsageStats) -> Vec<Line<'static>> {
             Some(tool_hint(plugin)),
         ));
     }
+    lines
+}
 
+fn build_skills(stats: &UsageStats) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
     section(
         &mut lines,
         format!("Skilly ({}) · čtení SKILL.md", stats.skills.len()),
@@ -62,7 +94,11 @@ pub fn document(stats: &UsageStats) -> Vec<Line<'static>> {
             None,
         ));
     }
+    lines
+}
 
+fn build_commands(stats: &UsageStats) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
     section(&mut lines, format!("Příkazy ({})", stats.commands.len()));
     if stats.commands.is_empty() {
         empty_row(&mut lines);
@@ -77,7 +113,11 @@ pub fn document(stats: &UsageStats) -> Vec<Line<'static>> {
             None,
         ));
     }
+    lines
+}
 
+fn build_tools(stats: &UsageStats) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
     section(
         &mut lines,
         format!(
@@ -92,7 +132,6 @@ pub fn document(stats: &UsageStats) -> Vec<Line<'static>> {
     for tool in &stats.tools {
         lines.push(tool_row(tool));
     }
-
     lines
 }
 
