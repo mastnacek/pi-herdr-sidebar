@@ -4,6 +4,7 @@ pub mod discovery;
 pub mod input_highlighter;
 pub mod note;
 pub mod state;
+pub mod storage_format;
 pub mod view;
 pub mod viewer_content;
 

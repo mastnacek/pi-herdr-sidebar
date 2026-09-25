@@ -155,10 +155,23 @@ fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
             let is_sel = i == state.creation_dialog.autocomplete_selected;
             let marker = if is_sel { "▶ " } else { "  " };
             ac_lines.push(Line::from(vec![
-                Span::styled(marker, Style::default().fg(if is_sel { Color::Yellow } else { Color::DarkGray })),
+                Span::styled(
+                    marker,
+                    Style::default().fg(if is_sel {
+                        Color::Yellow
+                    } else {
+                        Color::DarkGray
+                    }),
+                ),
                 Span::styled(
                     format!("{:<18}", sug.insert_text),
-                    Style::default().fg(if is_sel { Color::Cyan } else { Color::White }).add_modifier(if is_sel { Modifier::BOLD } else { Modifier::empty() }),
+                    Style::default()
+                        .fg(if is_sel { Color::Cyan } else { Color::White })
+                        .add_modifier(if is_sel {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        }),
                 ),
                 Span::styled(
                     format!(" {}", sug.path),

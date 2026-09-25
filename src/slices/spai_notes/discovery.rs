@@ -3,7 +3,8 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::note::{parse_spai_markdown, SpaiNoteItem};
+use super::note::SpaiNoteItem;
+use super::storage_format::parse_spai_markdown;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CachedProject {

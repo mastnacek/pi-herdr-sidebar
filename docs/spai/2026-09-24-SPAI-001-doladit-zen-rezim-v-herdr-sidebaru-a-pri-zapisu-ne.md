@@ -12,8 +12,4 @@ spai_symbol: 'x'
 
 # SPAI-001: Doladit ZEN režim v herdr sidebaru a pri zapisu nefunguje @ pro vkladani projektu
 
-# SPAI-001: Doladit ZEN režim v herdr sidebaru a pri zapisu nefunguje @ pro vkladani projektu
-
-# SPAI-001: Doladit ZEN režim v herdr sidebaru a pri zapisu nefunguje @ pro vkladani projektu
-
-/ Doladit ZEN režim v herdr sidebaru a pri zapisu nefunguje @ pro vkladani projektu
+x Doladit ZEN režim v herdr sidebaru a pri zapisu nefunguje @ pro vkladani projektu

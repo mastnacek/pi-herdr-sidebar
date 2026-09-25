@@ -1,6 +1,7 @@
 //! State management for SPAI Notes tab.
 use super::discovery::{discover_spai_projects, SpaiProjectSummary};
-use super::note::{format_spai_markdown, slugify, SpaiFacets, SpaiNoteItem, SpaiStatus, SpaiType};
+use super::note::{SpaiFacets, SpaiNoteItem, SpaiStatus, SpaiType};
+use super::storage_format::{format_spai_markdown, slugify, update_body_status_prefix};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -215,7 +216,9 @@ impl SpaiNotesState {
     }
 
     pub fn update_autocomplete(&mut self) {
-        if let Some(query) = super::autocomplete::extract_at_query(&self.creation_dialog.title_input) {
+        if let Some(query) =
+            super::autocomplete::extract_at_query(&self.creation_dialog.title_input)
+        {
             let suggestions = super::autocomplete::get_project_suggestions(&self.projects, query);
             self.creation_dialog.autocomplete_active = !suggestions.is_empty();
             self.creation_dialog.suggestions = suggestions;
@@ -229,14 +232,16 @@ impl SpaiNotesState {
     pub fn next_suggestion(&mut self) {
         if !self.creation_dialog.suggestions.is_empty() {
             self.creation_dialog.autocomplete_selected =
-                (self.creation_dialog.autocomplete_selected + 1) % self.creation_dialog.suggestions.len();
+                (self.creation_dialog.autocomplete_selected + 1)
+                    % self.creation_dialog.suggestions.len();
         }
     }
 
     pub fn prev_suggestion(&mut self) {
         if !self.creation_dialog.suggestions.is_empty() {
             if self.creation_dialog.autocomplete_selected == 0 {
-                self.creation_dialog.autocomplete_selected = self.creation_dialog.suggestions.len() - 1;
+                self.creation_dialog.autocomplete_selected =
+                    self.creation_dialog.suggestions.len() - 1;
             } else {
                 self.creation_dialog.autocomplete_selected -= 1;
             }
@@ -244,7 +249,8 @@ impl SpaiNotesState {
     }
 
     pub fn apply_selected_suggestion(&mut self) -> bool {
-        if self.creation_dialog.autocomplete_active && !self.creation_dialog.suggestions.is_empty() {
+        if self.creation_dialog.autocomplete_active && !self.creation_dialog.suggestions.is_empty()
+        {
             let idx = self.creation_dialog.autocomplete_selected;
             if let Some(s) = self.creation_dialog.suggestions.get(idx).cloned() {
                 super::autocomplete::apply_at_completion(&mut self.creation_dialog.title_input, &s);
@@ -313,6 +319,7 @@ impl SpaiNotesState {
         let new_status = item.status.next_cycle();
         item.status = new_status;
         item.symbol = new_status.symbol().to_string();
+        item.body = update_body_status_prefix(&item.body, new_status);
 
         let updated_content = format_spai_markdown(item);
         std::fs::write(&item.file_path, updated_content).map_err(|e| e.to_string())?;
