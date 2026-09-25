@@ -14,6 +14,7 @@ pub enum Tab {
     Status = 1,
     Skills = 2,
     Mcp = 3,
+    Notes = 4,
 }
 
 impl Tab {
@@ -22,6 +23,7 @@ impl Tab {
             0 => Tab::Zen,
             2 => Tab::Skills,
             3 => Tab::Mcp,
+            4 => Tab::Notes,
             _ => Tab::Status,
         }
     }
@@ -68,4 +70,5 @@ pub struct SidebarState {
     pub weather: Option<WeatherTelemetry>,
     pub weather_location_index: usize,
     pub weather_last_fetch: u64,
+    pub spai_notes: crate::slices::spai_notes::SpaiNotesState,
 }

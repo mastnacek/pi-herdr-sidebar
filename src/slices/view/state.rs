@@ -55,6 +55,7 @@ impl SidebarState {
             weather_location_index: crate::slices::telemetry::weather_live::load_selected_location(
             ),
             weather_last_fetch: 0,
+            spai_notes: crate::slices::spai_notes::SpaiNotesState::new(None),
         };
 
         state.refresh(true);
@@ -94,7 +95,7 @@ impl SidebarState {
             let tab_id = match tab {
                 Tab::Status => "status",
                 Tab::Skills => "skills",
-                Tab::Zen | Tab::Mcp => return,
+                Tab::Zen | Tab::Mcp | Tab::Notes => return,
             };
 
             let col = if let Some(snap) = &self.snapshot {
@@ -125,13 +126,13 @@ impl SidebarState {
     }
 
     pub fn next_tab(&mut self) {
-        let next = (self.active_tab.to_index() + 1) % 4;
+        let next = (self.active_tab.to_index() + 1) % 5;
         self.set_tab(Tab::from_index(next));
     }
 
     pub fn prev_tab(&mut self) {
         let prev = if self.active_tab.to_index() == 0 {
-            3
+            4
         } else {
             self.active_tab.to_index() - 1
         };
@@ -156,6 +157,8 @@ impl SidebarState {
                 self.set_tab(Tab::Skills);
             } else if col < 50 {
                 self.set_tab(Tab::Mcp);
+            } else if col < 63 {
+                self.set_tab(Tab::Notes);
             }
         }
     }
@@ -206,6 +209,8 @@ impl SidebarState {
             .and_then(|p| p.cwd.as_deref())
             .map(Path::new);
         self.openrouter_credits = refresh_openrouter(pane_cwd, force);
+
+        self.spai_notes.refresh(pane_cwd);
 
         self.refresh_weather(force);
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-24 11:38:51",
+  "lastUpdated": "2026-09-25 09:14:36",
   "records": [
     {
       "id": "SPAI-001",
@@ -12,6 +12,126 @@
       "tags": [],
       "project": "pi-herdr-sidebar",
       "file": "2026-09-24-SPAI-001-doladit-zen-rezim-v-herdr-sidebaru-a-pri-zapisu-ne.md"
+    },
+    {
+      "id": "SPAI-002",
+      "title": "Scaffold spai_notes VSA slice folder and basic files (mod.rs, state.rs, actions.rs, view.rs, note.rs).",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 08:56:58",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-002-scaffold-spai-notes-vsa-slice-folder-and-basic-fil.md"
+    },
+    {
+      "id": "SPAI-003",
+      "title": "Implement SpaiNotes state (SpaiNotes struct, Note struct, serde traits).",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 08:57:00",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-003-implement-spainotes-state-spainotes-struct-note-st.md"
+    },
+    {
+      "id": "SPAI-004",
+      "title": "Create spai_notes slice under src/slices with state.rs, actions.rs, view.rs, note.rs, mod.rs.",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 08:57:51",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-004-create-spai-notes-slice-under-srcslices-with-state.md"
+    },
+    {
+      "id": "SPAI-005",
+      "title": "Move spai_notes slice to src/slices, create state.rs, actions.rs, view.rs, update mod.rs accordingly.",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 08:57:54",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-005-move-spai-notes-slice-to-srcslices-create-staters-.md"
+    },
+    {
+      "id": "SPAI-006",
+      "title": "Create view.rs for spai_notes slice (render_spai_notes) and integrate slice into src/slices/mod.rs and App state.",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 09:01:11",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-006-create-viewrs-for-spai-notes-slice-render-spai-not.md"
+    },
+    {
+      "id": "SPAI-007",
+      "title": "Implement SPAI parser/formatter (YAML frontmatter + prefix syntax . / x /. z ? - + slugify) in shared or spai slice.",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 09:06:09",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-007-implement-spai-parserformatter-yaml-frontmatter-pr.md"
+    },
+    {
+      "id": "SPAI-008",
+      "title": "Implement multi-project SPAI discovery (pi-projects-cache.json + roots) with active project quick-switch.",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 09:06:10",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-008-implement-multi-project-spai-discovery-pi-projects.md"
+    },
+    {
+      "id": "SPAI-009",
+      "title": "Build ZEN Notes & SPAI fileviewer UI tab in src/slices/view/ with keyboard shortcuts (0-4, j/k, p active project, e edit, n new note).",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 09:06:15",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-009-build-zen-notes-spai-fileviewer-ui-tab-in-srcslice.md"
+    },
+    {
+      "id": "SPAI-010",
+      "title": "Add in-tui note creation popup/input dialog with title & SPAI prefix selection.",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 09:11:08",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-010-add-in-tui-note-creation-popupinput-dialog-with-ti.md"
+    },
+    {
+      "id": "SPAI-011",
+      "title": "Add note status cycling in notes tab (hotkey x: todo -> working -> waiting -> done -> cancelled).",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 09:11:14",
+      "tags": [],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-011-add-note-status-cycling-in-notes-tab-hotkey-x-todo.md"
     }
   ]
 }

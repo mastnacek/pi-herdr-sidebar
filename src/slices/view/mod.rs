@@ -55,6 +55,29 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                     if key.kind != KeyEventKind::Press {
                         continue;
                     }
+                    // If creation dialog is active, intercept dialog keystrokes
+                    if state.active_tab == Tab::Notes && state.spai_notes.creation_dialog.active {
+                        match key.code {
+                            KeyCode::Esc => {
+                                state.spai_notes.close_creation_dialog();
+                            }
+                            KeyCode::Tab => {
+                                state.spai_notes.cycle_creation_kind();
+                            }
+                            KeyCode::Enter => {
+                                let _ = state.spai_notes.submit_creation_dialog();
+                            }
+                            KeyCode::Backspace => {
+                                state.spai_notes.creation_dialog.title_input.pop();
+                            }
+                            KeyCode::Char(c) => {
+                                state.spai_notes.creation_dialog.title_input.push(c);
+                            }
+                            _ => {}
+                        }
+                        continue;
+                    }
+
                     // Quit on q or Esc, or Ctrl+c
                     if key.code == KeyCode::Char('q')
                         || key.code == KeyCode::Esc
@@ -73,10 +96,50 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         KeyCode::Char('1') => state.set_tab(Tab::Status),
                         KeyCode::Char('2') => state.set_tab(Tab::Skills),
                         KeyCode::Char('3') => state.set_tab(Tab::Mcp),
-                        KeyCode::Up | KeyCode::Char('k') => state.scroll_up(1),
-                        KeyCode::Down | KeyCode::Char('j') => state.scroll_down(1),
-                        KeyCode::PageUp => state.scroll_up(10),
-                        KeyCode::PageDown => state.scroll_down(10),
+                        KeyCode::Char('4') => state.set_tab(Tab::Notes),
+                        KeyCode::Char('p') if state.active_tab == Tab::Notes => {
+                            state.spai_notes.jump_to_active_project();
+                        }
+                        KeyCode::Char('[') if state.active_tab == Tab::Notes => {
+                            state.spai_notes.prev_project();
+                        }
+                        KeyCode::Char(']') if state.active_tab == Tab::Notes => {
+                            state.spai_notes.next_project();
+                        }
+                        KeyCode::Char('n') if state.active_tab == Tab::Notes => {
+                            state.spai_notes.open_creation_dialog();
+                        }
+                        KeyCode::Char('x') if state.active_tab == Tab::Notes => {
+                            let _ = state.spai_notes.cycle_selected_status();
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            if state.active_tab == Tab::Notes {
+                                state.spai_notes.prev_item();
+                            } else {
+                                state.scroll_up(1);
+                            }
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if state.active_tab == Tab::Notes {
+                                state.spai_notes.next_item();
+                            } else {
+                                state.scroll_down(1);
+                            }
+                        }
+                        KeyCode::PageUp => {
+                            if state.active_tab == Tab::Notes {
+                                state.spai_notes.scroll_viewer_up(6);
+                            } else {
+                                state.scroll_up(10);
+                            }
+                        }
+                        KeyCode::PageDown => {
+                            if state.active_tab == Tab::Notes {
+                                state.spai_notes.scroll_viewer_down(6);
+                            } else {
+                                state.scroll_down(10);
+                            }
+                        }
                         KeyCode::Home => state.scroll = 0,
                         KeyCode::Char('r') => state.trigger_manual_refresh(),
                         KeyCode::Char('w') => {

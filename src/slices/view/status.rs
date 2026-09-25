@@ -126,10 +126,7 @@ pub fn render_live_status(
                 };
                 lines.push(Line::from(vec![
                     Span::styled("   ", Style::default()),
-                    Span::styled(
-                        &repo.name,
-                        Style::default().fg(Color::White).bold(),
-                    ),
+                    Span::styled(&repo.name, Style::default().fg(Color::White).bold()),
                     Span::styled(edited_tag, Style::default().fg(Color::Yellow)),
                 ]));
                 for c in repo.recent_commits.iter().take(2) {

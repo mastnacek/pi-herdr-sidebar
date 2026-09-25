@@ -114,11 +114,15 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         vec![Span::raw(" 3: MCP ")]
     };
 
+    // 4. Notes tab indicator (SPAI notes & fileviewer)
+    let notes_spans = vec![Span::raw(" 4: Notes ")];
+
     let titles: Vec<Line> = vec![
         Line::from(zen_spans),
         Line::from(status_spans),
         Line::from(skills_spans),
         Line::from(mcp_spans),
+        Line::from(notes_spans),
     ];
 
     // Top status indicator: static dot in Zen tab or when idle; animated ONLY when agent is running in active tabs
@@ -173,6 +177,9 @@ fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
     match state.active_tab {
         Tab::Zen => super::zen::render_zen_face(frame, area, state),
         Tab::Mcp => super::mcp::render_mcp_face(frame, area, state),
+        Tab::Notes => {
+            crate::slices::spai_notes::render_spai_notes_tab(frame, area, &state.spai_notes)
+        }
         Tab::Status => {
             if let Some(t) = &state.live {
                 super::status::render_live_status(frame, area, t, state);
