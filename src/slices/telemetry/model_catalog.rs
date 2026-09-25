@@ -137,32 +137,68 @@ struct TopLevelFile {
 
 pub type Catalog = Vec<(String, Vec<ModelEntry>)>;
 
-static CATALOG: Mutex<Option<(Option<SystemTime>, Option<SystemTime>, Catalog)>> = Mutex::new(None);
+/// Runtime-injected provider from the `pi-zen-fallback` extension: its models
+/// exist only in the extension's cache file, never in `models-store.json`.
+const ZEN_PROVIDER: &str = "zenfree";
+const ZEN_CACHE_FILE: &str = "zen-free-models.cache.json";
 
-fn catalog_mtimes() -> (Option<SystemTime>, Option<SystemTime>) {
+/// `zen-free-models.cache.json` shape: `{ fetchedAt, models: [...] }`.
+#[derive(Deserialize)]
+struct ZenCacheFile {
+    #[serde(default)]
+    models: Vec<ModelEntry>,
+}
+
+/// Models registered at runtime by pi extensions, keyed by provider name.
+fn runtime_catalogs(home: &std::path::Path) -> Vec<(String, Vec<ModelEntry>)> {
+    let path = home.join(".pi").join("agent").join(ZEN_CACHE_FILE);
+    let Ok(text) = fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let Ok(cache) = serde_json::from_str::<ZenCacheFile>(&text) else {
+        return Vec::new();
+    };
+    if cache.models.is_empty() {
+        return Vec::new();
+    }
+    vec![(ZEN_PROVIDER.to_string(), cache.models)]
+}
+
+/// Cached catalog plus the mtimes that invalidate it.
+struct CatalogCache {
+    models_json: Option<SystemTime>,
+    store_json: Option<SystemTime>,
+    zen_cache: Option<SystemTime>,
+    catalog: Catalog,
+}
+
+static CATALOG: Mutex<Option<CatalogCache>> = Mutex::new(None);
+
+fn catalog_mtimes() -> (Option<SystemTime>, Option<SystemTime>, Option<SystemTime>) {
     let home = match crate::shared::dirs_home() {
         Some(h) => h,
-        None => return (None, None),
+        None => return (None, None, None),
     };
     let mtime = |p: PathBuf| fs::metadata(p).and_then(|m| m.modified()).ok();
     (
         mtime(home.join(".pi").join("agent").join("models.json")),
         mtime(home.join(".pi").join("agent").join("models-store.json")),
+        mtime(home.join(".pi").join("agent").join(ZEN_CACHE_FILE)),
     )
 }
 
 pub fn load_catalog() -> Catalog {
-    let (m1, m2) = catalog_mtimes();
+    let (m1, m2, m3) = catalog_mtimes();
     if let Ok(guard) = CATALOG.lock() {
-        if let Some((c1, c2, cat)) = guard.as_ref() {
-            if *c1 == m1 && *c2 == m2 {
-                return cat.clone();
+        if let Some(cache) = guard.as_ref() {
+            if cache.models_json == m1 && cache.store_json == m2 && cache.zen_cache == m3 {
+                return cache.catalog.clone();
             }
         }
     }
     let mut cat: Catalog = Vec::new();
     let home = crate::shared::dirs_home();
-    if let Some(home) = home {
+    if let Some(home) = &home {
         for (path, providers_key) in [
             (home.join(".pi").join("agent").join("models.json"), true),
             (
@@ -184,9 +220,18 @@ pub fn load_catalog() -> Catalog {
                 }
             }
         }
+        // Appended last: a static catalog entry with the same model id wins
+        // over the runtime cache, which only fills gaps (like pi's own
+        // `ctx.model.contextWindow` fallback does).
+        cat.extend(runtime_catalogs(home));
     }
     if let Ok(mut guard) = CATALOG.lock() {
-        *guard = Some((m1, m2, cat.clone()));
+        *guard = Some(CatalogCache {
+            models_json: m1,
+            store_json: m2,
+            zen_cache: m3,
+            catalog: cat.clone(),
+        });
     }
     cat
 }

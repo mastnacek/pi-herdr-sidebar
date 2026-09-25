@@ -2,6 +2,7 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod context_usage;
 pub mod git_live;
 pub mod mcp_live;
 pub mod model_catalog;
@@ -64,6 +65,9 @@ pub struct LiveTelemetry {
     pub context_tokens: u64,
     pub context_window: u64,
     pub context_percent: Option<f64>,
+    /// pi itself reports the context as unknown (post-compaction gap, or no
+    /// trustworthy usage yet) — render `?`, not `0.0%`.
+    pub context_unknown: bool,
     pub total_cost: f64,
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -112,41 +116,56 @@ pub struct Usage {
     pub cost: Option<UsageCost>,
 }
 
-#[derive(Deserialize)]
-struct MessageBody {
-    role: Option<String>,
-    provider: Option<String>,
-    model: Option<String>,
+#[derive(Deserialize, Default)]
+pub struct MessageBody {
+    pub role: Option<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
     #[serde(default, rename = "isError")]
-    is_error: Option<bool>,
+    pub is_error: Option<bool>,
+    /// pi marks aborted/errored attempts here; their usage is not context.
+    #[serde(default, rename = "stopReason")]
+    pub stop_reason: Option<String>,
     #[serde(default)]
-    content: Option<serde_json::Value>,
+    pub content: Option<serde_json::Value>,
     #[serde(default)]
-    usage: Option<Usage>,
+    pub usage: Option<Usage>,
 }
 
-#[derive(Deserialize)]
-struct Entry {
+#[derive(Deserialize, Default)]
+pub struct Entry {
     #[serde(rename = "type")]
-    kind: String,
+    pub kind: String,
     #[serde(default)]
-    timestamp: String,
+    pub timestamp: String,
     #[serde(default)]
-    cwd: Option<String>,
+    pub cwd: Option<String>,
     #[serde(default)]
-    id: Option<String>,
+    pub id: Option<String>,
     #[serde(default, rename = "sessionId")]
-    session_id: Option<String>,
+    pub session_id: Option<String>,
     #[serde(default)]
-    provider: Option<String>,
+    pub provider: Option<String>,
     #[serde(rename = "modelId", default)]
-    model_id: Option<String>,
+    pub model_id: Option<String>,
     #[serde(default, rename = "thinkingLevel")]
-    level: Option<String>,
+    pub level: Option<String>,
     #[serde(default)]
-    message: Option<MessageBody>,
+    pub message: Option<MessageBody>,
     #[serde(default)]
-    usage: Option<Usage>,
+    pub usage: Option<Usage>,
+    /// `custom_message` payload (extension-injected context).
+    #[serde(default)]
+    pub content: Option<serde_json::Value>,
+    /// `branch_summary` / `compaction` summary text.
+    #[serde(default)]
+    pub summary: Option<String>,
+    /// `context_edit.targetId` — the entry whose context contribution changes.
+    #[serde(default, rename = "targetId")]
+    pub target_id: Option<String>,
+    /// `context_edit.replacement`; `null`/absent means the target is omitted.
+    #[serde(default)]
+    pub replacement: Option<serde_json::Value>,
 }
 
 pub fn parse_newest_session(cwd: Option<&str>) -> Option<LiveTelemetry> {
@@ -178,38 +197,42 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
     let mut last_thinking = String::new();
     let mut in_turn = false;
 
-    for line in content.lines() {
-        let Ok(entry) = serde_json::from_str::<Entry>(line) else {
-            continue;
-        };
+    // Parsed once so context accounting can look at the whole log (projection
+    // rules need entry order: last usage vs latest context_edit/compaction).
+    let entries: Vec<Entry> = content
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Entry>(line).ok())
+        .collect();
+
+    for entry in &entries {
         match entry.kind.as_str() {
             "session" => {
-                if let Some(s) = entry.session_id.or(entry.id) {
-                    if t.session_id.is_empty() {
-                        t.session_id = s;
+                if t.session_id.is_empty() {
+                    if let Some(s) = entry.session_id.as_deref().or(entry.id.as_deref()) {
+                        t.session_id = s.to_string();
                     }
                 }
-                if let Some(c) = entry.cwd {
-                    t.cwd = c;
+                if let Some(c) = entry.cwd.as_deref() {
+                    t.cwd = c.to_string();
                 }
             }
             "turn_start" => in_turn = true,
             "turn_end" => in_turn = false,
             "model_change" => {
-                if let Some(p) = entry.provider {
-                    last_model_provider = p;
+                if let Some(p) = entry.provider.as_deref() {
+                    last_model_provider = p.to_string();
                 }
-                if let Some(m) = entry.model_id {
-                    last_model_id = m;
+                if let Some(m) = entry.model_id.as_deref() {
+                    last_model_id = m.to_string();
                 }
             }
             "thinking_level_change" => {
-                if let Some(l) = entry.level {
-                    last_thinking = l;
+                if let Some(l) = entry.level.as_deref() {
+                    last_thinking = l.to_string();
                 }
             }
             "message" => {
-                if let Some(msg) = entry.message {
+                if let Some(msg) = entry.message.as_ref() {
                     if msg.role.as_deref() == Some("user") {
                         t.turns_count += 1;
                     }
@@ -219,14 +242,14 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                             t.tool_errors_count += 1;
                         }
                     }
-                    if let Some(serde_json::Value::Array(blocks)) = msg.content {
+                    if let Some(serde_json::Value::Array(blocks)) = msg.content.as_ref() {
                         for b in blocks {
                             if b.get("type").and_then(|v| v.as_str()) == Some("tool_call") {
                                 t.tool_calls_count += 1;
                             }
                         }
                     }
-                    if let Some(u) = msg.usage {
+                    if let Some(u) = msg.usage.as_ref() {
                         t.input_tokens += u.input;
                         t.output_tokens += u.output;
                         t.cache_read += u.cache_read;
@@ -234,28 +257,25 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                         t.reasoning_tokens += u.reasoning;
                         add_usage_cost(
                             &mut t,
-                            &u,
+                            u,
                             msg.provider
                                 .as_deref()
                                 .or(Some(last_model_provider.as_str())),
                             msg.model.as_deref().or(Some(last_model_id.as_str())),
                         );
-                        if msg.role.as_deref() == Some("assistant") && u.total_tokens > 0 {
-                            t.context_tokens = u.total_tokens;
-                        }
                         if msg.role.as_deref() == Some("assistant") {
-                            if let Some(p) = msg.provider {
-                                last_model_provider = p;
+                            if let Some(p) = msg.provider.as_deref() {
+                                last_model_provider = p.to_string();
                             }
-                            if let Some(m) = msg.model {
-                                last_model_id = m;
+                            if let Some(m) = msg.model.as_deref() {
+                                last_model_id = m.to_string();
                             }
                         }
                     }
                 }
             }
             _ => {
-                if let Some(u) = entry.usage {
+                if let Some(u) = entry.usage.as_ref() {
                     t.input_tokens += u.input;
                     t.output_tokens += u.output;
                     t.cache_read += u.cache_read;
@@ -263,7 +283,7 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                     t.reasoning_tokens += u.reasoning;
                     add_usage_cost(
                         &mut t,
-                        &u,
+                        u,
                         Some(last_model_provider.as_str()),
                         Some(last_model_id.as_str()),
                     );
@@ -271,7 +291,7 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
             }
         }
         if !entry.timestamp.is_empty() {
-            t.last_entry_ts = entry.timestamp;
+            t.last_entry_ts = entry.timestamp.clone();
         }
     }
 
@@ -288,6 +308,10 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
         win = context_window_for("", &t.model_id);
     }
     t.context_window = win;
+    // Same rules pi applies: context_edit/compaction invalidate an older usage.
+    let context = context_usage::estimate_context_tokens(&entries);
+    t.context_tokens = context.unwrap_or(0);
+    t.context_unknown = context.is_none();
     t.context_percent = if win > 0 && t.context_tokens > 0 {
         Some((t.context_tokens as f64 / win as f64) * 100.0)
     } else {

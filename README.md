@@ -7,7 +7,8 @@ Provides high-performance, real-time agent telemetry, skill compliance gates, to
 **Self-reading telemetry**: the Status face parses the Pi agent's own session JSONL
 (`~/.pi/agent/sessions/...`) directly — no snapshot from the TypeScript
 `pi-sidebar` extension required. Model, thinking level, context window (resolved
-from `models.json` + `models-store.json`), tokens, cache and cost all come from
+from `models.json` + `models-store.json`, plus the runtime caches extensions
+inject, e.g. `zen-free-models.cache.json`), tokens, cache and cost all come from
 the session log; git state is read from the session's cwd. The snapshot file is
 only used as a fallback for the Skills face (pi-plugin-dev publishes skill state
 over an in-process event bus, not to disk) and for legacy renderer mode.
@@ -20,7 +21,9 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
   Built in native Rust using Ratatui 0.29+ and Crossterm, completely replacing slow node-based renderers.
 - **Three Interactive Faces**:
   - `Status`: Full agent telemetry with statusline parity:
-    - Context window gauge: `📊 ██████░░░░░░░░ 42.5%/200k (auto)` with exact decimal precision and auto-compaction indicator
+    - Context window gauge: `📊 ██████░░░░░░░░ 42.5% (70.1k/1M)`, or `?` when
+      pi itself reports the context as unknown (post-compaction gap); no
+      extension required, and no dependence on context-mode
     - Token economics: `⬆️ In / ⬇️ Out` compact metrics
     - Cache performance: `📦 Read / Write` totals and `🎯 Hit rate %`
     - Cost tracking: Exact session dollar expenditure
