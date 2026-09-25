@@ -70,18 +70,18 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     let is_zen = state.active_tab == Tab::Zen;
 
     // 0. Zen tab: calm, serene indicator
-    let zen_spans = vec![Span::raw(" 0: Zen ")];
+    let zen_spans = vec![Span::raw(super::state_model::TAB_LABELS[0])];
 
     // 1. Status tab indicator: spinner ONLY when agent is actively working/executing (and not in Zen tab)
     let is_agent_working = state.live.as_ref().map(|l| l.is_working).unwrap_or(false);
     let status_spans = if is_agent_working && !is_zen {
         vec![
-            Span::raw(" 1: Status "),
+            Span::raw(super::state_model::TAB_LABELS[1]),
             Span::styled(spinner, Style::default().fg(Color::Cyan).bold()),
             Span::raw(" "),
         ]
     } else {
-        vec![Span::raw(" 1: Status ")]
+        vec![Span::raw(super::state_model::TAB_LABELS[1])]
     };
 
     // 2. Skills tab indicator: spinner ONLY when skill is active AND in-turn (and not in Zen tab)
@@ -94,28 +94,32 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
     let skills_spans = if is_skill_working && !is_zen {
         vec![
-            Span::raw(" 2: Skills "),
+            Span::raw(super::state_model::TAB_LABELS[2]),
             Span::styled(spinner, Style::default().fg(Color::Yellow).bold()),
             Span::raw(" "),
         ]
     } else {
-        vec![Span::raw(" 2: Skills ")]
+        vec![Span::raw(super::state_model::TAB_LABELS[2])]
     };
 
     // 3. MCP tab indicator: spinner when MCP calls are in flight (and not in Zen tab)
     let is_mcp_in_flight = state.mcp.as_ref().map(|m| m.in_flight).unwrap_or(false);
     let mcp_spans = if is_mcp_in_flight && !is_zen {
         vec![
-            Span::raw(" 3: MCP "),
+            Span::raw(super::state_model::TAB_LABELS[3]),
             Span::styled(spinner, Style::default().fg(Color::Magenta).bold()),
             Span::raw(" "),
         ]
     } else {
-        vec![Span::raw(" 3: MCP ")]
+        vec![Span::raw(super::state_model::TAB_LABELS[3])]
     };
 
     // 4. Notes tab indicator (SPAI notes & fileviewer)
-    let notes_spans = vec![Span::raw(" 4: Notes ")];
+    let notes_spans = vec![Span::raw(super::state_model::TAB_LABELS[4])];
+
+    // 5. Shortcuts tab (keybindings). The usage overview is its own window, so
+    // there is nothing to animate here.
+    let shortcuts_spans = vec![Span::raw(super::state_model::TAB_LABELS[5])];
 
     let titles: Vec<Line> = vec![
         Line::from(zen_spans),
@@ -123,6 +127,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Line::from(skills_spans),
         Line::from(mcp_spans),
         Line::from(notes_spans),
+        Line::from(shortcuts_spans),
     ];
 
     // Top status indicator: static dot in Zen tab or when idle; animated ONLY when agent is running in active tabs
@@ -179,6 +184,9 @@ fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Tab::Mcp => super::mcp::render_mcp_face(frame, area, state),
         Tab::Notes => {
             crate::slices::spai_notes::render_spai_notes_tab(frame, area, &state.spai_notes)
+        }
+        Tab::Shortcuts => {
+            crate::slices::shortcuts::render_shortcuts_tab(frame, area, &state.shortcuts)
         }
         Tab::Status => {
             if let Some(t) = &state.live {

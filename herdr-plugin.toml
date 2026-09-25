@@ -40,6 +40,46 @@ height = 24
 command = ["target/release/pi_sidebar.exe", "popup"]
 platforms = ["windows"]
 
+# Large modal devoted to the SPAI Notes editor — same mechanic as the Kanban
+# board (`placement = "popup"`), opened straight on the Notes face.
+[[panes]]
+id = "notes-popup"
+title = "Pi Herdr Notes Editor"
+placement = "popup"
+width = "92%"
+height = "88%"
+command = ["target/release/pi_sidebar", "popup", "--tab", "notes"]
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "notes-popup-win"
+title = "Pi Herdr Notes Editor"
+placement = "popup"
+width = "92%"
+height = "88%"
+command = ["target/release/pi_sidebar.exe", "popup", "--tab", "notes"]
+platforms = ["windows"]
+
+# Plugin/skill usage overview as a standalone window (no sidebar chrome),
+# opened by its own keybinding.
+[[panes]]
+id = "usage"
+title = "Pi Herdr Plugin Usage"
+placement = "popup"
+width = "92%"
+height = "88%"
+command = ["target/release/pi_sidebar", "usage"]
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "usage-win"
+title = "Pi Herdr Plugin Usage"
+placement = "popup"
+width = "92%"
+height = "88%"
+command = ["target/release/pi_sidebar.exe", "usage"]
+platforms = ["windows"]
+
 [[actions]]
 id = "toggle"
 title = "Toggle Pi Herdr Sidebar"
@@ -66,6 +106,34 @@ id = "popup-win"
 title = "Open Pi Herdr Sidebar Popup"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar.exe", "popup-action"]
+platforms = ["windows"]
+
+[[actions]]
+id = "edit-notes"
+title = "Open Pi Herdr Notes Editor (modal)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "notes-popup-action"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "edit-notes-win"
+title = "Open Pi Herdr Notes Editor (modal)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "notes-popup-action"]
+platforms = ["windows"]
+
+[[actions]]
+id = "usage"
+title = "Open Pi Herdr Plugin Usage (window)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "usage-popup-action"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "usage-win"
+title = "Open Pi Herdr Plugin Usage (window)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "usage-popup-action"]
 platforms = ["windows"]
 
 [[actions]]

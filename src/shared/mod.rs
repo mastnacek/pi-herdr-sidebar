@@ -2,6 +2,7 @@ pub mod client;
 pub mod context;
 pub mod snapshot;
 pub mod terminal;
+pub mod theme;
 
 pub use client::{HerdrClient, HerdrPaneInfo};
 pub use context::{

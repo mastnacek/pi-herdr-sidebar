@@ -1,6 +1,6 @@
 //! Parsing and formatting for SPAI notes markdown and YAML frontmatter.
-use std::path::PathBuf;
 use super::note::{SpaiFacets, SpaiNoteItem, SpaiStatus, SpaiType};
+use std::path::PathBuf;
 
 /// Creates a safe URL/file slug from title.
 pub fn slugify(text: &str) -> String {
@@ -48,7 +48,9 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
 
         let indent = &line[..line.len() - trimmed.len()];
         let mut matched_len = 0;
-        for p in &["/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- "] {
+        for p in &[
+            "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ",
+        ] {
             if trimmed.starts_with(p) {
                 matched_len = p.len();
                 break;
@@ -114,6 +116,21 @@ pub fn format_spai_markdown(item: &SpaiNoteItem) -> String {
     out.push('\n');
 
     out
+}
+
+/// Parses a YAML inline tag list (`[ai, chat]`, `ai, chat`, or a single tag)
+/// into a vector, stripping quotes and empty entries.
+pub fn parse_inline_tags(raw: &str) -> Vec<String> {
+    let trimmed = raw.trim();
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(trimmed);
+    inner
+        .split(',')
+        .map(|t| t.trim().trim_matches('"').trim_matches('\'').to_string())
+        .filter(|t| !t.is_empty())
+        .collect()
 }
 
 /// Parses a SPAI markdown file into `SpaiNoteItem`.
@@ -193,7 +210,8 @@ pub fn parse_spai_markdown(content: &str, file_path: PathBuf) -> Option<SpaiNote
     let mut kind = SpaiType::Todo;
     let mut status = SpaiStatus::Todo;
     let mut timestamp = String::new();
-    let tags = Vec::new();
+    let mut tags: Vec<String> = Vec::new();
+    let mut tags_list_mode = false;
     let mut facets = SpaiFacets {
         project: None,
         project_path: None,
@@ -204,12 +222,32 @@ pub fn parse_spai_markdown(content: &str, file_path: PathBuf) -> Option<SpaiNote
 
     for line in yaml_part.lines() {
         let l = line.trim();
+
+        // Multi-line YAML list form: `tags:` followed by `- tag` lines
+        if tags_list_mode {
+            if let Some(v) = l.strip_prefix("- ") {
+                let tag = v.trim().trim_matches('"').trim_matches('\'');
+                if !tag.is_empty() {
+                    tags.push(tag.to_string());
+                }
+                continue;
+            }
+            tags_list_mode = false;
+        }
+
         if let Some(v) = l.strip_prefix("type:") {
             kind = SpaiType::from_str(v);
         } else if let Some(v) = l.strip_prefix("status:") {
             status = SpaiStatus::from_str(v);
         } else if let Some(v) = l.strip_prefix("timestamp:") {
             timestamp = v.trim().trim_matches('"').to_string();
+        } else if let Some(v) = l.strip_prefix("tags:") {
+            let v = v.trim();
+            if v.is_empty() {
+                tags_list_mode = true;
+            } else {
+                tags = parse_inline_tags(v);
+            }
         } else if let Some(v) = l.strip_prefix("spai_symbol:") {
             symbol = v.trim().trim_matches('\'').trim_matches('"').to_string();
         } else if let Some(v) = l.strip_prefix("project:") {
@@ -248,4 +286,57 @@ pub fn parse_spai_markdown(content: &str, file_path: PathBuf) -> Option<SpaiNote
         file_path,
         file_name,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn note(path: &str) -> PathBuf {
+        PathBuf::from(path)
+    }
+
+    #[test]
+    fn inline_tags_are_parsed_and_stripped() {
+        assert_eq!(
+            parse_inline_tags("[ai, chat, fix]"),
+            vec!["ai", "chat", "fix"]
+        );
+        assert_eq!(parse_inline_tags("ai, chat"), vec!["ai", "chat"]);
+        assert_eq!(parse_inline_tags("solo"), vec!["solo"]);
+        assert_eq!(parse_inline_tags("['a', \"b\"]"), vec!["a", "b"]);
+        assert!(parse_inline_tags("[]").is_empty());
+    }
+
+    #[test]
+    fn frontmatter_tags_survive_parse_format_round_trip() {
+        let src = "---\ntype: Todo\ntitle: \"T\"\ntimestamp: 2026-09-09 20:19:09\nstatus: done\nsource: pi-spai\ntags: [ai, chat, fix]\nfacets:\n  project: skoly\nspai_symbol: 'x'\n---\n\n# SPAI-009: T\n\nx T\n";
+        let item = parse_spai_markdown(src, note("2026-09-09-SPAI-009-t.md")).unwrap();
+        assert_eq!(item.tags, vec!["ai", "chat", "fix"]);
+
+        let round_tripped = format_spai_markdown(&item);
+        assert!(
+            round_tripped.contains("tags: [ai, chat, fix]"),
+            "tags dropped on save: {round_tripped}"
+        );
+        let again = parse_spai_markdown(&round_tripped, note("2026-09-09-SPAI-009-t.md")).unwrap();
+        assert_eq!(again.tags, vec!["ai", "chat", "fix"]);
+    }
+
+    #[test]
+    fn multiline_yaml_tag_list_is_parsed() {
+        let src = "---\ntype: Todo\ntitle: \"T\"\ntags:\n  - ai\n  - chat\nstatus: todo\n---\n\n# SPAI-001: T\n\n. T\n";
+        let item = parse_spai_markdown(src, note("2026-01-01-SPAI-001-t.md")).unwrap();
+        assert_eq!(item.tags, vec!["ai", "chat"]);
+        assert_eq!(item.kind, SpaiType::Todo);
+    }
+
+    #[test]
+    fn note_without_tags_stays_tagless() {
+        let src = "---\ntype: Todo\ntitle: \"T\"\nstatus: todo\n---\n\n# SPAI-001: T\n\n. T\n";
+        let item = parse_spai_markdown(src, note("2026-01-01-SPAI-001-t.md")).unwrap();
+        assert!(item.tags.is_empty());
+        assert!(!format_spai_markdown(&item).contains("tags:"));
+    }
 }

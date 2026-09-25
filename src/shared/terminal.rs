@@ -25,6 +25,32 @@ impl TerminalGuard {
     pub fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<Stdout>> {
         &mut self.terminal
     }
+
+    /// Temporarily hands the terminal back to the shell (for spawning an
+    /// external editor). Pair with [`TerminalGuard::resume`].
+    pub fn suspend(&mut self) -> io::Result<()> {
+        disable_raw_mode()?;
+        execute!(
+            self.terminal.backend_mut(),
+            LeaveAlternateScreen,
+            Show,
+            DisableMouseCapture
+        )?;
+        Ok(())
+    }
+
+    /// Re-enters the alternate screen / raw mode after [`TerminalGuard::suspend`].
+    pub fn resume(&mut self) -> io::Result<()> {
+        enable_raw_mode()?;
+        execute!(
+            self.terminal.backend_mut(),
+            EnterAlternateScreen,
+            Hide,
+            EnableMouseCapture
+        )?;
+        self.terminal.clear()?;
+        Ok(())
+    }
 }
 
 impl Drop for TerminalGuard {

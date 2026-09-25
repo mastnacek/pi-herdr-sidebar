@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+# `unstable-rendered-line-info` exposes `Paragraph::line_count(width)`, which
+# the notes editor uses to keep the cursor row inside the visible body viewport.
+ratatui = { version = "0.29", default-features = false, features = ["crossterm", "unstable-rendered-line-info"] }
 crossterm = { version = "0.28" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

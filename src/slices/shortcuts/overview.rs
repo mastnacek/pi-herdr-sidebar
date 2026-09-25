@@ -1,0 +1,46 @@
+//! Standalone plugin-usage overview window (`pi_sidebar usage`).
+//!
+//! Opened by its own Herdr keybinding as a `placement = "popup"` pane — the same
+//! mechanic the Kanban board uses. It renders *only* the overview: no sidebar
+//! header, tab bar or shared banner, so it reads as a dedicated modal window and
+//! can be dismissed with `Esc`.
+use super::modal;
+use super::usage::state::UsageOverview;
+use crate::shared::TerminalGuard;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use std::io;
+use std::time::Duration;
+
+/// Runs the overview until the user closes it.
+pub fn run_overview() -> io::Result<()> {
+    let mut state = UsageOverview::new();
+    // Cached when the log fingerprint is unchanged, so repeat opens are instant.
+    state.ensure_scan(false);
+
+    let mut guard = TerminalGuard::init()?;
+    let tick_rate = Duration::from_millis(150);
+
+    loop {
+        // Harvest a finished scan before painting so the window can switch from
+        // the progress bar to the data in the same frame.
+        state.poll_scan();
+
+        guard.terminal_mut().draw(|frame| {
+            modal::render_usage_panel(frame, frame.area(), &state);
+        })?;
+
+        if event::poll(tick_rate)? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Char('r') => state.ensure_scan(true),
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+    }
+
+    Ok(())
+}

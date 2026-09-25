@@ -35,6 +35,10 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
     - Status footer: `✓ settled · N read · N written` / `● running`
   - `Herdr Panes`:
     - Live workspace pane table: Pane ID, Tab, Workspace, Label, Focus indicator, and working directory.
+  - `Notes` (SPAI):
+    - Cross-project `docs/spai` browser with a ZEN detail viewer.
+    - `e` opens the integrated editor (title + body, `Tab` switches field, `Ctrl+S` saves).
+    - `E` opens the selected note in an external editor (`$VISUAL`, then `$EDITOR`, then a platform default), reloading notes on exit.
 - **Clickable & Keyboard-Driven**:
   - Click any tab on the top bar or press `Tab`, `1`, `2`, `3` to switch faces.
   - Automatically synchronizes tab changes with the Pi agent session via `<snapshot>.request.json`.
@@ -52,12 +56,85 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
 | --- | --- |
 | `Tab` / `Right` / `l` | Next face (`Status` → `Skills` → `Herdr`) |
 | `Shift+Tab` / `Left` / `h` | Previous face |
-| `1` / `2` / `3` | Direct jump to face (1: Status, 2: Skills, 3: Herdr) |
+| `1` … `5` | Direct jump to face (0: Zen, 1: Status, 2: Skills, 3: MCP, 4: Notes, 5: Shortcuts) |
 | `Up` / `k` | Scroll up 1 line |
 | `Down` / `j` | Scroll down 1 line |
 | `PageUp` / `PageDown` | Scroll up / down 10 lines |
 | `r` | Force refresh snapshot & Herdr state |
 | `q` / `Esc` / `Ctrl+c` | Exit sidebar |
+
+### SPAI Notes tab (`4`)
+
+| Shortcut | Action |
+| --- | --- |
+| `←` / `→` (`, .` `[` `]`) | Switch project |
+| `p` | Jump to the active (session cwd) project |
+| `↑` / `↓` (`k` / `j`) | Select note |
+| `PgUp` / `PgDn` (`u` / `d`) | Scroll viewer |
+| `e` | Integrated edit dialog for the selected note |
+| `E` | Open the selected note in an external editor |
+| `n` | New note (SPAI smart input with `@project` autocomplete) |
+| `x` | Cycle note status |
+
+Inside the integrated editor (`e`) every printable key inserts its character —
+the external editor is on `Ctrl+E`, never a bare `E`.
+
+### Shortcuts tab (`5`)
+
+Lists the keybindings your Herdr actually has: the `[[keys.command]]` entries
+from `config.toml` (badged `config`) merged with the documented Herdr defaults,
+with the resolved prefix (`ctrl+b` unless overridden).
+
+Actions this plugin offers but you have not bound yet are listed as `návrh`
+(suggested) rows with a free chord — that is how the usage overview below is
+discoverable without hand-editing `config.toml` first. A suggestion never
+proposes a chord Herdr already uses by default.
+
+| Shortcut | Action |
+| --- | --- |
+| `↑` / `↓` (`k` / `j`) | Select binding |
+| `PgUp` / `PgDn` | Scroll the list |
+| `r` | Re-read `config.toml` |
+
+The overview is **not** part of this tab: it is a separate window with its own
+keybinding (section below).
+
+### Plugin usage overview (standalone window)
+
+Its own `placement = "popup"` pane — the same mechanic the Kanban board uses —
+rendered by `pi_sidebar usage`. It shows *only* the overview: no sidebar header,
+tab bar or shared banner, so it reads as a dedicated modal window and closes with
+`Esc`.
+
+Bind it in `~/.config/herdr/config.toml` (Windows: `%APPDATA%\herdr\config.toml`):
+
+```toml
+[[keys.command]]
+key = "prefix+u"
+type = "plugin_action"
+command = "pi.herdr-sidebar.usage-win"
+description = "Pi Herdr Plugin Usage"
+```
+
+Shows what your plugins, skills and slash-commands are actually used for, counted
+from pi's own session logs (`~/.pi/agent/sessions/**/*.jsonl`):
+
+- plugins ranked by tool calls, with proportional bars,
+- skills ranked by `SKILL.md` reads,
+- slash-commands, and the most frequent tools overall,
+- totals: files, messages, tool calls and scan time.
+
+| Shortcut | Action |
+| --- | --- |
+| `Esc` / `q` | Close the window |
+| `r` | Re-scan, ignoring the cache |
+
+The scan walks ~300 MB, so it always runs on a background thread with a progress
+bar, and the aggregate is cached against a fingerprint of the log set (file
+count, total bytes, newest mtime). A cached open is effectively instant.
+Tool → plugin attribution is a tested prefix table, including the
+`mcp__<server>` namespace proxies and the `knowledge_base_` /
+`knowledge-base_` name variants.
 
 ---
 
@@ -68,6 +145,27 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
 - `pi.sidebar.switch-tab`: Switch between Status and Skills faces remotely.
 - `pi.sidebar.sidebar`: Split pane entrypoint.
 - `pi.sidebar.sidebar-popup`: Popup modal entrypoint.
+- `pi.sidebar.edit-notes` / `edit-notes-win`: SPAI note editor as a large modal.
+- `pi.sidebar.usage` / `usage-win`: plugin/skill usage overview as a standalone
+  window (`pi_sidebar usage`), no sidebar chrome.
+
+Bind them in `~/.config/herdr/config.toml` (Windows:
+`%APPDATA%\herdr\config.toml`) — Herdr owns keybindings, the manifest only
+declares actions:
+
+```toml
+[[keys.command]]
+key = "prefix+n"
+type = "plugin_action"
+command = "pi.herdr-sidebar.edit-notes-win"
+description = "Pi Herdr Notes Editor (modal)"
+
+[[keys.command]]
+key = "prefix+u"
+type = "plugin_action"
+command = "pi.herdr-sidebar.usage-win"
+description = "Pi Herdr Plugin Usage (window)"
+```
 
 ---
 
@@ -85,7 +183,8 @@ pi-sidebar/
     │   ├── client.rs           # Herdr CLI subprocess client wrapper
     │   ├── context.rs          # Environment & snapshot path discovery
     │   ├── snapshot.rs         # JSON snapshot transport & PID lock
-    │   └── terminal.rs         # Crossterm terminal setup/cleanup guard
+    │   ├── terminal.rs         # Crossterm terminal setup/cleanup guard
+    │   └── theme.rs            # Modal backdrop / focus styling + bars
     └── slices/                 # Isolated feature slices
         ├── telemetry/           # Live telemetry: Pi session JSONL parser
         │   │                    #   (model, usage, cost, context, git) — no TS ext
@@ -106,6 +205,21 @@ pi-sidebar/
    ```bash
    cargo build --release
    ```
+
+   > **Close running sidebar panes first.** On Windows the running pane holds a
+   > lock on `target/release/pi_sidebar.exe`, so the build dies with
+   > `failed to remove ...\pi_sidebar.exe: Přístup byl odepřen. (os error 5)` and
+   > the pane silently keeps executing the **old** binary — new shortcuts appear
+   > to do nothing. Close the panes, rebuild, then reopen:
+   >
+   > ```bash
+   > herdr pane close <sidebar-pane-id>          # list with: herdr pane list
+   > cargo build --release
+   > herdr plugin action invoke pi.herdr-sidebar.toggle-win
+   > ```
+   >
+   > Panes also respawn by themselves through the plugin's `ensure` events on
+   > pane/tab/workspace focus.
 
 2. Link into Herdr:
    ```bash

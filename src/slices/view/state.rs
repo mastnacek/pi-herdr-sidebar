@@ -56,6 +56,7 @@ impl SidebarState {
             ),
             weather_last_fetch: 0,
             spai_notes: crate::slices::spai_notes::SpaiNotesState::new(None),
+            shortcuts: crate::slices::shortcuts::ShortcutsState::new(),
         };
 
         state.refresh(true);
@@ -95,7 +96,7 @@ impl SidebarState {
             let tab_id = match tab {
                 Tab::Status => "status",
                 Tab::Skills => "skills",
-                Tab::Zen | Tab::Mcp | Tab::Notes => return,
+                Tab::Zen | Tab::Mcp | Tab::Notes | Tab::Shortcuts => return,
             };
 
             let col = if let Some(snap) = &self.snapshot {
@@ -126,15 +127,16 @@ impl SidebarState {
     }
 
     pub fn next_tab(&mut self) {
-        let next = (self.active_tab.to_index() + 1) % 5;
+        let next = (self.active_tab.to_index() + 1) % super::state_model::TAB_COUNT;
         self.set_tab(Tab::from_index(next));
     }
 
     pub fn prev_tab(&mut self) {
-        let prev = if self.active_tab.to_index() == 0 {
-            4
+        let current = self.active_tab.to_index();
+        let prev = if current == 0 {
+            super::state_model::TAB_COUNT - 1
         } else {
-            self.active_tab.to_index() - 1
+            current - 1
         };
         self.set_tab(Tab::from_index(prev));
     }
@@ -147,18 +149,30 @@ impl SidebarState {
         self.scroll = self.scroll.saturating_add(lines);
     }
 
+    /// Copies the full weather forecast (all locations × all days) to the clipboard.
+    pub fn copy_weather_report(&mut self) {
+        let report = crate::slices::telemetry::weather_live::collect_all_locations_report();
+        let ok = crate::slices::telemetry::weather_live::copy_to_clipboard(&report);
+        self.refresh_status = if ok {
+            "📋 Předpověď zkopírována do schránky".to_string()
+        } else {
+            "Schránka není dostupná".to_string()
+        };
+        self.refresh_timer = 8;
+        self.refresh_progress = 0.0;
+    }
+
     pub fn handle_mouse_click(&mut self, col: u16, row: u16) {
         if row <= 3 {
-            if col < 11 {
-                self.set_tab(Tab::Zen);
-            } else if col < 24 {
-                self.set_tab(Tab::Status);
-            } else if col < 37 {
-                self.set_tab(Tab::Skills);
-            } else if col < 50 {
-                self.set_tab(Tab::Mcp);
-            } else if col < 63 {
-                self.set_tab(Tab::Notes);
+            // Hit-test from the same labels the header renders, so adding a tab
+            // cannot silently break clicking.
+            let mut edge = 0u16;
+            for (index, label) in super::state_model::TAB_LABELS.iter().enumerate() {
+                edge += label.chars().count() as u16 + 1; // +1 for the divider
+                if col < edge {
+                    self.set_tab(Tab::from_index(index));
+                    return;
+                }
             }
         }
     }

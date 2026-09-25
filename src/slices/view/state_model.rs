@@ -15,7 +15,22 @@ pub enum Tab {
     Skills = 2,
     Mcp = 3,
     Notes = 4,
+    Shortcuts = 5,
 }
+
+/// Number of tabs; keep in sync with [`Tab`] and [`TAB_LABELS`].
+pub const TAB_COUNT: usize = 6;
+
+/// Tab bar labels, in index order. Single source of truth so the header and the
+/// click hit-testing cannot drift apart.
+pub const TAB_LABELS: [&str; TAB_COUNT] = [
+    " 0: Zen ",
+    " 1: Status ",
+    " 2: Skills ",
+    " 3: MCP ",
+    " 4: Notes ",
+    " 5: Shortcuts ",
+];
 
 impl Tab {
     pub fn from_index(index: usize) -> Self {
@@ -24,6 +39,7 @@ impl Tab {
             2 => Tab::Skills,
             3 => Tab::Mcp,
             4 => Tab::Notes,
+            5 => Tab::Shortcuts,
             _ => Tab::Status,
         }
     }
@@ -71,4 +87,5 @@ pub struct SidebarState {
     pub weather_location_index: usize,
     pub weather_last_fetch: u64,
     pub spai_notes: crate::slices::spai_notes::SpaiNotesState,
+    pub shortcuts: crate::slices::shortcuts::ShortcutsState,
 }

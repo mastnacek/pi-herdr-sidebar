@@ -12,7 +12,7 @@ spai_symbol: 'x'
 
 # SPAI-012: T testování zápisu
 
-# SPAI-012: T testování zápisu
+x # SPAI-012: T testování zápisu
 
 # SPAI-012: T testování zápisu
 

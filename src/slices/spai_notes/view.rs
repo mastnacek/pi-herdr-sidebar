@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Clear, Paragraph, Wrap},
+    widgets::{Block, BorderType, Paragraph, Wrap},
     Frame,
 };
 
@@ -43,145 +43,9 @@ pub fn render_spai_notes_tab(frame: &mut Frame, area: Rect, state: &SpaiNotesSta
     render_right_viewer(frame, main_chunks[1], state);
 
     if state.creation_dialog.active {
-        render_creation_dialog(frame, area, state);
-    }
-}
-
-fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
-fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_area = centered_rect(area, 64, 34);
-    frame.render_widget(Clear, dialog_area);
-
-    let raw = &state.creation_dialog.title_input;
-    let detected = super::input_highlighter::detect_spai_input(raw);
-
-    let header_title = format!(" ✍ SPAI Smart Input: {} ", detected.prefix_label);
-
-    let title_block = Block::bordered()
-        .title(Span::styled(
-            header_title,
-            Style::default().fg(detected.badge_color).bold(),
-        ))
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(detected.badge_color));
-
-    let mut input_spans = vec![Span::styled(
-        "  Vstup: ",
-        Style::default().fg(Color::DarkGray),
-    )];
-
-    if raw.is_empty() {
-        input_spans.push(Span::styled(
-            "| napište . úkol, ? nápad, - poznámku, ! prioritu...",
-            Style::default().fg(Color::DarkGray),
-        ));
-    } else {
-        let highlighted = super::input_highlighter::highlight_spai_input_spans(raw);
-        input_spans.extend(highlighted);
-        input_spans.push(Span::styled("█", Style::default().fg(Color::Yellow)));
-    }
-
-    let lines = vec![
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("  Detekovaný typ: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!(
-                    "[{} {}]",
-                    detected.prefix_glyph.trim(),
-                    detected.prefix_label
-                ),
-                Style::default().fg(detected.badge_color).bold(),
-            ),
-            Span::styled(
-                "   (Syntax: . / /. x z ? - ! @ :tag:)",
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]),
-        Line::raw(""),
-        Line::from(input_spans),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("  [Enter]", Style::default().fg(Color::Green).bold()),
-            Span::styled(" Uložit  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Tab]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" Přepnout typ  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Esc]", Style::default().fg(Color::Yellow)),
-            Span::styled(" Zrušit", Style::default().fg(Color::DarkGray)),
-        ]),
-    ];
-
-    let para = Paragraph::new(lines).block(title_block);
-    frame.render_widget(para, dialog_area);
-
-    if state.creation_dialog.autocomplete_active && !state.creation_dialog.suggestions.is_empty() {
-        let count = state.creation_dialog.suggestions.len() as u16;
-        let ac_height = (count + 2).min(8);
-        let ac_area = Rect {
-            x: dialog_area.x + 4,
-            y: dialog_area.y + 6,
-            width: dialog_area.width.saturating_sub(8),
-            height: ac_height,
-        };
-
-        frame.render_widget(Clear, ac_area);
-
-        let ac_block = Block::bordered()
-            .title(" 📁 Vyberte projekt [@...] [Tab/Enter] ")
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Cyan));
-
-        let mut ac_lines = Vec::new();
-        for (i, sug) in state.creation_dialog.suggestions.iter().enumerate() {
-            let is_sel = i == state.creation_dialog.autocomplete_selected;
-            let marker = if is_sel { "▶ " } else { "  " };
-            ac_lines.push(Line::from(vec![
-                Span::styled(
-                    marker,
-                    Style::default().fg(if is_sel {
-                        Color::Yellow
-                    } else {
-                        Color::DarkGray
-                    }),
-                ),
-                Span::styled(
-                    format!("{:<18}", sug.insert_text),
-                    Style::default()
-                        .fg(if is_sel { Color::Cyan } else { Color::White })
-                        .add_modifier(if is_sel {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
-                ),
-                Span::styled(
-                    format!(" {}", sug.path),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-
-        let ac_para = Paragraph::new(ac_lines).block(ac_block);
-        frame.render_widget(ac_para, ac_area);
+        super::dialog_views::render_creation_dialog(frame, area, state);
+    } else if state.edit_dialog.active {
+        super::dialog_views::render_edit_dialog(frame, area, state);
     }
 }
 
@@ -191,7 +55,7 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         .constraints([
             Constraint::Length(3), // Project header / switcher
             Constraint::Min(4),    // Items list
-            Constraint::Length(1), // Footer hotkeys hint
+            Constraint::Length(2), // Footer hotkeys + status hint
         ])
         .split(area);
 
@@ -323,21 +187,38 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     let items_para = Paragraph::new(list_lines).block(items_block).scroll((0, 0));
     frame.render_widget(items_para, chunks[1]);
 
-    // 3. Hotkeys footer
-    let footer = Paragraph::new(Line::from(vec![
-        Span::styled("[←/→]", Style::default().fg(Color::Cyan).bold()),
-        Span::styled(" projekt ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[↑/↓]", Style::default().fg(Color::Yellow)),
-        Span::styled(" posun ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[d/u]", Style::default().fg(Color::Magenta).bold()),
-        Span::styled(" čtení ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[x]", Style::default().fg(Color::Green).bold()),
-        Span::styled(" stav ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[n]", Style::default().fg(Color::Yellow).bold()),
-        Span::styled(" nová ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[p]", Style::default().fg(Color::Yellow)),
-        Span::styled(" aktivní", Style::default().fg(Color::DarkGray)),
-    ]));
+    // 3. Hotkeys footer + status feedback
+    let status_line = Line::from(vec![
+        Span::styled("  ", Style::default()),
+        Span::styled(
+            state
+                .status_message
+                .clone()
+                .unwrap_or_else(|| "e = integrovaná úprava · E = externí editor".to_string()),
+            Style::default().fg(if state.status_message.is_some() {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }),
+        ),
+    ]);
+    let footer = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("[←/→]", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(" proj ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[↑/↓]", Style::default().fg(Color::Yellow)),
+            Span::styled(" položka ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[e]", Style::default().fg(Color::Yellow).bold()),
+            Span::styled(" edit ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[E]", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(" ext ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[x]", Style::default().fg(Color::Green).bold()),
+            Span::styled(" stav ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[n]", Style::default().fg(Color::Yellow).bold()),
+            Span::styled(" nová ", Style::default().fg(Color::DarkGray)),
+        ]),
+        status_line,
+    ]);
     frame.render_widget(footer, chunks[2]);
 }
 
