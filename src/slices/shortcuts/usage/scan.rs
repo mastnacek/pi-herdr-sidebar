@@ -139,7 +139,7 @@ pub fn scan_blocking(progress: &ScanProgress) -> Result<UsageStats, String> {
         plugins: rank_plugins(&counters.tools),
         tools: top(&counters.tools, usize::MAX),
         skills: top(&counters.skills, usize::MAX),
-        commands: top(&counters.commands, 20),
+        commands: top(&counters.commands, usize::MAX),
         elapsed_ms: started.elapsed().as_millis() as u64,
         newest_session: newest,
     };

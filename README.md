@@ -119,15 +119,21 @@ description = "Pi Herdr Plugin Usage"
 Shows what your plugins, skills and slash-commands are actually used for, counted
 from pi's own session logs (`~/.pi/agent/sessions/**/*.jsonl`):
 
-- plugins ranked by tool calls, with proportional bars,
-- skills ranked by `SKILL.md` reads,
-- slash-commands, and the most frequent tools overall,
-- totals: files, messages, tool calls and scan time.
+- **every** plugin, with proportional bars and its three most used tools inline,
+- **every** skill ranked by `SKILL.md` reads,
+- **every** slash-command, and **every** tool with its owning plugin,
+- totals in the footer: files, messages, tool calls, plugins, skills, scan time.
+
+The document is scrollable and lists everything — there is no "… and N more"
+row. Only names longer than the name column are clipped.
 
 | Shortcut | Action |
 | --- | --- |
-| `Esc` / `q` | Close the window |
+| `↑` / `↓` (`k` / `j`) | Scroll one row |
+| `PgUp` / `PgDn` (`Space`) | Scroll one screen |
+| `Home` / `End` (`g` / `G`) | Jump to the top / bottom |
 | `r` | Re-scan, ignoring the cache |
+| `Esc` / `q` | Close the window |
 
 The scan walks ~300 MB, so it always runs on a background thread with a progress
 bar, and the aggregate is cached against a fingerprint of the log set (file

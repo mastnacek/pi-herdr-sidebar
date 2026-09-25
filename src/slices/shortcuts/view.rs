@@ -192,10 +192,12 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &ShortcutsState) {
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, state: &ShortcutsState) {
-    let status = state
-        .status
-        .clone()
-        .unwrap_or_else(|| "m = statistiky použití pluginů a skillů".to_string());
+    // The overview window is not part of this tab, so the footer must not
+    // advertise an in-tab key for it — it is opened by its own Herdr chord.
+    let status = state.status.clone().unwrap_or_else(|| {
+        "návrh = zatím nepřiřazené (přidejte do config.toml) · okna otevírá vlastní zkratka"
+            .to_string()
+    });
 
     let lines = vec![
         Line::from(vec![
@@ -203,8 +205,6 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &ShortcutsState) {
             Span::styled(" výběr  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[PgUp/PgDn]", Style::default().fg(Color::Cyan).bold()),
             Span::styled(" posun  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[m]", Style::default().fg(Color::Yellow).bold()),
-            Span::styled(" statistiky  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[r]", Style::default().fg(Color::Cyan).bold()),
             Span::styled(" znovu načíst config", Style::default().fg(Color::DarkGray)),
         ]),

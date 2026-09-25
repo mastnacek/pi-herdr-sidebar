@@ -12,6 +12,9 @@ use std::io;
 use std::time::Duration;
 
 /// Runs the overview until the user closes it.
+///
+/// Keys: `↑/↓` (`k`/`j`) scroll a row, `PgUp/PgDn` (or `Space`) a screen,
+/// `Home/End` (`g`/`G`) jump to the bounds, `r` rescans, `Esc`/`q` closes.
 pub fn run_overview() -> io::Result<()> {
     let mut state = UsageOverview::new();
     // Cached when the log fingerprint is unchanged, so repeat opens are instant.
@@ -26,7 +29,7 @@ pub fn run_overview() -> io::Result<()> {
         state.poll_scan();
 
         guard.terminal_mut().draw(|frame| {
-            modal::render_usage_panel(frame, frame.area(), &state);
+            modal::render_usage_panel(frame, frame.area(), &mut state);
         })?;
 
         if event::poll(tick_rate)? {
@@ -34,6 +37,12 @@ pub fn run_overview() -> io::Result<()> {
                 Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
                     KeyCode::Char('r') => state.ensure_scan(true),
+                    KeyCode::Up | KeyCode::Char('k') => state.scroll_by(-1),
+                    KeyCode::Down | KeyCode::Char('j') => state.scroll_by(1),
+                    KeyCode::PageUp => state.page(false),
+                    KeyCode::PageDown | KeyCode::Char(' ') => state.page(true),
+                    KeyCode::Home | KeyCode::Char('g') => state.scroll_home(),
+                    KeyCode::End | KeyCode::Char('G') => state.scroll_end(),
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
                     _ => {}
                 },
