@@ -21,6 +21,10 @@ fn credit_color(remaining: f64) -> Color {
 }
 
 pub fn shared_banner_height(state: &SidebarState) -> u16 {
+    if state.active_tab == crate::slices::view::state::Tab::Notes {
+        return 1;
+    }
+
     let mut base_lines = 4;
     if let Some(l) = &state.live {
         let prompt = l.input_tokens + l.cache_read + l.cache_write;
@@ -321,6 +325,11 @@ fn build_quota_and_credits_lines(state: &SidebarState) -> Vec<Line<'static>> {
 }
 
 pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &SidebarState) {
+    if state.active_tab == crate::slices::view::state::Tab::Notes {
+        render_minimalist_notes_banner(frame, area, state);
+        return;
+    }
+
     let mut lines = Vec::new();
     lines.extend(build_model_and_turns_lines(state));
     lines.extend(build_context_and_cost_lines(state));
@@ -333,4 +342,52 @@ pub fn render_shared_model_banner(frame: &mut Frame, area: Rect, state: &Sidebar
 
     let paragraph = Paragraph::new(Text::from(lines)).block(block);
     frame.render_widget(paragraph, area);
+}
+
+fn render_minimalist_notes_banner(frame: &mut Frame, area: Rect, state: &SidebarState) {
+    let live = state.live.as_ref();
+    let model = live
+        .map(|l| {
+            if l.model_id.is_empty() {
+                "neznámý model".to_string()
+            } else {
+                l.model_id.clone()
+            }
+        })
+        .unwrap_or_else(|| "offline".to_string());
+
+    let provider = live
+        .map(|l| l.provider.as_str())
+        .filter(|p| !p.is_empty())
+        .unwrap_or("pi");
+
+    let ctx_pct = live.and_then(|l| l.context_percent).unwrap_or(0.0);
+    let ctx_tokens = live.map(|l| l.context_tokens).unwrap_or(0);
+    let ctx_window = live.map(|l| l.context_window).unwrap_or(0);
+
+    let pct_color = if ctx_pct >= 90.0 {
+        Color::Red
+    } else if ctx_pct >= 60.0 {
+        Color::Yellow
+    } else {
+        Color::Green
+    };
+
+    let line = Line::from(vec![
+        Span::styled(" 🤖 ", Style::default().fg(Color::DarkGray)),
+        Span::styled(format!("{}/", provider), Style::default().fg(Color::DarkGray)),
+        Span::styled(model, Style::default().fg(Color::Cyan).bold()),
+        Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
+        Span::styled("📊 ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{:.1}%", ctx_pct),
+            Style::default().fg(pct_color).bold(),
+        ),
+        Span::styled(
+            format!(" ({}/{})", fmt_tokens(ctx_tokens), fmt_tokens(ctx_window)),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]);
+
+    frame.render_widget(Paragraph::new(line), area);
 }
