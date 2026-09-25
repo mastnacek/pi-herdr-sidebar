@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use super::note::{SpaiNoteItem, SpaiStatus};
+use super::note::SpaiStatus;
 use super::state::SpaiNotesState;
 
 pub fn render_spai_notes_tab(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
@@ -68,47 +68,57 @@ fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
 }
 
 fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_area = centered_rect(area, 60, 30);
+    let dialog_area = centered_rect(area, 64, 34);
     frame.render_widget(Clear, dialog_area);
 
-    let kind_glyph = match state.creation_dialog.selected_kind {
-        super::note::SpaiType::Todo => ".  Todo",
-        super::note::SpaiType::Idea => "?  Idea",
-        super::note::SpaiType::Note => "-  Note",
-    };
+    let raw = &state.creation_dialog.title_input;
+    let detected = super::input_highlighter::detect_spai_input(raw);
+
+    let header_title = format!(" ✍ SPAI Smart Input: {} ", detected.prefix_label);
 
     let title_block = Block::bordered()
-        .title(" ✍ Nová SPAI Poznámka ")
+        .title(Span::styled(
+            header_title,
+            Style::default().fg(detected.badge_color).bold(),
+        ))
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Yellow).bold());
+        .border_style(Style::default().fg(detected.badge_color));
+
+    let mut input_spans = vec![
+        Span::styled("  Vstup: ", Style::default().fg(Color::DarkGray)),
+    ];
+
+    if raw.is_empty() {
+        input_spans.push(Span::styled(
+            "| napište . úkol, ? nápad, - poznámku, ! prioritu...",
+            Style::default().fg(Color::DarkGray),
+        ));
+    } else {
+        let highlighted = super::input_highlighter::highlight_spai_input_spans(raw);
+        input_spans.extend(highlighted);
+        input_spans.push(Span::styled("█", Style::default().fg(Color::Yellow)));
+    }
 
     let lines = vec![
         Line::raw(""),
         Line::from(vec![
+            Span::styled("  Detekovaný typ: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                "  Typ položky [Tab]: ",
-                Style::default().fg(Color::DarkGray),
+                format!("[{} {}]", detected.prefix_glyph.trim(), detected.prefix_label),
+                Style::default().fg(detected.badge_color).bold(),
             ),
-            Span::styled(
-                format!("[{}]", kind_glyph),
-                Style::default().fg(Color::Cyan).bold(),
-            ),
+            Span::styled("   (Syntax: . / /. x z ? - ! @ :tag:)", Style::default().fg(Color::DarkGray)),
         ]),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("  Název: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{}_", state.creation_dialog.title_input),
-                Style::default().fg(Color::White).bold(),
-            ),
-        ]),
+        Line::from(input_spans),
         Line::raw(""),
         Line::from(vec![
-            Span::styled(
-                "  [Enter] Vytvořit  ",
-                Style::default().fg(Color::Green).bold(),
-            ),
-            Span::styled("[Esc] Zrušit", Style::default().fg(Color::DarkGray)),
+            Span::styled("  [Enter]", Style::default().fg(Color::Green).bold()),
+            Span::styled(" Uložit  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Tab]", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(" Přepnout typ  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Esc]", Style::default().fg(Color::Yellow)),
+            Span::styled(" Zrušit", Style::default().fg(Color::DarkGray)),
         ]),
     ];
 
@@ -253,14 +263,18 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     // 3. Hotkeys footer
     let footer = Paragraph::new(Line::from(vec![
-        Span::styled(" [j/k]", Style::default().fg(Color::Yellow)),
+        Span::styled("[[/]]", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(" projekt ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[j/k]", Style::default().fg(Color::Yellow)),
         Span::styled(" posun ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[d/u]", Style::default().fg(Color::Magenta).bold()),
+        Span::styled(" čtení ", Style::default().fg(Color::DarkGray)),
         Span::styled("[x]", Style::default().fg(Color::Green).bold()),
-        Span::styled(" cyklus stavu ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[p]", Style::default().fg(Color::Yellow)),
-        Span::styled(" aktivní ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[n]", Style::default().fg(Color::Yellow)),
+        Span::styled(" stav ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[n]", Style::default().fg(Color::Yellow).bold()),
         Span::styled(" nová ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[p]", Style::default().fg(Color::Yellow)),
+        Span::styled(" aktivní", Style::default().fg(Color::DarkGray)),
     ]));
     frame.render_widget(footer, chunks[2]);
 }
@@ -271,7 +285,7 @@ fn render_right_viewer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     let (title, content_lines) = if let Some(item) = item_opt {
         (
             format!(" {} · {} ", item.id, item.title),
-            format_viewer_content(item),
+            super::viewer_content::format_viewer_content(item),
         )
     } else {
         (
@@ -300,103 +314,4 @@ fn render_right_viewer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         .scroll((state.viewer_scroll, 0));
 
     frame.render_widget(viewer, area);
-}
-
-fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-
-    lines.push(Line::raw(""));
-
-    // Metadata header
-    let status_color = match item.status {
-        SpaiStatus::Done => Color::Rgb(55, 244, 153),
-        SpaiStatus::Working => Color::Rgb(241, 252, 121),
-        SpaiStatus::Waiting => Color::Rgb(189, 147, 249),
-        SpaiStatus::Cancelled => Color::DarkGray,
-        SpaiStatus::Idea => Color::Rgb(255, 121, 198),
-        SpaiStatus::Note => Color::Rgb(139, 233, 253),
-        _ => Color::White,
-    };
-
-    lines.push(Line::from(vec![
-        Span::styled("  Stav:     ", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!("{} {}", item.status.glyph(), item.status.as_str()),
-            Style::default().fg(status_color).bold(),
-        ),
-        Span::styled("    Typ: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(item.kind.as_str(), Style::default().fg(Color::White)),
-    ]));
-
-    lines.push(Line::from(vec![
-        Span::styled("  Vytvořeno:", Style::default().fg(Color::DarkGray)),
-        Span::styled(
-            format!(" {}", item.timestamp),
-            Style::default().fg(Color::Gray),
-        ),
-    ]));
-
-    if let Some(proj) = &item.facets.project {
-        lines.push(Line::from(vec![
-            Span::styled("  Projekt:  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(proj.clone(), Style::default().fg(Color::Cyan)),
-        ]));
-    }
-
-    if let Some(p) = &item.facets.priority {
-        lines.push(Line::from(vec![
-            Span::styled("  Priorita: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(p.clone(), Style::default().fg(Color::Yellow)),
-        ]));
-    }
-
-    if !item.tags.is_empty() {
-        lines.push(Line::from(vec![
-            Span::styled("  Štítky:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(item.tags.join(", "), Style::default().fg(Color::Magenta)),
-        ]));
-    }
-
-    lines.push(Line::from(vec![
-        Span::styled("  Soubor:   ", Style::default().fg(Color::DarkGray)),
-        Span::styled(item.file_name.clone(), Style::default().fg(Color::DarkGray)),
-    ]));
-
-    lines.push(Line::styled(
-        "  ───────────────────────────────────────────",
-        Style::default().fg(Color::DarkGray),
-    ));
-    lines.push(Line::raw(""));
-
-    // Body lines
-    for line in item.body.lines() {
-        if line.starts_with("# ") {
-            lines.push(Line::styled(
-                format!("  {}", line),
-                Style::default().fg(Color::Green).bold(),
-            ));
-        } else if line.starts_with("## ") {
-            lines.push(Line::styled(
-                format!("  {}", line),
-                Style::default().fg(Color::Cyan).bold(),
-            ));
-        } else if line.starts_with("### ") {
-            lines.push(Line::styled(
-                format!("  {}", line),
-                Style::default().fg(Color::Yellow).bold(),
-            ));
-        } else if line.starts_with("- ") || line.starts_with("* ") {
-            lines.push(Line::styled(
-                format!("  {}", line),
-                Style::default().fg(Color::White),
-            ));
-        } else {
-            lines.push(Line::styled(
-                format!("  {}", line),
-                Style::default().fg(Color::White),
-            ));
-        }
-    }
-
-    lines
 }

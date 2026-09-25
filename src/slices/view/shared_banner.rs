@@ -375,7 +375,10 @@ fn render_minimalist_notes_banner(frame: &mut Frame, area: Rect, state: &Sidebar
 
     let line = Line::from(vec![
         Span::styled(" 🤖 ", Style::default().fg(Color::DarkGray)),
-        Span::styled(format!("{}/", provider), Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            format!("{}/", provider),
+            Style::default().fg(Color::DarkGray),
+        ),
         Span::styled(model, Style::default().fg(Color::Cyan).bold()),
         Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
         Span::styled("📊 ", Style::default().fg(Color::DarkGray)),

@@ -140,6 +140,12 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                                 state.scroll_down(10);
                             }
                         }
+                        KeyCode::Char('d') if state.active_tab == Tab::Notes => {
+                            state.spai_notes.scroll_viewer_down(4);
+                        }
+                        KeyCode::Char('u') if state.active_tab == Tab::Notes => {
+                            state.spai_notes.scroll_viewer_up(4);
+                        }
                         KeyCode::Home => state.scroll = 0,
                         KeyCode::Char('r') => state.trigger_manual_refresh(),
                         KeyCode::Char('w') => {
@@ -168,10 +174,27 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         state.handle_mouse_click(mouse.column, mouse.row);
                     }
                     MouseEventKind::ScrollUp => {
-                        state.scroll_up(2);
+                        if state.active_tab == Tab::Notes {
+                            // If mouse is on right pane, scroll viewer, else previous item
+                            if mouse.column >= 30 {
+                                state.spai_notes.scroll_viewer_up(3);
+                            } else {
+                                state.spai_notes.prev_item();
+                            }
+                        } else {
+                            state.scroll_up(2);
+                        }
                     }
                     MouseEventKind::ScrollDown => {
-                        state.scroll_down(2);
+                        if state.active_tab == Tab::Notes {
+                            if mouse.column >= 30 {
+                                state.spai_notes.scroll_viewer_down(3);
+                            } else {
+                                state.spai_notes.next_item();
+                            }
+                        } else {
+                            state.scroll_down(2);
+                        }
                     }
                     _ => {}
                 },

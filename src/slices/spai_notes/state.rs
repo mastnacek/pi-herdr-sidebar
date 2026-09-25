@@ -205,13 +205,30 @@ impl SpaiNotesState {
     }
 
     pub fn submit_creation_dialog(&mut self) -> Result<String, String> {
-        let title_to_use = if self.creation_dialog.title_input.trim().is_empty() {
-            "Nová SPAI poznámka".to_string()
+        let raw_input = self.creation_dialog.title_input.trim().to_string();
+        if raw_input.is_empty() {
+            return Err("Název nesmí být prázdný".to_string());
+        }
+
+        let detected = super::input_highlighter::detect_spai_input(&raw_input);
+
+        // Strip prefix if user explicitly typed it (e.g. ". my task" -> "my task")
+        let mut clean_title = raw_input.as_str();
+        for p in &["/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- "] {
+            if clean_title.starts_with(p) {
+                clean_title = &clean_title[p.len()..];
+                break;
+            }
+        }
+        let clean_title = clean_title.trim();
+        let title_to_use = if clean_title.is_empty() {
+            raw_input.clone()
         } else {
-            self.creation_dialog.title_input.trim().to_string()
+            clean_title.to_string()
         };
-        let kind = self.creation_dialog.selected_kind;
-        let prefix_line = format!("{} {}\n", kind.as_str(), title_to_use);
+
+        let kind = detected.kind;
+        let prefix_line = format!("{} {}\n", detected.prefix_glyph, title_to_use);
         let res = self.create_quick_note(&title_to_use, kind, &prefix_line);
         if res.is_ok() {
             self.close_creation_dialog();
