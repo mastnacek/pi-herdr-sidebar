@@ -132,6 +132,44 @@ fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
 
     let para = Paragraph::new(lines).block(title_block);
     frame.render_widget(para, dialog_area);
+
+    if state.creation_dialog.autocomplete_active && !state.creation_dialog.suggestions.is_empty() {
+        let count = state.creation_dialog.suggestions.len() as u16;
+        let ac_height = (count + 2).min(8);
+        let ac_area = Rect {
+            x: dialog_area.x + 4,
+            y: dialog_area.y + 6,
+            width: dialog_area.width.saturating_sub(8),
+            height: ac_height,
+        };
+
+        frame.render_widget(Clear, ac_area);
+
+        let ac_block = Block::bordered()
+            .title(" 📁 Vyberte projekt [@...] [Tab/Enter] ")
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Cyan));
+
+        let mut ac_lines = Vec::new();
+        for (i, sug) in state.creation_dialog.suggestions.iter().enumerate() {
+            let is_sel = i == state.creation_dialog.autocomplete_selected;
+            let marker = if is_sel { "▶ " } else { "  " };
+            ac_lines.push(Line::from(vec![
+                Span::styled(marker, Style::default().fg(if is_sel { Color::Yellow } else { Color::DarkGray })),
+                Span::styled(
+                    format!("{:<18}", sug.insert_text),
+                    Style::default().fg(if is_sel { Color::Cyan } else { Color::White }).add_modifier(if is_sel { Modifier::BOLD } else { Modifier::empty() }),
+                ),
+                Span::styled(
+                    format!(" {}", sug.path),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+
+        let ac_para = Paragraph::new(ac_lines).block(ac_block);
+        frame.render_widget(ac_para, ac_area);
+    }
 }
 
 fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
@@ -185,7 +223,10 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         }));
 
     let proj_hint = Paragraph::new(Line::from(vec![
-        Span::styled("◄ [← / →] projekt  ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(
+            "◄ [← / →] projekt  ",
+            Style::default().fg(Color::Cyan).bold(),
+        ),
         Span::styled("[p] aktivní", Style::default().fg(Color::Yellow)),
     ]))
     .block(proj_block);

@@ -1,4 +1,5 @@
 //! Spai Notes Slice
+pub mod autocomplete;
 pub mod discovery;
 pub mod input_highlighter;
 pub mod note;

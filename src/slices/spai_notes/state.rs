@@ -8,6 +8,9 @@ pub struct NoteCreationDialog {
     pub active: bool,
     pub title_input: String,
     pub selected_kind: SpaiType,
+    pub autocomplete_active: bool,
+    pub autocomplete_selected: usize,
+    pub suggestions: Vec<super::autocomplete::ProjectSuggestion>,
 }
 
 impl Default for NoteCreationDialog {
@@ -16,6 +19,9 @@ impl Default for NoteCreationDialog {
             active: false,
             title_input: String::new(),
             selected_kind: SpaiType::Todo,
+            autocomplete_active: false,
+            autocomplete_selected: 0,
+            suggestions: Vec::new(),
         }
     }
 }
@@ -194,6 +200,60 @@ impl SpaiNotesState {
     pub fn close_creation_dialog(&mut self) {
         self.creation_dialog.active = false;
         self.creation_dialog.title_input.clear();
+        self.creation_dialog.autocomplete_active = false;
+        self.creation_dialog.suggestions.clear();
+    }
+
+    pub fn on_dialog_char_typed(&mut self, c: char) {
+        self.creation_dialog.title_input.push(c);
+        self.update_autocomplete();
+    }
+
+    pub fn on_dialog_backspace(&mut self) {
+        self.creation_dialog.title_input.pop();
+        self.update_autocomplete();
+    }
+
+    pub fn update_autocomplete(&mut self) {
+        if let Some(query) = super::autocomplete::extract_at_query(&self.creation_dialog.title_input) {
+            let suggestions = super::autocomplete::get_project_suggestions(&self.projects, query);
+            self.creation_dialog.autocomplete_active = !suggestions.is_empty();
+            self.creation_dialog.suggestions = suggestions;
+            self.creation_dialog.autocomplete_selected = 0;
+        } else {
+            self.creation_dialog.autocomplete_active = false;
+            self.creation_dialog.suggestions.clear();
+        }
+    }
+
+    pub fn next_suggestion(&mut self) {
+        if !self.creation_dialog.suggestions.is_empty() {
+            self.creation_dialog.autocomplete_selected =
+                (self.creation_dialog.autocomplete_selected + 1) % self.creation_dialog.suggestions.len();
+        }
+    }
+
+    pub fn prev_suggestion(&mut self) {
+        if !self.creation_dialog.suggestions.is_empty() {
+            if self.creation_dialog.autocomplete_selected == 0 {
+                self.creation_dialog.autocomplete_selected = self.creation_dialog.suggestions.len() - 1;
+            } else {
+                self.creation_dialog.autocomplete_selected -= 1;
+            }
+        }
+    }
+
+    pub fn apply_selected_suggestion(&mut self) -> bool {
+        if self.creation_dialog.autocomplete_active && !self.creation_dialog.suggestions.is_empty() {
+            let idx = self.creation_dialog.autocomplete_selected;
+            if let Some(s) = self.creation_dialog.suggestions.get(idx).cloned() {
+                super::autocomplete::apply_at_completion(&mut self.creation_dialog.title_input, &s);
+                self.creation_dialog.autocomplete_active = false;
+                self.creation_dialog.suggestions.clear();
+                return true;
+            }
+        }
+        false
     }
 
     pub fn cycle_creation_kind(&mut self) {

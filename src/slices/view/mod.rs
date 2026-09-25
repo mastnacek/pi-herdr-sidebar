@@ -57,21 +57,40 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                     }
                     // If creation dialog is active, intercept dialog keystrokes
                     if state.active_tab == Tab::Notes && state.spai_notes.creation_dialog.active {
+                        let ac_active = state.spai_notes.creation_dialog.autocomplete_active;
                         match key.code {
                             KeyCode::Esc => {
-                                state.spai_notes.close_creation_dialog();
+                                if ac_active {
+                                    state.spai_notes.creation_dialog.autocomplete_active = false;
+                                } else {
+                                    state.spai_notes.close_creation_dialog();
+                                }
+                            }
+                            KeyCode::Up if ac_active => {
+                                state.spai_notes.prev_suggestion();
+                            }
+                            KeyCode::Down if ac_active => {
+                                state.spai_notes.next_suggestion();
                             }
                             KeyCode::Tab => {
-                                state.spai_notes.cycle_creation_kind();
+                                if ac_active {
+                                    state.spai_notes.apply_selected_suggestion();
+                                } else {
+                                    state.spai_notes.cycle_creation_kind();
+                                }
                             }
                             KeyCode::Enter => {
-                                let _ = state.spai_notes.submit_creation_dialog();
+                                if ac_active {
+                                    state.spai_notes.apply_selected_suggestion();
+                                } else {
+                                    let _ = state.spai_notes.submit_creation_dialog();
+                                }
                             }
                             KeyCode::Backspace => {
-                                state.spai_notes.creation_dialog.title_input.pop();
+                                state.spai_notes.on_dialog_backspace();
                             }
                             KeyCode::Char(c) => {
-                                state.spai_notes.creation_dialog.title_input.push(c);
+                                state.spai_notes.on_dialog_char_typed(c);
                             }
                             _ => {}
                         }
