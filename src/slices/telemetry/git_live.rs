@@ -265,3 +265,61 @@ pub fn git_info(cwd: &Path) -> Option<GitTelemetry> {
         touched_repos: Vec::new(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// Smoke test over real repositories: `git_info` must not panic or hang.
+    ///
+    /// Ignored by default because it spawns `git` in directories outside the
+    /// crate. Cwds come from `PI_SIDEBAR_GIT_TEST_CWDS` (`;` separated) and
+    /// default to this crate's directory:
+    ///
+    /// ```text
+    /// PI_SIDEBAR_GIT_TEST_CWDS="D:/repo/one;D:/repo/two" \
+    ///   cargo test git_info -- --ignored --nocapture
+    /// ```
+    #[test]
+    #[ignore = "spawns git against real repositories"]
+    fn git_info_never_panics_on_real_repos() {
+        let cwds = std::env::var("PI_SIDEBAR_GIT_TEST_CWDS")
+            .unwrap_or_else(|_| env!("CARGO_MANIFEST_DIR").to_string());
+
+        for cwd in cwds.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+            let path = Path::new(cwd);
+            let started = Instant::now();
+            let info = git_info(path);
+            let elapsed = started.elapsed();
+            match &info {
+                Some(i) => println!(
+                    "{cwd} -> branch={:?} dirty={} commits={} in {elapsed:?}",
+                    i.branch,
+                    i.staged + i.unstaged + i.untracked,
+                    i.recent_commits.len()
+                ),
+                None => println!("{cwd} -> no repo in {elapsed:?}"),
+            }
+            assert!(
+                elapsed < Duration::from_secs(20),
+                "git_info took {elapsed:?} for {cwd}"
+            );
+        }
+    }
+
+    /// A cwd outside any repository (and a path that does not exist) must yield
+    /// `None`, never a panic.
+    #[test]
+    fn non_repo_cwd_is_none() {
+        assert!(git_info(Path::new("Z:/definitely/not/a/repo")).is_none());
+    }
+
+    /// Monorepo fallback must survive an empty session and a missing cwd.
+    #[test]
+    fn monorepo_fallback_is_panic_free() {
+        let telemetry = build_monorepo_telemetry(Path::new("Z:/nope"), "");
+        assert!(telemetry.touched_repos.is_empty());
+        assert_eq!(telemetry.staged, 0);
+    }
+}
