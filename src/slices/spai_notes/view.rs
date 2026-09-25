@@ -84,9 +84,10 @@ fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(detected.badge_color));
 
-    let mut input_spans = vec![
-        Span::styled("  Vstup: ", Style::default().fg(Color::DarkGray)),
-    ];
+    let mut input_spans = vec![Span::styled(
+        "  Vstup: ",
+        Style::default().fg(Color::DarkGray),
+    )];
 
     if raw.is_empty() {
         input_spans.push(Span::styled(
@@ -104,10 +105,17 @@ fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
         Line::from(vec![
             Span::styled("  Detekovaný typ: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("[{} {}]", detected.prefix_glyph.trim(), detected.prefix_label),
+                format!(
+                    "[{} {}]",
+                    detected.prefix_glyph.trim(),
+                    detected.prefix_label
+                ),
                 Style::default().fg(detected.badge_color).bold(),
             ),
-            Span::styled("   (Syntax: . / /. x z ? - ! @ :tag:)", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "   (Syntax: . / /. x z ? - ! @ :tag:)",
+                Style::default().fg(Color::DarkGray),
+            ),
         ]),
         Line::raw(""),
         Line::from(input_spans),
@@ -177,8 +185,8 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         }));
 
     let proj_hint = Paragraph::new(Line::from(vec![
-        Span::styled("◄ [ / ] ► změna  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[p] skok na aktivní", Style::default().fg(Color::Yellow)),
+        Span::styled("◄ [← / →] projekt  ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("[p] aktivní", Style::default().fg(Color::Yellow)),
     ]))
     .block(proj_block);
     frame.render_widget(proj_hint, chunks[0]);
@@ -263,9 +271,9 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     // 3. Hotkeys footer
     let footer = Paragraph::new(Line::from(vec![
-        Span::styled("[[/]]", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("[←/→]", Style::default().fg(Color::Cyan).bold()),
         Span::styled(" projekt ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[j/k]", Style::default().fg(Color::Yellow)),
+        Span::styled("[↑/↓]", Style::default().fg(Color::Yellow)),
         Span::styled(" posun ", Style::default().fg(Color::DarkGray)),
         Span::styled("[d/u]", Style::default().fg(Color::Magenta).bold()),
         Span::styled(" čtení ", Style::default().fg(Color::DarkGray)),

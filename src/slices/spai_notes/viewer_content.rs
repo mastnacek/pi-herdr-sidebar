@@ -1,9 +1,9 @@
 //! Formatter for the right-hand SPAI note viewer.
+use super::note::{SpaiNoteItem, SpaiStatus};
 use ratatui::{
     style::{Color, Style, Stylize},
     text::{Line, Span},
 };
-use super::note::{SpaiNoteItem, SpaiStatus};
 
 pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
     let mut lines = Vec::new();

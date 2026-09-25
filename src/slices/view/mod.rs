@@ -90,8 +90,20 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                     match key.code {
                         KeyCode::Tab => state.next_tab(),
                         KeyCode::BackTab => state.prev_tab(),
-                        KeyCode::Left | KeyCode::Char('h') => state.prev_tab(),
-                        KeyCode::Right | KeyCode::Char('l') => state.next_tab(),
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            if state.active_tab == Tab::Notes {
+                                state.spai_notes.prev_project();
+                            } else {
+                                state.prev_tab();
+                            }
+                        }
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            if state.active_tab == Tab::Notes {
+                                state.spai_notes.next_project();
+                            } else {
+                                state.next_tab();
+                            }
+                        }
                         KeyCode::Char('0') => state.set_tab(Tab::Zen),
                         KeyCode::Char('1') => state.set_tab(Tab::Status),
                         KeyCode::Char('2') => state.set_tab(Tab::Skills),
@@ -100,10 +112,14 @@ pub fn run_view(mode: ViewMode, snapshot_override: Option<PathBuf>) -> io::Resul
                         KeyCode::Char('p') if state.active_tab == Tab::Notes => {
                             state.spai_notes.jump_to_active_project();
                         }
-                        KeyCode::Char('[') if state.active_tab == Tab::Notes => {
+                        KeyCode::Char(',') | KeyCode::Char('<') | KeyCode::Char('[')
+                            if state.active_tab == Tab::Notes =>
+                        {
                             state.spai_notes.prev_project();
                         }
-                        KeyCode::Char(']') if state.active_tab == Tab::Notes => {
+                        KeyCode::Char('.') | KeyCode::Char('>') | KeyCode::Char(']')
+                            if state.active_tab == Tab::Notes =>
+                        {
                             state.spai_notes.next_project();
                         }
                         KeyCode::Char('n') if state.active_tab == Tab::Notes => {

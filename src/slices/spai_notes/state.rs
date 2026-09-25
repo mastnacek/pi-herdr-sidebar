@@ -214,7 +214,9 @@ impl SpaiNotesState {
 
         // Strip prefix if user explicitly typed it (e.g. ". my task" -> "my task")
         let mut clean_title = raw_input.as_str();
-        for p in &["/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- "] {
+        for p in &[
+            "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ",
+        ] {
             if clean_title.starts_with(p) {
                 clean_title = &clean_title[p.len()..];
                 break;

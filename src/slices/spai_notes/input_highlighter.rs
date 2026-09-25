@@ -1,9 +1,9 @@
 //! SPAI live input syntax detection and highlighting (inspired by tui/src/spai).
+use super::note::{SpaiStatus, SpaiType};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
-use super::note::{SpaiStatus, SpaiType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DetectedSpaiInput {
@@ -114,11 +114,15 @@ pub fn highlight_spai_input_spans(input: &str) -> Vec<Span<'static>> {
     let mut rest = input;
 
     // 1. Highlight matching prefix if present
-    for p in &["/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- "] {
+    for p in &[
+        "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ",
+    ] {
         if rest.starts_with(p) {
             spans.push(Span::styled(
                 p.to_string(),
-                Style::default().fg(detected.badge_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(detected.badge_color)
+                    .add_modifier(Modifier::BOLD),
             ));
             rest = &rest[p.len()..];
             break;
@@ -162,7 +166,9 @@ fn style_spai_word(word: &str) -> Span<'static> {
         // Project or date facet
         Span::styled(
             word.to_string(),
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         )
     } else if word.starts_with(':') && word.ends_with(':') && word.len() > 2 {
         // Tag :work:
@@ -172,10 +178,7 @@ fn style_spai_word(word: &str) -> Span<'static> {
         )
     } else if word.starts_with('#') {
         // Hash tag
-        Span::styled(
-            word.to_string(),
-            Style::default().fg(Color::Magenta),
-        )
+        Span::styled(word.to_string(), Style::default().fg(Color::Magenta))
     } else {
         Span::styled(word.to_string(), Style::default().fg(Color::White))
     }
