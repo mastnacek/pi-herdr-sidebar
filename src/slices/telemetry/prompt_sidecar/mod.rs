@@ -38,6 +38,11 @@ pub struct PromptTextSource {
     pub source: String,
     #[serde(default)]
     pub path: Option<String>,
+    /// First non-empty line of the text, trimmed and truncated. The engine hands
+    /// extensions only the text, so an inline append (`--append-system-prompt`,
+    /// joined sources) would otherwise be anonymous — the preview names it.
+    #[serde(default)]
+    pub preview: String,
 }
 
 impl PromptTextSource {

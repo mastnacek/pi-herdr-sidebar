@@ -90,7 +90,8 @@ pub(super) fn child_lines(
             Some((PromptSource::Inline, _)) => lines.push(child(
                 indent,
                 format!(
-                    "← inline (--append-system-prompt / složené zdroje){}",
+                    "← inline{}{}",
+                    preview_suffix(&view.append_preview),
                     size_suffix(view.append_chars)
                 ),
                 Color::Magenta,
@@ -111,7 +112,8 @@ pub(super) fn child_lines(
             Some((PromptSource::Inline, _)) => lines.push(child(
                 indent,
                 format!(
-                    "⚠ nahrazeno: --system-prompt / inline{}",
+                    "⚠ nahrazeno: inline{}{}",
+                    preview_suffix(&view.override_preview),
                     size_suffix(view.override_chars)
                 ),
                 Color::Yellow,
@@ -230,6 +232,15 @@ fn skill_summary(view: &PromptView) -> Option<String> {
         shown.join(", "),
         suffix
     ))
+}
+
+/// ` · "CIM BUDU…"` — names an inline block the engine gave no path for.
+fn preview_suffix(preview: &str) -> String {
+    if preview.is_empty() {
+        String::new()
+    } else {
+        format!(" · \"{preview}\"")
+    }
 }
 
 /// ` (312 zn)` when the provider reported a size, empty otherwise.

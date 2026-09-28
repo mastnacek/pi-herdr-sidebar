@@ -53,9 +53,13 @@ struct PromptView {
     append_system: Option<(PromptSource, SourceState)>,
     /// Character count of the addendum text, when the provider reported it.
     append_chars: usize,
+    /// First line of the addendum text — names an inline (CLI) append.
+    append_preview: String,
     system_override: Option<(PromptSource, SourceState)>,
     /// Character count of the `SYSTEM.md` / forced prompt text.
     override_chars: usize,
+    /// First line of the replacement text.
+    override_preview: String,
     loaded_at: String,
     tools: Vec<String>,
     tools_added: u32,
@@ -112,12 +116,18 @@ impl PromptView {
                 .as_ref()
                 .map(|t| t.chars)
                 .unwrap_or(0),
+            append_preview: sidecar
+                .append_system_prompt
+                .as_ref()
+                .map(|t| t.preview.clone())
+                .unwrap_or_default(),
             system_override: sidecar.attribute(&sidecar.custom_prompt),
-            override_chars: sidecar
+            override_chars: sidecar.custom_prompt.as_ref().map(|t| t.chars).unwrap_or(0),
+            override_preview: sidecar
                 .custom_prompt
                 .as_ref()
-                .map(|t| t.chars)
-                .unwrap_or(0),
+                .map(|t| t.preview.clone())
+                .unwrap_or_default(),
             loaded_at: sidecar.captured_at.clone(),
             tools: sidecar.tools.clone(),
             skills: sidecar.skills.iter().map(|s| s.name.clone()).collect(),
@@ -135,8 +145,10 @@ impl PromptView {
             context_files: tree.context_files.clone(),
             append_system: tree.append_system.clone(),
             append_chars: 0,
+            append_preview: String::new(),
             system_override: tree.system_override.clone(),
             override_chars: 0,
+            override_preview: String::new(),
             loaded_at: tree.loaded_at.clone(),
             tools: tree.tools.clone(),
             tools_added: tree.tools_added,

@@ -138,7 +138,7 @@ extension captures it into `<pane>.prompt.json` beside the pane snapshot:
 | `capturedAt` | when the engine resolved this prompt |
 | `sections` / `sectionChars` | the section set and per-section sizes, measured on the rendered prompt |
 | `contextFiles[{path, chars}]` | every loaded `AGENTS.md`, with its real path |
-| `appendSystemPrompt` / `customPrompt` | `{chars, source: "file" (with `path`) or `source: "inline"`}` |
+| `appendSystemPrompt` / `customPrompt` | `{chars, source: "file" (with `path`) or `source: "inline"`, preview}` |
 | `forced` | `forceSystemPrompt` was in play |
 | `tools` / `skills` | the resolved loadouts |
 | `systemPromptChars` | length of the rendered prompt |
@@ -149,6 +149,12 @@ applies and measures sizes on the rendered prompt (each non-`preamble` section
 is wrapped as `<name>…</name>`). A dead (`live: false`) or newer-version sidecar
 is ignored and the transcript replay takes over, so the panel works with or
 without the extension.
+
+`preview` exists because the engine exposes only the *text* of an append
+(`systemPromptOptions.appendSystemPrompt`); `appendSystemPromptSourcePaths` stays
+internal, so a file passed with `--append-system-prompt <path>` is reported as
+`inline` by necessity. The preview names it — `← inline · "CIM BUDU…"` instead of
+an anonymous inline flag.
 
 ## 5. What the Status face renders
 
@@ -166,7 +172,7 @@ can explain:
 ├─ 3 rules               81 zn
 ├─ 4 docs                120 zn
 ├─ 5 addendum            138 zn
-│    ← inline (--append-system-prompt / složené zdroje) (136 zn)
+│    ← inline · "ALWAYS RESPOND IN CAVEMAN MODE. Drop articles and fi…" (136 zn)
 ├─ 6 project_context     584 zn
 │    └─ D:/…/pi-herdr-sidebar/AGENTS.md (471 zn)
 ├─ 7 skills              75 zn

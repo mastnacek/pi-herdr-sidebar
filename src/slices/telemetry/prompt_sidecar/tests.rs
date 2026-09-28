@@ -9,7 +9,7 @@ fn sidecar_json(extra: &str) -> String {
         r#"{{
   "source": "before_agent_start",
   "capturedAt": "2026-09-28T10:31:14.000Z",
-  "appendSystemPrompt": {{ "chars": 17, "source": "file", "path": "D:/work/.pi/APPEND_SYSTEM.md" }},
+  "appendSystemPrompt": {{ "chars": 17, "source": "file", "path": "D:/work/.pi/APPEND_SYSTEM.md", "preview": "PROJECT ADDENDUM" }},
   "sections": ["preamble", "tools", "rules"],
   "sectionChars": {{ "preamble": 169, "tools": 8300, "rules": 4100 }},
   "contextFiles": [{{ "path": "D:/work/AGENTS.md", "chars": 470 }}],
@@ -71,6 +71,7 @@ fn addendum_is_carried_with_its_size_and_file() {
     let sidecar = parse(&sidecar_json(live_v1()));
     let text = sidecar.append_system_prompt.as_ref().expect("addendum");
     assert_eq!(text.chars, 17);
+    assert_eq!(text.preview, "PROJECT ADDENDUM");
     assert!(text.is_file());
 
     match sidecar.attribute(&sidecar.append_system_prompt) {
@@ -89,6 +90,17 @@ fn a_forced_prompt_is_flagged_and_custom_prompt_carries_the_text() {
         sidecar.attribute(&sidecar.custom_prompt),
         Some((PromptSource::Inline, SourceState::Ok))
     );
+}
+
+#[test]
+fn an_inline_text_source_keeps_its_preview() {
+    let sidecar = parse(&sidecar_json(
+        r#", "version": 1, "live": true, "customPrompt": { "chars": 20, "source": "inline", "preview": "CIM BUDU" }"#,
+    ));
+    let custom = sidecar.custom_prompt.as_ref().expect("custom prompt");
+    assert!(!custom.is_file());
+    assert_eq!(custom.preview, "CIM BUDU");
+    assert_eq!(custom.path, None);
 }
 
 #[test]
