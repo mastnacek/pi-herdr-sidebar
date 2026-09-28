@@ -72,9 +72,11 @@ combined: a trusted project file replaces the agent-directory one.
 
 The sidebar attributes the `addendum` / `preamble` text by comparing it with
 the candidate files (exact or suffix match, so a CLI flag prepended to the file
-content still resolves). A candidate that exists on disk but did not end up in
-the prompt is listed as `· na disku, ale nepoužito` — typically an untrusted
-project file.
+content still resolves).
+
+A candidate that exists on disk but did not end up in the prompt is
+deliberately **not listed** — that is noise, not signal. The panel only ever
+names files that were loaded.
 
 ### Context files (`AGENTS.md`)
 
@@ -95,16 +97,39 @@ does not suppress the agent-directory file or any other ancestor. A nested git
 worktree whose own context file shadows the main repo's copy is skipped, so the
 same instructions are not applied twice.
 
-## 4. What the Status face renders
+## 4. Loading signal and drift
+
+Pi caches discovered resources at session start and re-reads them only on
+`/reload` (`docs/slash-commands.md`). Nothing is written to disk when a file is
+loaded, so the panel uses two signals instead:
+
+- **the loading moment** — the timestamp of the newest system message (`···
+  načteno HH:MM:SS` in the header). That is when the effective prompt was
+  assembled, i.e. when the context files actually entered the request;
+- **drift** — every *loaded* source file is stat-ed and compared with that
+  timestamp. If the file is newer (`1 s` of slack for the write/replay race),
+  the row is flagged `⚠ změněno na disku — /reload`, because the running prompt
+  still shows the old text. A loaded file that disappeared is flagged
+  `⚠ soubor zmizel`.
+
+Nothing is compared for files that were not loaded, so an untrusted project
+file, an `AGENTS.md` in an unrelated ancestor, or a rejected candidate stays
+silent. For an exact per-turn loading signal (including forced prompts and CLI
+appends that never touch a file), an in-process extension can observe
+`before_agent_start.systemPromptOptions` — `contextFiles[{path, content}]`,
+`appendSystemPrompt`, `customPrompt`, `selectedTools` — and publish it as a
+sidecar the same way `pi-plugin-dev` publishes skill state.
+
+## 5. What the Status face renders
 
 ```text
-🧠 Systémový prompt (pi replay · 7 sekcí · 18k zn)
+🧠 Systémový prompt (pi replay · 7 sekcí · 18k zn · načteno 10:19:22)
 ├─ 1 preamble            169 zn  You are an expert coding assistant operating…
 ├─ 2 tools               8.3k zn  - read: Read file contents
 │    · 85 nástrojů: read, bash, edit, write, bg_wait +80
 ├─ 3 rules               4.1k zn  - Use bash for file operations like ls, rg, …
 ├─ 4 docs                1.3k zn  Pi documentation (read only when the user as…
-├─ 5 addendum            — nepřítomno (APPEND_SYSTEM.md)
+├─ 5 addendum            — nepřítomno
 ├─ 6 project_context     669 zn
 │    └─ D:/…/pi-herdr-sidebar/AGENTS.md (470 zn)
 ├─ 7 skills              4.1k zn  The following skills provide specialized ins…
@@ -118,13 +143,16 @@ same instructions are not applied twice.
 - `⟳N` marks a section patched by a later system message; `· odstraněno
   pozdějším patchem` marks a section a later message removed with `null`;
 - `[ext]` marks a section Pi did not build (extension-injected);
-- children name the sources: every `AGENTS.md` path with its character count,
-  the matching `APPEND_SYSTEM.md` / `SYSTEM.md` file, and the replayed tool
-  loadout (`(+N −M)` only when more than one message declared tools);
-- the header shows the section count, total characters and the number of
-  patching system messages.
+- children name the **loaded** sources only: every `AGENTS.md` path with its
+  character count and the matching `APPEND_SYSTEM.md` / `SYSTEM.md` file. A
+  drifted one carries `⚠ změněno na disku — /reload` (or `⚠ soubor zmizel`);
+  files that were not loaded get no row at all;
+- the replayed tool loadout sits under `tools` (`(+N −M)` only when more than
+  one message declared tools);
+- the header shows the section count, total characters, the loading moment and
+  the number of patching system messages.
 
-## 5. Reading it by hand
+## 6. Reading it by hand
 
 The system messages are ordinary JSONL lines — no Pi process needed:
 

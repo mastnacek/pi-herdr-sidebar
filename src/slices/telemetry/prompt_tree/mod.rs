@@ -35,7 +35,7 @@ use serde_json::Value;
 
 mod sources;
 
-use sources::attribute;
+use sources::{attribute, file_state, iso_to_epoch_ms};
 
 /// Pi's section build order (see the module docs). Unknown names are
 /// extension sections and render after these.
@@ -60,6 +60,19 @@ pub enum PromptSource {
     Inline,
 }
 
+/// Drift of a loaded source file against the prompt that carried its text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SourceState {
+    /// Still identical to what the prompt shows.
+    #[default]
+    Ok,
+    /// Changed on disk *after* the prompt was built — pi only re-reads on
+    /// `/reload`, so the running prompt is stale.
+    Modified,
+    /// Was loaded but is gone from disk now.
+    Missing,
+}
+
 /// One prompt section after replaying every patch.
 #[derive(Debug, Clone, Default)]
 pub struct PromptSection {
@@ -81,6 +94,8 @@ pub struct PromptSection {
 pub struct PromptFileRef {
     pub path: String,
     pub chars: usize,
+    /// Drift against the prompt that loaded it.
+    pub state: SourceState,
 }
 
 /// Replayed system prompt of one session.
@@ -90,15 +105,15 @@ pub struct PromptTree {
     /// Every context file pi loaded, in the order it rendered them
     /// (agent directory first, then root → cwd).
     pub context_files: Vec<PromptFileRef>,
-    /// `addendum` attribution (APPEND_SYSTEM.md), when the section exists.
-    pub append_system: Option<PromptSource>,
-    /// `APPEND_SYSTEM.md` candidates found on disk but not present in the
-    /// prompt (e.g. project file when the project is untrusted).
-    pub append_candidates: Vec<String>,
+    /// `addendum` attribution (APPEND_SYSTEM.md), when the section exists,
+    /// with the drift of the file it matched.
+    pub append_system: Option<(PromptSource, SourceState)>,
     /// `SYSTEM.md` / `--system-prompt` attribution, when the default preamble
     /// was replaced.
-    pub system_override: Option<PromptSource>,
-    pub system_candidates: Vec<String>,
+    pub system_override: Option<(PromptSource, SourceState)>,
+    /// Timestamp of the newest system message — the moment the effective
+    /// prompt was assembled. Empty when the transcript has none.
+    pub loaded_at: String,
     /// Effective tool loadout after `toolsAdded` / `toolsRemoved` replay.
     pub tools: Vec<String>,
     pub tools_added: u32,
@@ -130,7 +145,10 @@ pub fn parse_prompt_tree(content: &str, cwd: &str) -> Option<PromptTree> {
         if msg.get("role").and_then(Value::as_str) != Some("system") {
             continue;
         }
-        builder.push_system_message(msg);
+        builder.push_system_message(
+            msg,
+            entry.get("timestamp").and_then(Value::as_str).unwrap_or(""),
+        );
     }
 
     if builder.messages == 0 {
@@ -154,11 +172,18 @@ struct Builder {
     tools_added: u32,
     tools_removed: u32,
     tool_messages: u32,
+    /// Timestamp of the newest system message, as pi wrote it.
+    loaded_at: String,
+    loaded_ms: u64,
 }
 
 impl Builder {
-    fn push_system_message(&mut self, msg: &Value) {
+    fn push_system_message(&mut self, msg: &Value, timestamp: &str) {
         self.messages += 1;
+        if !timestamp.is_empty() {
+            self.loaded_at = timestamp.to_string();
+            self.loaded_ms = iso_to_epoch_ms(timestamp);
+        }
 
         if let Some(sections) = msg.get("sections").and_then(Value::as_object) {
             for (name, value) in sections {
@@ -241,31 +266,42 @@ impl Builder {
             });
         }
 
+        let loaded_ms = self.loaded_ms;
         let preamble = self.text.get("preamble").cloned().unwrap_or_default();
         let has_tools = self.text.contains_key("tools");
 
-        let (append_system, append_candidates) =
-            attribute(self.text.get("addendum"), cwd, "APPEND_SYSTEM.md");
-        let (system_override, system_candidates) = if preamble.is_empty() || has_tools {
-            (None, Vec::new())
-        } else {
-            let (source, candidates) = attribute(Some(&preamble), cwd, "SYSTEM.md");
-            (source, candidates)
+        let attribute_source = |section: Option<&String>, file_name: &str| {
+            attribute(section, cwd, file_name).map(|source| {
+                let state = match &source {
+                    PromptSource::File(path) => file_state(path, loaded_ms),
+                    PromptSource::Inline => SourceState::Ok,
+                };
+                (source, state)
+            })
         };
 
-        let context_files = self
+        let append_system = attribute_source(self.text.get("addendum"), "APPEND_SYSTEM.md");
+        let system_override = if preamble.is_empty() || has_tools {
+            None
+        } else {
+            attribute_source(Some(&preamble), "SYSTEM.md")
+        };
+
+        let mut context_files = self
             .text
             .get("project_context")
             .map(|text| parse_project_instructions(text))
             .unwrap_or_default();
+        for file in &mut context_files {
+            file.state = file_state(&file.path, loaded_ms);
+        }
 
         PromptTree {
             sections,
             context_files,
             append_system,
-            append_candidates,
             system_override,
-            system_candidates,
+            loaded_at: self.loaded_at,
             tools: self.tools,
             tools_added: self.tools_added,
             tools_removed: self.tools_removed,
@@ -319,6 +355,7 @@ fn parse_project_instructions(text: &str) -> Vec<PromptFileRef> {
         out.push(PromptFileRef {
             path,
             chars: content.trim().chars().count(),
+            state: SourceState::Ok,
         });
         rest = next;
     }

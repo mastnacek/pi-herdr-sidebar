@@ -8,7 +8,9 @@
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 
-use crate::slices::telemetry::prompt_tree::{PromptSection, PromptSource, SECTION_ORDER};
+use crate::slices::telemetry::prompt_tree::{
+    PromptSection, PromptSource, SourceState, SECTION_ORDER,
+};
 use crate::slices::telemetry::LiveTelemetry;
 
 /// Human hint per documented section, in the same order as [`SECTION_ORDER`].
@@ -57,9 +59,10 @@ pub(super) fn prompt_tree_lines(t: &LiveTelemetry) -> Vec<Line<'static>> {
         ),
         Span::styled(
             format!(
-                "(pi replay · {} sekcí · {})",
+                "(pi replay · {} sekcí · {}{})",
                 tree.sections.len(),
-                fmt_chars(tree.total_chars)
+                fmt_chars(tree.total_chars),
+                loaded_suffix(&tree.loaded_at)
             ),
             Style::default().fg(Color::DarkGray),
         ),
@@ -122,7 +125,7 @@ fn section_line(
 
     match section {
         None => spans.push(Span::styled(
-            format!("— nepřítomno ({})", hint_for(name)),
+            "— nepřítomno".to_string(),
             Style::default().fg(Color::DarkGray),
         )),
         Some(section) if section.removed => spans.push(Span::styled(
@@ -169,50 +172,34 @@ fn child_lines(
     let mut lines = Vec::new();
 
     match section.name.as_str() {
-        "addendum" => {
-            match tree.append_system.as_ref() {
-                Some(PromptSource::File(path)) => lines.push(child(
-                    indent,
-                    format!("← {}", shorten(path)),
-                    Color::Magenta,
-                )),
-                Some(PromptSource::Inline) => lines.push(child(
-                    indent,
-                    "← inline (--append-system-prompt / složené zdroje)".to_string(),
-                    Color::Magenta,
-                )),
-                None => {}
-            }
-            for path in &tree.append_candidates {
-                lines.push(child(
-                    indent,
-                    format!("· na disku, ale nepoužito: {}", shorten(path)),
-                    Color::DarkGray,
-                ));
-            }
-        }
-        "preamble" => {
-            match tree.system_override.as_ref() {
-                Some(PromptSource::File(path)) => lines.push(child(
-                    indent,
-                    format!("⚠ nahrazeno: {}", shorten(path)),
-                    Color::Yellow,
-                )),
-                Some(PromptSource::Inline) => lines.push(child(
-                    indent,
-                    "⚠ nahrazeno: --system-prompt / inline".to_string(),
-                    Color::Yellow,
-                )),
-                None => {}
-            }
-            for path in &tree.system_candidates {
-                lines.push(child(
-                    indent,
-                    format!("· na disku, ale nepoužito: {}", shorten(path)),
-                    Color::DarkGray,
-                ));
-            }
-        }
+        "addendum" => match tree.append_system.as_ref() {
+            Some((PromptSource::File(path), state)) => lines.push(child_with_state(
+                indent,
+                format!("← {}", shorten(path)),
+                Color::Magenta,
+                *state,
+            )),
+            Some((PromptSource::Inline, _)) => lines.push(child(
+                indent,
+                "← inline (--append-system-prompt / složené zdroje)".to_string(),
+                Color::Magenta,
+            )),
+            None => {}
+        },
+        "preamble" => match tree.system_override.as_ref() {
+            Some((PromptSource::File(path), state)) => lines.push(child_with_state(
+                indent,
+                format!("⚠ nahrazeno: {}", shorten(path)),
+                Color::Yellow,
+                *state,
+            )),
+            Some((PromptSource::Inline, _)) => lines.push(child(
+                indent,
+                "⚠ nahrazeno: --system-prompt / inline".to_string(),
+                Color::Yellow,
+            )),
+            None => {}
+        },
         "project_context" => {
             for (offset, file) in tree.context_files.iter().enumerate() {
                 let branch = if offset + 1 == tree.context_files.len() {
@@ -220,7 +207,7 @@ fn child_lines(
                 } else {
                     "├─"
                 };
-                lines.push(child(
+                lines.push(child_with_state(
                     indent,
                     format!(
                         "{branch} {} ({})",
@@ -228,13 +215,7 @@ fn child_lines(
                         fmt_chars(file.chars)
                     ),
                     Color::Yellow,
-                ));
-            }
-            if tree.context_files.is_empty() {
-                lines.push(child(
-                    indent,
-                    "· žádný AGENTS.md nenalezen".to_string(),
-                    Color::DarkGray,
+                    file.state,
                 ));
             }
         }
@@ -245,6 +226,45 @@ fn child_lines(
     }
 
     lines
+}
+
+/// `HH:MM:SS` of the newest system message — the moment the effective prompt
+/// was assembled.
+fn loaded_suffix(loaded_at: &str) -> String {
+    let time = loaded_at
+        .split('T')
+        .nth(1)
+        .and_then(|rest| rest.split('.').next())
+        .filter(|t| !t.is_empty());
+    match time {
+        Some(time) => format!(" · načteno {time}"),
+        None => String::new(),
+    }
+}
+
+/// A loaded source row. Only files that were actually loaded get a row — an
+/// unused candidate on disk is silence, not noise. Drift is the one thing
+/// worth flagging: pi caches resources at session start and only re-reads them
+/// on `/reload`.
+fn child_with_state(
+    indent: &str,
+    text: String,
+    color: Color,
+    state: SourceState,
+) -> Line<'static> {
+    let mut line = child(indent, text, color);
+    match state {
+        SourceState::Ok => {}
+        SourceState::Modified => line.spans.push(Span::styled(
+            "  ⚠ změněno na disku — /reload",
+            Style::default().fg(Color::Red).bold(),
+        )),
+        SourceState::Missing => line.spans.push(Span::styled(
+            "  ⚠ soubor zmizel",
+            Style::default().fg(Color::Red).bold(),
+        )),
+    }
+    line
 }
 
 fn tool_summary(tree: &crate::slices::telemetry::prompt_tree::PromptTree) -> String {

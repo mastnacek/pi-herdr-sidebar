@@ -9,13 +9,22 @@ fn line(entry: Value) -> String {
 }
 
 fn system(sections: Value, extra: Value) -> String {
+    system_at("", sections, extra)
+}
+
+/// System message with an explicit transcript timestamp.
+fn system_at(ts: &str, sections: Value, extra: Value) -> String {
     let mut message = json!({ "role": "system", "content": "", "sections": sections });
     if let Some(obj) = extra.as_object() {
         for (k, v) in obj {
             message[k] = v.clone();
         }
     }
-    line(json!({ "type": "message", "message": message }))
+    let mut entry = json!({ "type": "message", "message": message });
+    if !ts.is_empty() {
+        entry["timestamp"] = json!(ts);
+    }
+    line(entry)
 }
 
 fn first_request() -> String {
@@ -113,7 +122,10 @@ fn addendum_without_matching_file_is_inline() {
     .join("\n");
 
     let tree = parse_prompt_tree(&log, "D:/work").expect("tree");
-    assert_eq!(tree.append_system, Some(PromptSource::Inline));
+    assert_eq!(
+        tree.append_system.map(|(source, _)| source),
+        Some(PromptSource::Inline)
+    );
     let addendum = tree.sections.iter().find(|s| s.name == "addendum").unwrap();
     assert_eq!(addendum.chars, "APPENDED RULES".len());
 }
@@ -133,7 +145,7 @@ fn addendum_is_attributed_to_the_project_append_system_file() {
 
     let tree = parse_prompt_tree(&log, &dir.display().to_string()).expect("tree");
     match tree.append_system {
-        Some(PromptSource::File(path)) => assert!(path.ends_with("APPEND_SYSTEM.md")),
+        Some((PromptSource::File(path), _)) => assert!(path.ends_with("APPEND_SYSTEM.md")),
         other => panic!("expected file attribution, got {other:?}"),
     }
 
@@ -151,7 +163,10 @@ fn default_prompt_is_not_an_override_but_missing_tools_is() {
     );
     let tree = parse_prompt_tree(&log, "D:/work").unwrap();
     assert!(tree.system_override.is_some());
-    assert_eq!(tree.system_override, Some(PromptSource::Inline));
+    assert_eq!(
+        tree.system_override.map(|(source, _)| source),
+        Some(PromptSource::Inline)
+    );
 }
 
 #[test]
@@ -191,4 +206,108 @@ fn temp_dir(tag: &str) -> std::path::PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+#[test]
+fn loaded_at_tracks_the_newest_system_message() {
+    let log = [
+        system_at(
+            "2026-09-28T10:19:22.000Z",
+            json!({ "preamble": "p", "tools": "t" }),
+            Value::Null,
+        ),
+        system_at(
+            "2026-09-28T11:00:00.000Z",
+            json!({ "rules": "r" }),
+            Value::Null,
+        ),
+    ]
+    .join("\n");
+
+    let tree = parse_prompt_tree(&log, "D:/work").unwrap();
+    assert_eq!(tree.loaded_at, "2026-09-28T11:00:00.000Z");
+}
+
+#[test]
+fn iso_timestamps_become_epoch_ms() {
+    assert_eq!(super::sources::iso_to_epoch_ms("1970-01-01T00:00:00.000Z"), 0);
+    assert_eq!(
+        super::sources::iso_to_epoch_ms("2026-09-28T10:19:22Z"),
+        1_790_590_762_000
+    );
+    assert_eq!(super::sources::iso_to_epoch_ms("2026-09-28T10:19:22.950Z"), 1_790_590_762_950);
+    assert_eq!(super::sources::iso_to_epoch_ms("garbage"), 0);
+    assert_eq!(super::sources::iso_to_epoch_ms(""), 0);
+}
+
+#[test]
+fn a_source_edited_after_the_prompt_is_flagged_modified() {
+    let dir = temp_dir("drift");
+    let pi_dir = dir.join(".pi");
+    std::fs::create_dir_all(&pi_dir).unwrap();
+    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "PROJECT ADDENDUM\n").unwrap();
+
+    let log = [
+        system_at(
+            "2020-01-01T00:00:00.000Z",
+            json!({ "preamble": "p", "tools": "t" }),
+            Value::Null,
+        ),
+        system_at(
+            "2020-01-01T00:00:01.000Z",
+            json!({ "addendum": "PROJECT ADDENDUM" }),
+            Value::Null,
+        ),
+    ]
+    .join("\n");
+
+    let tree = parse_prompt_tree(&log, &dir.display().to_string()).unwrap();
+    let (source, state) = tree.append_system.expect("addendum attributed");
+    assert!(matches!(source, PromptSource::File(_)));
+    assert_eq!(state, SourceState::Modified);
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_source_older_than_the_prompt_is_fresh() {
+    let dir = temp_dir("fresh");
+    let pi_dir = dir.join(".pi");
+    std::fs::create_dir_all(&pi_dir).unwrap();
+    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "PROJECT ADDENDUM\n").unwrap();
+
+    let log = system_at(
+        "2099-01-01T00:00:00.000Z",
+        json!({ "preamble": "p", "tools": "t", "addendum": "PROJECT ADDENDUM" }),
+        Value::Null,
+    );
+
+    let tree = parse_prompt_tree(&log, &dir.display().to_string()).unwrap();
+    let (_, state) = tree.append_system.expect("addendum attributed");
+    assert_eq!(state, SourceState::Ok);
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn context_files_report_drift_too() {
+    let dir = temp_dir("ctxdrift");
+    let agents = dir.join("AGENTS.md");
+    std::fs::write(&agents, "project rules\n").unwrap();
+    let project_context = format!(
+        "Project-specific instructions and guidelines:\n\n<project_instructions path=\"{}\">\nproject rules\n</project_instructions>",
+        agents.display()
+    );
+
+    let log = system_at(
+        "2020-01-01T00:00:00.000Z",
+        json!({ "preamble": "p", "tools": "t", "project_context": project_context }),
+        Value::Null,
+    );
+
+    let tree = parse_prompt_tree(&log, &dir.display().to_string()).unwrap();
+    assert_eq!(tree.context_files.len(), 1);
+    assert_eq!(tree.context_files[0].state, SourceState::Modified);
+
+    std::fs::remove_dir_all(&dir).ok();
 }
