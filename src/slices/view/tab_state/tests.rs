@@ -20,7 +20,14 @@ fn a_saved_face_comes_back() {
     let dir = temp_dir("roundtrip");
     assert_eq!(load(Some(&dir)), DEFAULT, "nothing stored yet");
 
-    for tab in [Tab::Zen, Tab::Skills, Tab::Mcp, Tab::Notes, Tab::Shortcuts, Tab::Status] {
+    for tab in [
+        Tab::Zen,
+        Tab::Skills,
+        Tab::Mcp,
+        Tab::Notes,
+        Tab::Shortcuts,
+        Tab::Status,
+    ] {
         save(Some(&dir), tab);
         assert_eq!(load(Some(&dir)), tab, "{} did not round-trip", slug(tab));
     }
@@ -31,7 +38,11 @@ fn a_saved_face_comes_back() {
 #[test]
 fn slugs_are_stable_names_not_indices() {
     assert_eq!(slug(Tab::Status), "status");
-    assert_eq!(from_slug("  STATUS\n"), Some(Tab::Status), "trimmed + case-insensitive");
+    assert_eq!(
+        from_slug("  STATUS\n"),
+        Some(Tab::Status),
+        "trimmed + case-insensitive"
+    );
     assert_eq!(from_slug("9"), None, "an index is not a name");
     assert_eq!(from_slug(""), None);
     assert_eq!(from_slug("nonsense"), None);

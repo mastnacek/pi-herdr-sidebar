@@ -279,7 +279,16 @@ impl SidebarState {
                     self.snapshot = None;
                     self.last_mtime = None;
                     self.last_live = None;
-                    self.refresh_status = "Snapshot smazán (reload?)".to_string();
+                    // The snapshot is only a fallback for the legacy renderer
+                    // path; the Status face reads the session log and the prompt
+                    // sidecar. Reporting its absence as a problem was a false
+                    // alarm once the TS pane went away, so say what is actually
+                    // driving the faces instead.
+                    self.refresh_status = if self.live.is_some() {
+                        "relace + sidecar".to_string()
+                    } else {
+                        "Snapshot smazán (reload?)".to_string()
+                    };
                 }
             }
         }
