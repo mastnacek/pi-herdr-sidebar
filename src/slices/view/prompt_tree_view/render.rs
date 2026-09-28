@@ -153,6 +153,18 @@ pub(super) fn child_lines(
     lines
 }
 
+/// `⚠ ~/.pi/agent/APPEND_SYSTEM.md  na disku, ale engine addendum neodeslal`
+/// under a missing addendum row.
+pub(super) fn unloaded_append_line(glyph: &str, path: &str) -> Line<'static> {
+    let indent = if glyph == "└─" { "     " } else { "│    " };
+    let mut line = child(indent, format!("⚠ {}", shorten(path)), Color::Red);
+    line.spans.push(Span::styled(
+        "  na disku, ale engine addendum neodeslal — /reload",
+        Style::default().fg(Color::DarkGray),
+    ));
+    line
+}
+
 /// `HH:MM:SS` of the capture — the moment the effective prompt was assembled.
 pub(super) fn loaded_suffix(loaded_at: &str) -> String {
     let time = loaded_at

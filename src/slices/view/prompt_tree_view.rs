@@ -17,13 +17,14 @@ use ratatui::text::{Line, Span};
 
 use crate::slices::telemetry::prompt_sidecar::PromptSidecar;
 use crate::slices::telemetry::prompt_tree::{
-    PromptFileRef, PromptSection, PromptSource, PromptTree, SourceState, SECTION_ORDER,
+    canonical_append_file, PromptFileRef, PromptSection, PromptSource, PromptTree, SourceState,
+    SECTION_ORDER,
 };
 use crate::slices::telemetry::LiveTelemetry;
 
 mod render;
 
-use render::{child_lines, loaded_suffix, section_line};
+use render::{child_lines, loaded_suffix, section_line, unloaded_append_line};
 
 /// Human hint per documented section, in the same order as [`SECTION_ORDER`].
 const SECTION_HINT: [(&str, &str); 8] = [
@@ -60,6 +61,9 @@ struct PromptView {
     override_chars: usize,
     /// First line of the replacement text.
     override_preview: String,
+    /// A discovery-location `APPEND_SYSTEM.md` that exists while the engine sent
+    /// no addendum — one line that answers "why is my append missing?".
+    unloaded_append: Option<String>,
     loaded_at: String,
     tools: Vec<String>,
     tools_added: u32,
@@ -129,6 +133,11 @@ impl PromptView {
                 .map(|t| t.preview.clone())
                 .unwrap_or_default(),
             loaded_at: sidecar.captured_at.clone(),
+            unloaded_append: if sidecar.append_system_prompt.is_some() {
+                None
+            } else {
+                canonical_append_file(&sidecar.cwd)
+            },
             tools: sidecar.tools.clone(),
             skills: sidecar.skills.iter().map(|s| s.name.clone()).collect(),
             skill_chars: sidecar.skills.iter().map(|s| s.description_chars).sum(),
@@ -168,6 +177,7 @@ impl PromptView {
                 0
             },
             override_preview: tree.override_preview.clone(),
+            unloaded_append: tree.unloaded_append.clone(),
             loaded_at: tree.loaded_at.clone(),
             tools: tree.tools.clone(),
             tools_added: tree.tools_added,
@@ -266,6 +276,13 @@ pub(super) fn prompt_tree_lines(
         lines.push(section_line(glyph, index + 1, name, section));
         if let Some(section) = section {
             lines.extend(child_lines(glyph, section, &view));
+        } else if *name == "addendum" {
+            // A missing addendum is where a file that exists on disk but never
+            // loaded gets explained — otherwise the panel stays silent about a
+            // misconfiguration (untrusted project, missing /reload).
+            if let Some(path) = view.unloaded_append.as_ref() {
+                lines.push(unloaded_append_line(glyph, path));
+            }
         }
     }
 

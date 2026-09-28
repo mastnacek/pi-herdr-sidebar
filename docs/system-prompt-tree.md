@@ -169,6 +169,20 @@ If row 5 reads `— nepřítomno`, the engine really did send no `addendum`: the
 is no `APPEND_SYSTEM.md` in either discovery location *and* nothing passed
 `--append-system-prompt`.
 
+If a **canonical** discovery file *does* exist on disk while the engine sent no
+addendum, the row is followed by exactly one line explaining it:
+
+```text
+├─ 5 addendum            — nepřítomno
+│    ⚠ C:/Users/…/.pi/agent/APPEND_SYSTEM.md  na disku, ale engine addendum neodeslal — /reload
+```
+
+That is either an untrusted project (`SYSTEM.md` / `APPEND_SYSTEM.md` in
+`.pi/` only load when the project is trusted) or a file written after the
+session was built. Speculative candidates — `agents/*.md`, unrelated ancestor
+directories, rejected matches — are still **never** listed; the rule is one
+actionable line, not a directory listing.
+
 A launch alias that passes the flag itself (e.g.
 `pi --append-system-prompt ~/.pi/agent/agents/cim-budu.md`) is invisible to
 discovery, so both providers fall back to **content matching**: the `addendum`

@@ -206,11 +206,21 @@ impl Builder {
             file.state = file_state(&file.path, loaded_ms);
         }
 
+        // No addendum was sent: if a discovery location still holds one, that is
+        // worth one line, because the panel would otherwise stay silent about a
+        // misconfiguration (untrusted project, missing /reload).
+        let unloaded_append = if append_system.is_some() {
+            None
+        } else {
+            super::canonical_append_file(cwd)
+        };
+
         PromptTree {
             sections,
             context_files,
             append_system,
             addendum_preview,
+            unloaded_append,
             system_override,
             override_preview,
             loaded_at: self.loaded_at,

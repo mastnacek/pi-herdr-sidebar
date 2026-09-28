@@ -76,6 +76,9 @@ pub struct PromptSidecar {
     pub live: bool,
     #[serde(default, rename = "capturedAt")]
     pub captured_at: String,
+    /// cwd of the captured request — used to explain an absent `addendum`.
+    #[serde(default)]
+    pub cwd: String,
     #[serde(default)]
     pub forced: bool,
     #[serde(default, rename = "customPrompt")]

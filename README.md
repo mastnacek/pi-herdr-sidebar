@@ -39,7 +39,8 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
       — node builtins only, no plugin dependency; copy it to
       `~/.pi/agent/extensions/` and `/reload`.
       Whether `APPEND_SYSTEM.md` was added is always shown (`— nepřítomno` when
-      not); files that were never loaded are not listed.
+      not, plus one line naming a canonical file that exists on disk but never
+      loaded); files that were never loaded are otherwise not listed.
       See [`docs/system-prompt-tree.md`](docs/system-prompt-tree.md).
   - `Skills`: pi-plugin-dev skill HUD (structured `<pane>.skills.json` sidecar written by the TS pi-sidebar extension):
     - Active skill target: `🎯 <skill-name>`

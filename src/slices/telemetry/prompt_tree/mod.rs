@@ -109,6 +109,10 @@ pub struct PromptTree {
     /// First line of the addendum body — names an inline (CLI) append even
     /// without the exact provider.
     pub addendum_preview: String,
+    /// A canonical `APPEND_SYSTEM.md` that exists on disk while the engine sent
+    /// no `addendum`: the answer to "why is my append missing?" — untrusted
+    /// project, or a file written after the session was built.
+    pub unloaded_append: Option<String>,
     /// `SYSTEM.md` / `--system-prompt` attribution, when the default preamble
     /// was replaced.
     pub system_override: Option<(PromptSource, SourceState)>,
@@ -134,6 +138,11 @@ pub struct PromptTree {
 /// instead of from the transcript.
 pub fn source_state(path: &str, loaded_at: &str) -> SourceState {
     sources::file_state(path, sources::iso_to_epoch_ms(loaded_at))
+}
+
+/// A discovery-location `APPEND_SYSTEM.md` for `cwd`, if one exists on disk.
+pub fn canonical_append_file(cwd: &str) -> Option<String> {
+    sources::canonical_append_path(cwd, crate::shared::dirs_home().as_deref())
 }
 
 #[cfg(test)]

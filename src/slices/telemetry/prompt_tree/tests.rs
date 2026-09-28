@@ -367,3 +367,38 @@ fn cli_prompt_files_under_agents_are_attributed_by_content() {
 
     std::fs::remove_dir_all(&home).ok();
 }
+
+#[test]
+fn an_unloaded_canonical_append_file_is_reported() {
+    let dir = temp_dir("unloaded-append");
+    let pi_dir = dir.join(".pi");
+    std::fs::create_dir_all(&pi_dir).unwrap();
+    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "NEVER SENT\n").unwrap();
+    let cwd = dir.display().to_string();
+
+    // The engine sent no addendum although a discovery location holds one.
+    let log = system(json!({ "preamble": "p", "tools": "t" }), Value::Null);
+    let tree = parse_prompt_tree(&log, &cwd).expect("tree");
+    assert!(tree.append_system.is_none());
+    let hint = tree.unloaded_append.expect("hint");
+    assert!(hint.ends_with("APPEND_SYSTEM.md"), "{hint}");
+
+    // A session that did send it has nothing to explain.
+    let log = system(
+        json!({
+            "preamble": "p",
+            "tools": "t",
+            "addendum": "<addendum>\nNEVER SENT\n</addendum>",
+        }),
+        Value::Null,
+    );
+    let tree = parse_prompt_tree(&log, &cwd).expect("tree");
+    assert!(tree.append_system.is_some());
+    assert!(tree.unloaded_append.is_none());
+
+    // …and with no file on disk there is nothing to say either.
+    std::fs::remove_dir_all(&dir).ok();
+    let log = system(json!({ "preamble": "p", "tools": "t" }), Value::Null);
+    let tree = parse_prompt_tree(&log, &cwd).expect("tree");
+    assert!(tree.unloaded_append.is_none());
+}

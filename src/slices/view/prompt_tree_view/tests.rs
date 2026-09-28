@@ -156,17 +156,35 @@ fn preview_newest_session() {
     }
 }
 
+/// The noise rule, sharpened: a *canonical* discovery file that never reached
+/// the engine gets exactly one actionable line, while speculative candidates
+/// (`agents/*.md` and friends) are never listed at all.
 #[test]
-fn files_that_were_not_loaded_are_not_listed() {
+fn only_a_canonical_unloaded_file_gets_a_row() {
     let dir = temp_dir("unloaded");
     let pi_dir = dir.join(".pi");
     std::fs::create_dir_all(&pi_dir).unwrap();
-    // On disk, but the prompt never carried it (e.g. untrusted project).
-    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "NOT LOADED\n").unwrap();
+    // Canonical location, on disk, but the prompt never carried it.
+    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "NOT LOADED
+").unwrap();
 
     let log = system(r#"{"preamble":"p","tools":"t","cwd":"D:/work"}"#, "");
-    let rendered = joined(&tree_from(&log, &dir.display().to_string()));
-    assert!(!rendered.contains("APPEND_SYSTEM.md"), "{rendered}");
+    let rows = flat(&tree_from(&log, &dir.display().to_string()));
+    let hints: Vec<&String> = rows
+        .iter()
+        .filter(|row| row.contains("APPEND_SYSTEM.md"))
+        .collect();
+    assert_eq!(hints.len(), 1, "one line, not a directory listing: {rows:#?}");
+    assert!(hints[0].contains("/reload"), "{:?}", hints[0]);
+
+    // An append that matched no file stays inline: candidates are not listed.
+    let log = system(
+        r#"{"preamble":"p","tools":"t","addendum":"<addendum>\nCIM BUDU RULES\n</addendum>"}"#,
+        "",
+    );
+    let rendered = joined(&tree_from(&log, "D:/work"));
+    assert!(rendered.contains("← inline"), "{rendered}");
+    assert!(!rendered.contains("agents/"), "{rendered}");
     assert!(!rendered.contains("nepoužito"), "{rendered}");
 
     std::fs::remove_dir_all(&dir).ok();
@@ -416,6 +434,49 @@ fn replay_names_the_append_when_its_text_matches_a_file() {
 
     assert!(rendered.contains("APPEND_SYSTEM.md"), "{rendered}");
     assert!(rendered.contains("(14 zn)"), "{rendered}");
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Both providers explain an addendum that exists on disk but never reached the
+/// engine — the answer to "why is my append missing?".
+#[test]
+fn an_absent_addendum_points_at_the_file_that_never_loaded() {
+    let dir = temp_dir("hintview");
+    let pi_dir = dir.join(".pi");
+    std::fs::create_dir_all(&pi_dir).unwrap();
+    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "NEVER SENT\n").unwrap();
+    let cwd = dir.display().to_string();
+
+    let log = system(r#"{"preamble":"p","tools":"t"}"#, "");
+    let replay = joined(&tree_from(&log, &cwd));
+    assert!(replay.contains("nepřítomno"), "{replay}");
+    assert!(replay.contains("APPEND_SYSTEM.md"), "{replay}");
+    assert!(replay.contains("/reload"), "{replay}");
+
+    let raw = serde_json::json!({
+        "version": 1,
+        "live": true,
+        "capturedAt": "2026-09-28T10:31:14.000Z",
+        "cwd": cwd,
+        "sections": ["preamble"],
+        "sectionChars": { "preamble": 1 },
+        "systemPromptChars": 1,
+    })
+    .to_string();
+    let exact: PromptSidecar = serde_json::from_str(&raw).expect("sidecar");
+    let text: String = prompt_tree_lines(&LiveTelemetry::default(), Some(&exact))
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(text.contains("APPEND_SYSTEM.md"), "{text}");
+    assert!(text.contains("na disku, ale engine addendum neodeslal"), "{text}");
 
     std::fs::remove_dir_all(&dir).ok();
 }

@@ -53,6 +53,26 @@ pub(super) fn candidate_paths(cwd: &str, file_name: &str, home: Option<&Path>) -
     paths
 }
 
+/// The two canonical `APPEND_SYSTEM.md` locations that *discovery* would read,
+/// in pi's precedence order — no `agents/` files, no content matching.
+///
+/// Used to explain an absence: if one of these exists while the engine sent no
+/// `addendum`, something other than "there is no file" is going on (an untrusted
+/// project, or a file written after the session was built).
+pub(super) fn canonical_append_path(cwd: &str, home: Option<&Path>) -> Option<String> {
+    let mut candidates = Vec::new();
+    if !cwd.is_empty() {
+        candidates.push(Path::new(cwd).join(".pi").join("APPEND_SYSTEM.md"));
+    }
+    if let Some(home) = home {
+        candidates.push(home.join(".pi").join("agent").join("APPEND_SYSTEM.md"));
+    }
+    candidates
+        .into_iter()
+        .find(|path| path.is_file())
+        .map(|path| path.display().to_string())
+}
+
 /// Every `*.md` under `<home>/.pi/agent/agents`, sorted for determinism.
 fn agent_prompt_files(home: &Path) -> Vec<PathBuf> {
     let dir = home.join(".pi").join("agent").join("agents");
