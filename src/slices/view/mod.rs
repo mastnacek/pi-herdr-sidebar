@@ -5,6 +5,7 @@
 pub mod external;
 pub mod keys;
 pub mod mcp;
+pub mod prompt_tree_view;
 pub mod shared_banner;
 pub mod skills;
 pub mod spai_ui;

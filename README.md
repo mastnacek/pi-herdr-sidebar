@@ -29,6 +29,11 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
     - Cost tracking: Exact session dollar expenditure
     - Model & thinking level: `(provider) model • 🧠 <level>`
     - Git badge: `🌿 branch ●dirty/○clean ▸N ahead ◂N behind`
+    - System-prompt tree: the prompt Pi actually sent, replayed from the
+      session JSONL — documented section order, every loaded `AGENTS.md` with
+      its path, and whether `APPEND_SYSTEM.md` was added (`— nepřítomno` when
+      not). Later section patches, removed sections and the replayed tool
+      loadout are marked. See [`docs/system-prompt-tree.md`](docs/system-prompt-tree.md).
   - `Skills`: pi-plugin-dev skill HUD (structured `<pane>.skills.json` sidecar written by the TS pi-sidebar extension):
     - Active skill target: `🎯 <skill-name>`
     - Counters: `<N> refs · elapsed · <N> turns`

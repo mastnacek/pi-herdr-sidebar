@@ -7,6 +7,7 @@ pub mod git_live;
 pub mod mcp_live;
 pub mod model_catalog;
 pub mod openrouter_live;
+pub mod prompt_tree;
 pub mod quota_live;
 pub mod session_finder;
 pub mod skills;
@@ -82,6 +83,10 @@ pub struct LiveTelemetry {
     pub git_dirty: u32,
     pub is_working: bool,
     pub last_entry_ts: String,
+    /// Replayed system prompt: which sections the model actually received,
+    /// which `AGENTS.md` files they came from and whether an `APPEND_SYSTEM.md`
+    /// addendum made it in.
+    pub prompt: Option<prompt_tree::PromptTree>,
 }
 
 #[derive(Deserialize)]
@@ -335,6 +340,7 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                         &content,
                     ));
                 }
+                t.prompt = prompt_tree::parse_prompt_tree(&content, &cwd);
             }
         }
     }
