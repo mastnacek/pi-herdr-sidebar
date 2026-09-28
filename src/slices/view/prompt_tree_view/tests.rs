@@ -381,3 +381,41 @@ fn preview_prompt_sidecar() {
         println!("{text}");
     }
 }
+
+/// The replay provider carries previews and sizes too, so an inline append is
+/// named even with no extension publishing the sidecar.
+#[test]
+fn replay_shows_the_inline_addendum_preview_and_size() {
+    let log = system(
+        r#"{"preamble":"p","tools":"t","addendum":"<addendum>\nCIM BUDU RULES\n</addendum>"}"#,
+        "",
+    );
+    let rendered = joined(&tree_from(&log, "D:/work"));
+
+    assert!(rendered.contains("replay ze session logu"), "{rendered}");
+    assert!(rendered.contains("← inline"), "{rendered}");
+    assert!(rendered.contains("CIM BUDU RULES"), "{rendered}");
+    assert!(
+        rendered.contains("(14 zn)"),
+        "the body size, wrapper excluded: {rendered}"
+    );
+}
+
+#[test]
+fn replay_names_the_append_when_its_text_matches_a_file() {
+    let dir = temp_dir("replayfile");
+    let pi_dir = dir.join(".pi");
+    std::fs::create_dir_all(&pi_dir).unwrap();
+    std::fs::write(pi_dir.join("APPEND_SYSTEM.md"), "CIM BUDU RULES\n").unwrap();
+
+    let log = system(
+        r#"{"preamble":"p","tools":"t","addendum":"<addendum>\nCIM BUDU RULES\n</addendum>"}"#,
+        "",
+    );
+    let rendered = joined(&tree_from(&log, &dir.display().to_string()));
+
+    assert!(rendered.contains("APPEND_SYSTEM.md"), "{rendered}");
+    assert!(rendered.contains("(14 zn)"), "{rendered}");
+
+    std::fs::remove_dir_all(&dir).ok();
+}

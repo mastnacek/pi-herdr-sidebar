@@ -22,33 +22,58 @@ use crate::shared::dirs_home;
 /// precedence order pi uses (project `.pi/` first, then the agent directory).
 ///
 /// `None` when the section is absent; `Inline` when it exists but matches no
-/// candidate (a CLI flag, joined sources, or an extension).
+/// candidate (joined sources or an extension).
 pub(super) fn attribute(
     section: Option<&String>,
     cwd: &str,
     file_name: &str,
 ) -> Option<PromptSource> {
     let text = section?;
-    let source = match_source(text, &candidate_paths(cwd, file_name));
+    let home = dirs_home();
+    let source = match_source(text, &candidate_paths(cwd, file_name, home.as_deref()));
     Some(source.unwrap_or(PromptSource::Inline))
 }
 
-/// `SYSTEM.md` / `APPEND_SYSTEM.md` locations, project first.
-fn candidate_paths(cwd: &str, file_name: &str) -> Vec<PathBuf> {
+/// `SYSTEM.md` / `APPEND_SYSTEM.md` locations: project first, then the agent
+/// directory, then the prompt files kept under `agents/`.
+///
+/// The last group exists because `--append-system-prompt <path>` never goes
+/// through discovery, and the documented alias pattern keeps those files in
+/// `~/.pi/agent/agents/`. Content matching keeps it evidence rather than a
+/// guess: a file only wins when its text *is* the section body.
+pub(super) fn candidate_paths(cwd: &str, file_name: &str, home: Option<&Path>) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if !cwd.is_empty() {
         paths.push(Path::new(cwd).join(".pi").join(file_name));
     }
-    if let Some(home) = dirs_home() {
+    if let Some(home) = home {
         paths.push(home.join(".pi").join("agent").join(file_name));
+        paths.extend(agent_prompt_files(home));
     }
     paths
+}
+
+/// Every `*.md` under `<home>/.pi/agent/agents`, sorted for determinism.
+fn agent_prompt_files(home: &Path) -> Vec<PathBuf> {
+    let dir = home.join(".pi").join("agent").join("agents");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file() && path.extension().is_some_and(|extension| extension == "md")
+        })
+        .collect();
+    files.sort();
+    files
 }
 
 /// Match a section body against candidate files. Pi joins multiple append
 /// sources with a blank line, and a CLI flag can be prepended, so an exact
 /// match or a suffix match both count.
-fn match_source(text: &str, candidates: &[PathBuf]) -> Option<PromptSource> {
+pub(super) fn match_source(text: &str, candidates: &[PathBuf]) -> Option<PromptSource> {
     let target = normalize(text);
     if target.is_empty() {
         return None;

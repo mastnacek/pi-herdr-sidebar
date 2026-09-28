@@ -317,3 +317,54 @@ fn context_files_report_drift_too() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn the_addendum_preview_and_inner_size_survive_without_a_sidecar() {
+    let log = system(
+        json!({
+            "preamble": "p",
+            "tools": "t",
+            "addendum": "<addendum>\nCIM BUDU RULES\n</addendum>",
+        }),
+        Value::Null,
+    );
+
+    let tree = parse_prompt_tree(&log, "D:/work").expect("tree");
+    assert_eq!(tree.addendum_preview, "CIM BUDU RULES");
+    let addendum = tree
+        .sections
+        .iter()
+        .find(|section| section.name == "addendum")
+        .expect("addendum");
+    assert_eq!(
+        addendum.chars,
+        "CIM BUDU RULES".len(),
+        "the wrapper is not part of the section body"
+    );
+}
+
+#[test]
+fn cli_prompt_files_under_agents_are_attributed_by_content() {
+    let home = temp_dir("agents-home");
+    let agents = home.join(".pi").join("agent").join("agents");
+    std::fs::create_dir_all(&agents).unwrap();
+    std::fs::write(agents.join("cim-budu.md"), "CIM BUDU RULES\n").unwrap();
+    std::fs::write(agents.join("unrelated.md"), "something else\n").unwrap();
+
+    let candidates = super::sources::candidate_paths("D:/work", "APPEND_SYSTEM.md", Some(&home));
+    // The canonical locations are checked first, the agents/ files last.
+    let first = candidates[0].to_string_lossy().replace('\\', "/");
+    assert!(first.ends_with(".pi/APPEND_SYSTEM.md"), "{first}");
+
+    match super::sources::match_source("CIM BUDU RULES", &candidates) {
+        Some(PromptSource::File(path)) => assert!(path.ends_with("cim-budu.md"), "{path}"),
+        other => panic!("expected a file match, got {other:?}"),
+    }
+    assert!(
+        super::sources::match_source("NOT IN ANY FILE 7f3a", &candidates).is_none(),
+        "a file only wins when its text is the body"
+    );
+
+    std::fs::remove_dir_all(&home).ok();
+}
+

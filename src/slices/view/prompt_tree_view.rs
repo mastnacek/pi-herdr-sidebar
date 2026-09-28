@@ -140,15 +140,34 @@ impl PromptView {
     }
 
     fn from_replay(tree: &PromptTree) -> Self {
+        // Sizes and previews come from the transcript too, so the replay is no
+        // longer blind to an append there: it names the file when the text
+        // matches one, and shows a preview when it does not.
+        let section_chars = |name: &str| {
+            tree.sections
+                .iter()
+                .find(|section| section.name == name)
+                .map(|section| section.chars)
+                .unwrap_or(0)
+        };
+
         Self {
             sections: tree.sections.clone(),
             context_files: tree.context_files.clone(),
             append_system: tree.append_system.clone(),
-            append_chars: 0,
-            append_preview: String::new(),
+            append_chars: if tree.append_system.is_some() {
+                section_chars("addendum")
+            } else {
+                0
+            },
+            append_preview: tree.addendum_preview.clone(),
             system_override: tree.system_override.clone(),
-            override_chars: 0,
-            override_preview: String::new(),
+            override_chars: if tree.system_override.is_some() {
+                section_chars("preamble")
+            } else {
+                0
+            },
+            override_preview: tree.override_preview.clone(),
             loaded_at: tree.loaded_at.clone(),
             tools: tree.tools.clone(),
             tools_added: tree.tools_added,

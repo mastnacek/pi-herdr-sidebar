@@ -30,14 +30,14 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
     - Model & thinking level: `(provider) model • 🧠 <level>`
     - Git badge: `🌿 branch ●dirty/○clean ▸N ahead ◂N behind`
     - System-prompt tree: the prompt Pi actually sent, from two providers —
-      `exact` (the TS extension's `before_agent_start` sidecar: real paths,
-      forced prompts, CLI appends) with the session-transcript `replay` as the
-      always-available fallback. Documented section order, loading moment,
-      every loaded `AGENTS.md` with its path, and whether `APPEND_SYSTEM.md`
-      was added (`— nepřítomno` when not). Later section patches, removed
-      sections, the replayed tool loadout and files changed on disk after the
-      load (`— /reload`) are marked; files that were never loaded are not
-      listed. See [`docs/system-prompt-tree.md`](docs/system-prompt-tree.md).
+      `replay` (session transcript, always available; names the section set,
+      every loaded `AGENTS.md`, a CLI append attributed by content against
+      `~/.pi/agent/agents/*.md`, previews and on-disk drift) and the optional
+      `exact` sidecar the TS `pi-sidebar` extension publishes from
+      `before_agent_start` (adds `⚠ vynucený prompt` for `forceSystemPrompt`).
+      Whether `APPEND_SYSTEM.md` was added is always shown (`— nepřítomno` when
+      not); files that were never loaded are not listed.
+      See [`docs/system-prompt-tree.md`](docs/system-prompt-tree.md).
   - `Skills`: pi-plugin-dev skill HUD (structured `<pane>.skills.json` sidecar written by the TS pi-sidebar extension):
     - Active skill target: `🎯 <skill-name>`
     - Counters: `<N> refs · elapsed · <N> turns`

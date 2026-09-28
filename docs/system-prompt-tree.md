@@ -7,8 +7,11 @@ request: the base instructions, the `AGENTS.md` chain, and whether an
 The panel has two providers and names the one in use:
 
 * **replay** — parses the section set out of the Pi session transcript. Always
-  available, no extension needed, but section sources are inferred and a forced
-  prompt is invisible;
+  available, no extension needed. It names context files and `AGENTS.md`
+  chains exactly, attributes a CLI append by content (`agents/*.md` plus the
+  two `APPEND_SYSTEM.md` locations), previews inline text and reports drift;
+  what it cannot see is a *forced* prompt (`forceSystemPrompt`), and it only
+  refreshes when the transcript grows;
 * **exact** — reads the `.prompt.json` sidecar the TypeScript `pi-sidebar`
   extension captures on `before_agent_start`, i.e. the prompt the engine has
   resolved for the request it is about to send. Real paths, forced prompts and
@@ -144,10 +147,18 @@ data can never outlive the session that produced it.
 
 If row 5 reads `— nepřítomno`, the engine really did send no `addendum`: there
 is no `APPEND_SYSTEM.md` in either discovery location *and* nothing passed
-`--append-system-prompt`. A launch alias that passes the flag itself (e.g.
-`pi --append-system-prompt ~/.pi/agent/agents/cim-budu.md`) appears as
-`← inline` with its preview — the engine exposes only the text, never the path,
-so no provider can name that file.
+`--append-system-prompt`.
+
+A launch alias that passes the flag itself (e.g.
+`pi --append-system-prompt ~/.pi/agent/agents/cim-budu.md`) is invisible to
+discovery, so both providers fall back to **content matching**: the `addendum`
+body is compared with every `*.md` under `~/.pi/agent/agents/` (sorted), after
+the two canonical `APPEND_SYSTEM.md` locations. A file only wins when its text
+*is* the body, so the row reads `← /…/agents/cim-budu.md` — evidence, not a
+guess. The engine still never reveals the path through `systemPromptOptions`
+(`appendSystemPromptSourcePaths` stays internal), so the *exact* provider
+necessarily reports such an append as `inline`; the preview and the replay
+match are what name it.
 
 | Field | Meaning |
 | --- | --- |
@@ -171,6 +182,11 @@ without the extension.
 internal, so a file passed with `--append-system-prompt <path>` is reported as
 `inline` by necessity. The preview names it — `← inline · "CIM BUDU…"` instead of
 an anonymous inline flag.
+
+The exact provider is strictly optional: the replay covers section sources,
+append attribution and previews on its own. It exists for the two things the
+transcript cannot express — `forceSystemPrompt` and a per-turn snapshot that
+reflects handler changes before the next message is written.
 
 ## 5. What the Status face renders
 
