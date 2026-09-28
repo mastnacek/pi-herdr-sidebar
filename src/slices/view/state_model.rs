@@ -51,6 +51,9 @@ impl Tab {
 
 pub struct SidebarState {
     pub active_tab: Tab,
+    /// Plugin state directory from the injected environment, when herdr set it.
+    /// `tab_state` falls back to the pane-state directory without it.
+    pub state_dir: Option<PathBuf>,
     pub scroll: u16,
     pub snapshot_path: Option<PathBuf>,
     pub snapshot: Option<PaneSnapshot>,

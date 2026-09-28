@@ -12,6 +12,7 @@ pub mod spai_ui;
 pub mod state;
 pub mod state_model;
 pub mod state_refresh;
+pub mod tab_state;
 pub mod state_resolver;
 pub mod status;
 pub mod ui;

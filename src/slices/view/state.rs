@@ -9,6 +9,7 @@ use super::state_refresh::{
     refresh_spai,
 };
 use super::state_resolver::resolve_pane_binding;
+use super::tab_state;
 
 impl SidebarState {
     pub fn new(target_snapshot: Option<PathBuf>) -> Self {
@@ -17,9 +18,13 @@ impl SidebarState {
         let explicit = target_snapshot.is_some();
         let own_pane_id = ctx.pane_id.clone();
         let target_tab_id = ctx.tab_id.clone();
+        let state_dir = ctx.state_dir.clone();
 
         let mut state = Self {
-            active_tab: Tab::Zen,
+            // Boot on the face that was last used, so a recreated pane does not
+            // drop a Status monitor back onto Zen.
+            active_tab: tab_state::load(state_dir.as_deref()),
+            state_dir,
             scroll: 0,
             snapshot_path: target_snapshot,
             snapshot: None,
@@ -94,6 +99,8 @@ impl SidebarState {
         }
         self.active_tab = tab;
         self.scroll = 0;
+        // Remember it: the pane is recreated on every rebuild/reload.
+        tab_state::save(self.state_dir.as_deref(), tab);
 
         if let Some(path) = &self.snapshot_path {
             let tab_id = match tab {
