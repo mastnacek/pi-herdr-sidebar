@@ -54,7 +54,7 @@ fixed order. `preamble` is the only raw section; every other one reaches the
 model wrapped as `<name>…</name>`.
 
 | # | Section | Carries | Sourced from |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | `preamble` | base instructions | built-in text, or `SYSTEM.md` / `--system-prompt` (replaces it) |
 | 2 | `tools` | one-line snippet per selected tool | tool registry |
 | 3 | `rules` | tool + prompt guidelines | tool snippets, extension guidelines |
@@ -133,8 +133,24 @@ TypeScript `pi-sidebar` extension. On `before_agent_start` the engine hands over
 the resolved `systemPromptOptions` it renders the request from, and the
 extension captures it into `<pane>.prompt.json` beside the pane snapshot:
 
+It is written straight from the event handler, keyed by the **pi agent's pane
+id** — so it works with the extension's own pane closed, which is the normal
+setup when this native sidebar is the only pane in the tab. Neither side needs
+the other's pane to exist: this plugin derives the file path from the pane id
+alone (`snapshot_path_for_pane`), and `pi-sidebar` publishes regardless of its
+pane state. A `live: false` marker is written on `/reload` and at session end,
+and a dead or newer-version file is ignored in favour of the replay, so exact
+data can never outlive the session that produced it.
+
+If row 5 reads `— nepřítomno`, the engine really did send no `addendum`: there
+is no `APPEND_SYSTEM.md` in either discovery location *and* nothing passed
+`--append-system-prompt`. A launch alias that passes the flag itself (e.g.
+`pi --append-system-prompt ~/.pi/agent/agents/cim-budu.md`) appears as
+`← inline` with its preview — the engine exposes only the text, never the path,
+so no provider can name that file.
+
 | Field | Meaning |
-|---|---|
+| --- | --- |
 | `capturedAt` | when the engine resolved this prompt |
 | `sections` / `sectionChars` | the section set and per-section sizes, measured on the rendered prompt |
 | `contextFiles[{path, chars}]` | every loaded `AGENTS.md`, with its real path |

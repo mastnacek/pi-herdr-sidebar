@@ -276,7 +276,10 @@ fn an_inline_addendum_shows_its_preview() {
         .join("\n");
 
     assert!(text.contains("← inline"), "{text}");
-    assert!(text.contains("CIM BUDU"), "the preview names the append: {text}");
+    assert!(
+        text.contains("CIM BUDU"),
+        "the preview names the append: {text}"
+    );
     assert!(text.contains("3.9k zn"), "{text}");
 }
 
