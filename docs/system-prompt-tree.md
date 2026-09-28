@@ -131,19 +131,39 @@ silent.
 
 ### Exact loading signal (`.prompt.json` sidecar)
 
-For per-turn precision the Status face prefers a sidecar published by the
-TypeScript `pi-sidebar` extension. On `before_agent_start` the engine hands over
-the resolved `systemPromptOptions` it renders the request from, and the
-extension captures it into `<pane>.prompt.json` beside the pane snapshot:
+For per-turn precision the Status face prefers a sidecar published from
+`before_agent_start` by an in-process extension (only an in-process extension
+can see the prompt the engine resolved). **This repo ships one**:
+[`extensions/prompt-sidecar.ts`](../extensions/prompt-sidecar.ts) — no imports
+beyond node builtins, no dependency on any other plugin or package.
+
+```bash
+cp extensions/prompt-sidecar.ts ~/.pi/agent/extensions/   # then /reload in pi
+```
+
+It registers three handlers and otherwise stays out of the way:
+
+| Event | What it does |
+| --- | --- |
+| `before_agent_start` | captures `systemPromptOptions` + the rendered prompt → writes `<pane>.prompt.json` |
+| `session_start` | writes a `live: false` marker, so a reload cannot leave a previous session's prompt looking current |
+| `session_shutdown` | same dead marker |
+
+A `pi-sidebar`-style sidecar written by any other extension uses the identical
+format and is accepted just as well — the reader never cares who published it.
 
 It is written straight from the event handler, keyed by the **pi agent's pane
-id** — so it works with the extension's own pane closed, which is the normal
-setup when this native sidebar is the only pane in the tab. Neither side needs
-the other's pane to exist: this plugin derives the file path from the pane id
-alone (`snapshot_path_for_pane`), and `pi-sidebar` publishes regardless of its
-pane state. A `live: false` marker is written on `/reload` and at session end,
-and a dead or newer-version file is ignored in favour of the replay, so exact
+id** — so it works with no other pane open, which is the normal setup when this
+native sidebar is the only pane in the tab. Neither side needs the other's pane
+to exist: this plugin derives the file path from the pane id alone
+(`snapshot_path_for_pane`), and the extension publishes regardless of pane
+state. A dead or newer-version file is ignored in favour of the replay, so exact
 data can never outlive the session that produced it.
+
+Within the extension, `resolveSections()` and `attribute()` are pure and
+exported, so the risky parts are checkable without a pi session (see the
+`scripts/` note in this file's history) — the write itself is plain atomic
+fs code.
 
 If row 5 reads `— nepřítomno`, the engine really did send no `addendum`: there
 is no `APPEND_SYSTEM.md` in either discovery location *and* nothing passed
@@ -173,9 +193,10 @@ match are what name it.
 `systemPromptOptions.sections` only carries *extension* sections, so the
 publisher derives presence with the same rules `buildSystemPromptSections`
 applies and measures sizes on the rendered prompt (each non-`preamble` section
-is wrapped as `<name>…</name>`). A dead (`live: false`) or newer-version sidecar
-is ignored and the transcript replay takes over, so the panel works with or
-without the extension.
+is wrapped as `<name>…</name>`; the wrapper and its newlines are excluded, so
+both providers report the same content size). A dead (`live: false`) or
+newer-version sidecar is ignored and the transcript replay takes over, so the
+panel works with or without the extension.
 
 `preview` exists because the engine exposes only the *text* of an append
 (`systemPromptOptions.appendSystemPrompt`); `appendSystemPromptSourcePaths` stays

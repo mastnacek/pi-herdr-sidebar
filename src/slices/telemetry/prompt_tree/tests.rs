@@ -367,4 +367,3 @@ fn cli_prompt_files_under_agents_are_attributed_by_content() {
 
     std::fs::remove_dir_all(&home).ok();
 }
-

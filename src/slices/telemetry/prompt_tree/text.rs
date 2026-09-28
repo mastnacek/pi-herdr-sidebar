@@ -26,7 +26,10 @@ pub(super) fn preview(text: &str, name: &str) -> String {
         .lines()
         .map(str::trim)
         .find(|l| {
-            !l.is_empty() && *l != open && *l != "Project-specific instructions and guidelines:"
+            !l.is_empty()
+                && *l != open
+                && *l != "---"
+                && *l != "Project-specific instructions and guidelines:"
         })
         .unwrap_or("");
     let mut out: String = line.chars().take(64).collect();

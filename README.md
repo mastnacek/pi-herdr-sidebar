@@ -33,8 +33,11 @@ over an in-process event bus, not to disk) and for legacy renderer mode.
       `replay` (session transcript, always available; names the section set,
       every loaded `AGENTS.md`, a CLI append attributed by content against
       `~/.pi/agent/agents/*.md`, previews and on-disk drift) and the optional
-      `exact` sidecar the TS `pi-sidebar` extension publishes from
-      `before_agent_start` (adds `⚠ vynucený prompt` for `forceSystemPrompt`).
+      `exact` sidecar published from `before_agent_start` (adds
+      `⚠ vynucený prompt` for `forceSystemPrompt`). This repo ships that
+      publisher: [`extensions/prompt-sidecar.ts`](extensions/prompt-sidecar.ts)
+      — node builtins only, no plugin dependency; copy it to
+      `~/.pi/agent/extensions/` and `/reload`.
       Whether `APPEND_SYSTEM.md` was added is always shown (`— nepřítomno` when
       not); files that were never loaded are not listed.
       See [`docs/system-prompt-tree.md`](docs/system-prompt-tree.md).
