@@ -242,15 +242,20 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
                     if msg.role.as_deref() == Some("user") {
                         t.turns_count += 1;
                     }
-                    if msg.role.as_deref() == Some("tool_result") {
-                        t.tool_calls_count += 1;
-                        if msg.is_error.unwrap_or(false) {
-                            t.tool_errors_count += 1;
-                        }
+                    // pi writes camelCase (`toolResult`, `toolCall`); matching
+                    // only the snake_case spelling silently counted zero of
+                    // both, which is how the banner read `0 nástrojů` forever.
+                    if matches!(msg.role.as_deref(), Some("toolResult" | "tool_result"))
+                        && msg.is_error.unwrap_or(false)
+                    {
+                        t.tool_errors_count += 1;
                     }
                     if let Some(serde_json::Value::Array(blocks)) = msg.content.as_ref() {
                         for b in blocks {
-                            if b.get("type").and_then(|v| v.as_str()) == Some("tool_call") {
+                            let kind = b.get("type").and_then(|v| v.as_str());
+                            if matches!(kind, Some("toolCall" | "tool_call")) {
+                                // Count the invocation, not the result: one call
+                                // with a result would otherwise count twice.
                                 t.tool_calls_count += 1;
                             }
                         }
@@ -373,3 +378,6 @@ pub fn fmt_cost(v: f64) -> String {
         format!("${:.2}", v)
     }
 }
+
+#[cfg(test)]
+mod tests;
