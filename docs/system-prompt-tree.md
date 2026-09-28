@@ -161,9 +161,9 @@ state. A dead or newer-version file is ignored in favour of the replay, so exact
 data can never outlive the session that produced it.
 
 Within the extension, `resolveSections()` and `attribute()` are pure and
-exported, so the risky parts are checkable without a pi session (see the
-`scripts/` note in this file's history) — the write itself is plain atomic
-fs code.
+exported, so the risky parts (section set, sizes, content attribution) can be
+exercised from a plain node script without a pi session; the write itself is
+atomic fs code and the format is covered by the Rust reader tests.
 
 If row 5 reads `— nepřítomno`, the engine really did send no `addendum`: there
 is no `APPEND_SYSTEM.md` in either discovery location *and* nothing passed
