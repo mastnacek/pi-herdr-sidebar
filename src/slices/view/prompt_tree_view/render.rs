@@ -156,7 +156,11 @@ pub(super) fn child_lines(
 /// `⚠ ~/.pi/agent/APPEND_SYSTEM.md  na disku, ale engine addendum neodeslal`
 /// under a missing addendum row.
 pub(super) fn unloaded_append_line(glyph: &str, path: &str) -> Line<'static> {
-    let indent = if glyph == "└─" { "     " } else { "│    " };
+    let indent = if glyph == "└─" {
+        "     "
+    } else {
+        "│    "
+    };
     let mut line = child(indent, format!("⚠ {}", shorten(path)), Color::Red);
     line.spans.push(Span::styled(
         "  na disku, ale engine addendum neodeslal — /reload",
