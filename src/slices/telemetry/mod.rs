@@ -7,6 +7,7 @@ pub mod git_live;
 pub mod mcp_live;
 pub mod model_catalog;
 pub mod openrouter_live;
+pub mod prompt_sidecar;
 pub mod prompt_tree;
 pub mod quota_live;
 pub mod session_finder;

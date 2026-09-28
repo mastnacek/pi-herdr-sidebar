@@ -230,12 +230,18 @@ fn loaded_at_tracks_the_newest_system_message() {
 
 #[test]
 fn iso_timestamps_become_epoch_ms() {
-    assert_eq!(super::sources::iso_to_epoch_ms("1970-01-01T00:00:00.000Z"), 0);
+    assert_eq!(
+        super::sources::iso_to_epoch_ms("1970-01-01T00:00:00.000Z"),
+        0
+    );
     assert_eq!(
         super::sources::iso_to_epoch_ms("2026-09-28T10:19:22Z"),
         1_790_590_762_000
     );
-    assert_eq!(super::sources::iso_to_epoch_ms("2026-09-28T10:19:22.950Z"), 1_790_590_762_950);
+    assert_eq!(
+        super::sources::iso_to_epoch_ms("2026-09-28T10:19:22.950Z"),
+        1_790_590_762_950
+    );
     assert_eq!(super::sources::iso_to_epoch_ms("garbage"), 0);
     assert_eq!(super::sources::iso_to_epoch_ms(""), 0);
 }

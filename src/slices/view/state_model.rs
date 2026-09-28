@@ -3,9 +3,9 @@ use std::time::SystemTime;
 
 use crate::shared::{HerdrClient, HerdrPaneInfo, PaneSnapshot};
 use crate::slices::telemetry::{
-    mcp_live::McpTelemetry, openrouter_live::OpenRouterCreditTelemetry, quota_live::QuotaTelemetry,
-    skills::SkillSnapshotFile, spai_live::SpaiTelemetry, weather_live::WeatherTelemetry,
-    LiveTelemetry,
+    mcp_live::McpTelemetry, openrouter_live::OpenRouterCreditTelemetry,
+    prompt_sidecar::PromptSidecar, quota_live::QuotaTelemetry, skills::SkillSnapshotFile,
+    spai_live::SpaiTelemetry, weather_live::WeatherTelemetry, LiveTelemetry,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +76,9 @@ pub struct SidebarState {
     pub live_session_mtime: Option<SystemTime>,
     pub skills: Option<SkillSnapshotFile>,
     pub skills_mtime: Option<SystemTime>,
+    /// Exact prompt provenance captured in `before_agent_start` (TS extension).
+    pub prompt_sidecar: Option<PromptSidecar>,
+    pub prompt_sidecar_mtime: Option<SystemTime>,
     pub mcp: Option<McpTelemetry>,
     pub mcp_mtime: Option<SystemTime>,
     pub last_mcp_calls_count: u64,

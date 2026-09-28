@@ -5,7 +5,8 @@ use crate::shared::{HerdrClient, PaneSnapshot, PluginContext};
 
 pub use super::state_model::{SidebarState, Tab};
 use super::state_refresh::{
-    refresh_mcp, refresh_openrouter, refresh_quota, refresh_skills, refresh_spai,
+    refresh_mcp, refresh_openrouter, refresh_prompt_sidecar, refresh_quota, refresh_skills,
+    refresh_spai,
 };
 use super::state_resolver::resolve_pane_binding;
 
@@ -44,6 +45,8 @@ impl SidebarState {
             live_session_mtime: None,
             skills: None,
             skills_mtime: None,
+            prompt_sidecar: None,
+            prompt_sidecar_mtime: None,
             mcp: None,
             mcp_mtime: None,
             last_mcp_calls_count: 0,
@@ -203,6 +206,12 @@ impl SidebarState {
             self.live.as_ref(),
             &mut self.mcp_mtime,
             &mut self.mcp,
+            force,
+        );
+        refresh_prompt_sidecar(
+            self.snapshot_path.as_deref(),
+            &mut self.prompt_sidecar_mtime,
+            &mut self.prompt_sidecar,
             force,
         );
 

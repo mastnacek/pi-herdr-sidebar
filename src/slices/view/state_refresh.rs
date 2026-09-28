@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::SystemTime;
 
+use crate::slices::telemetry::prompt_sidecar::{sidecar_path, PromptSidecar};
 use crate::slices::telemetry::{
     mcp_live::McpTelemetry, openrouter_live::OpenRouterCreditTelemetry, quota_live::QuotaTelemetry,
     skills::SkillSnapshotFile, spai_live::SpaiTelemetry, LiveTelemetry,
@@ -70,6 +71,32 @@ pub fn refresh_mcp(
         }
     }
     *mcp = None;
+}
+
+/// Read `<pane>.prompt.json` — the exact prompt provenance the TS extension
+/// captured in `before_agent_start`. Unlike the skills face this needs no
+/// session log, and a dead sidecar reads as `None` so the Status face falls
+/// back to the transcript replay.
+pub fn refresh_prompt_sidecar(
+    snapshot_path: Option<&Path>,
+    mtime: &mut Option<SystemTime>,
+    sidecar: &mut Option<PromptSidecar>,
+    force: bool,
+) {
+    let Some(path) = snapshot_path.map(sidecar_path) else {
+        *sidecar = None;
+        return;
+    };
+    let Ok(meta) = std::fs::metadata(&path) else {
+        *sidecar = None;
+        return;
+    };
+    let modified = meta.modified().ok();
+    if !force && sidecar.is_some() && *mtime == modified {
+        return;
+    }
+    *mtime = modified;
+    *sidecar = PromptSidecar::read_from_file(&path);
 }
 
 pub fn refresh_spai(

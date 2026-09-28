@@ -20,8 +20,12 @@ pub fn render_live_status(
     lines.push(Line::raw(""));
 
     // 0. System prompt provenance — which AGENTS.md / APPEND_SYSTEM.md the
-    // model actually received (replayed from the session transcript).
-    lines.extend(super::prompt_tree_view::prompt_tree_lines(t));
+    // model actually received. Prefers the TS extension's `before_agent_start`
+    // sidecar (exact) and falls back to the session-transcript replay.
+    lines.extend(super::prompt_tree_view::prompt_tree_lines(
+        t,
+        state.prompt_sidecar.as_ref(),
+    ));
 
     // 1. Git Status Section
     if let Some(git) = &t.git {

@@ -125,6 +125,14 @@ pub struct PromptTree {
     pub total_chars: usize,
 }
 
+/// Drift of a file loaded at `loaded_at` (an ISO-8601 timestamp).
+///
+/// Shared with the prompt sidecar, which knows the capture time from the engine
+/// instead of from the transcript.
+pub fn source_state(path: &str, loaded_at: &str) -> SourceState {
+    sources::file_state(path, sources::iso_to_epoch_ms(loaded_at))
+}
+
 /// Parse a session JSONL body into the replayed system-prompt tree.
 ///
 /// Returns `None` when the transcript carries no system message yet (a session

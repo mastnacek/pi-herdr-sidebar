@@ -4,10 +4,20 @@ How the sidebar shows what the model *actually* received at the top of the
 request: the base instructions, the `AGENTS.md` chain, and whether an
 `APPEND_SYSTEM.md` addendum made it in.
 
-Everything is replayed from the Pi session transcript. No file is
-re-discovered to decide what was loaded — discovery is only used to *name* the
-source of a section. That keeps the panel honest when a project is untrusted,
-a worktree shadows a context file, or `SYSTEM.md` replaced the default prompt.
+The panel has two providers and names the one in use:
+
+* **replay** — parses the section set out of the Pi session transcript. Always
+  available, no extension needed, but section sources are inferred and a forced
+  prompt is invisible;
+* **exact** — reads the `.prompt.json` sidecar the TypeScript `pi-sidebar`
+  extension captures on `before_agent_start`, i.e. the prompt the engine has
+  resolved for the request it is about to send. Real paths, forced prompts and
+  CLI appends included.
+
+Either way no file is re-discovered to decide what was loaded — discovery is
+only used to *name* the source of a section. That keeps the panel honest when a
+project is untrusted, a worktree shadows a context file, or `SYSTEM.md` replaced
+the default prompt.
 
 ---
 
@@ -114,16 +124,60 @@ loaded, so the panel uses two signals instead:
 
 Nothing is compared for files that were not loaded, so an untrusted project
 file, an `AGENTS.md` in an unrelated ancestor, or a rejected candidate stays
-silent. For an exact per-turn loading signal (including forced prompts and CLI
-appends that never touch a file), an in-process extension can observe
-`before_agent_start.systemPromptOptions` — `contextFiles[{path, content}]`,
-`appendSystemPrompt`, `customPrompt`, `selectedTools` — and publish it as a
-sidecar the same way `pi-plugin-dev` publishes skill state.
+silent.
+
+### Exact loading signal (`.prompt.json` sidecar)
+
+For per-turn precision the Status face prefers a sidecar published by the
+TypeScript `pi-sidebar` extension. On `before_agent_start` the engine hands over
+the resolved `systemPromptOptions` it renders the request from, and the
+extension captures it into `<pane>.prompt.json` beside the pane snapshot:
+
+| Field | Meaning |
+|---|---|
+| `capturedAt` | when the engine resolved this prompt |
+| `sections` / `sectionChars` | the section set and per-section sizes, measured on the rendered prompt |
+| `contextFiles[{path, chars}]` | every loaded `AGENTS.md`, with its real path |
+| `appendSystemPrompt` / `customPrompt` | `{chars, source: "file" (with `path`) or `source: "inline"`}` |
+| `forced` | `forceSystemPrompt` was in play |
+| `tools` / `skills` | the resolved loadouts |
+| `systemPromptChars` | length of the rendered prompt |
+
+`systemPromptOptions.sections` only carries *extension* sections, so the
+publisher derives presence with the same rules `buildSystemPromptSections`
+applies and measures sizes on the rendered prompt (each non-`preamble` section
+is wrapped as `<name>…</name>`). A dead (`live: false`) or newer-version sidecar
+is ignored and the transcript replay takes over, so the panel works with or
+without the extension.
 
 ## 5. What the Status face renders
 
+The provider is named in the header: `exact · before_agent_start` (sidecar) or
+`replay ze session logu` (transcript). Both render the same frame.
+
+Exact mode, with an inline `--append-system-prompt` addendum — the case no file
+can explain:
+
 ```text
-🧠 Systémový prompt (pi replay · 7 sekcí · 18k zn · načteno 10:19:22)
+🧠 Systémový prompt (exact · before_agent_start · 8 sekcí · 1.4k zn · načteno 10:42:20)
+├─ 1 preamble            169 zn
+├─ 2 tools               90 zn
+│    · 12 nástrojů: read, bash, edit, write, bg_wait +7
+├─ 3 rules               81 zn
+├─ 4 docs                120 zn
+├─ 5 addendum            138 zn
+│    ← inline (--append-system-prompt / složené zdroje) (136 zn)
+├─ 6 project_context     584 zn
+│    └─ D:/…/pi-herdr-sidebar/AGENTS.md (471 zn)
+├─ 7 skills              75 zn
+│    · 3 skillů (111 zn): herdr-plugin-dev, spai-tasks, pi-lens-lsp-navigation
+└─ 8 cwd                 51 zn
+```
+
+Replay mode, same session without the extension:
+
+```text
+🧠 Systémový prompt (replay ze session logu · 7 sekcí · 18k zn · načteno 10:19:22)
 ├─ 1 preamble            169 zn  You are an expert coding assistant operating…
 ├─ 2 tools               8.3k zn  - read: Read file contents
 │    · 85 nástrojů: read, bash, edit, write, bg_wait +80
@@ -139,7 +193,10 @@ sidecar the same way `pi-plugin-dev` publishes skill state.
 - the documented frame is **always** complete, so an absent addendum is as
   visible as a present one (`— nepřítomno`), and the numbers state the
   sequence;
-- `zn` is the section's character count in the transcript;
+- `zn` is the section's character count (transcript for replay, measured on the
+  rendered prompt for exact);
+- `⚠ vynucený prompt` in the header means `forceSystemPrompt` replaced the whole
+  prompt — only the exact provider can see that;
 - `⟳N` marks a section patched by a later system message; `· odstraněno
   pozdějším patchem` marks a section a later message removed with `null`;
 - `[ext]` marks a section Pi did not build (extension-injected);
@@ -148,7 +205,7 @@ sidecar the same way `pi-plugin-dev` publishes skill state.
   drifted one carries `⚠ změněno na disku — /reload` (or `⚠ soubor zmizel`);
   files that were not loaded get no row at all;
 - the replayed tool loadout sits under `tools` (`(+N −M)` only when more than
-  one message declared tools);
+  one message declared tools); skill names come from the exact provider only;
 - the header shows the section count, total characters, the loading moment and
   the number of patching system messages.
 
