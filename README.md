@@ -240,8 +240,8 @@ pi-sidebar/
    > herdr plugin action invoke pi.herdr-sidebar.toggle-win
    > ```
    >
-   > Panes also respawn by themselves through the plugin's `ensure` events on
-   > pane/tab/workspace focus.
+   > The sidebar is manual-only since the `ensure` hooks were removed, so a
+   > closed pane stays closed — reopen it with the `toggle` action above.
 
 2. Link into Herdr:
    ```bash

@@ -150,52 +150,9 @@ contexts = ["workspace"]
 command = ["target/release/pi_sidebar.exe", "switch-tab"]
 platforms = ["windows"]
 
-[[events]]
-on = "workspace.created"
-platforms = ["linux", "macos"]
-command = ["target/release/pi_sidebar", "ensure"]
-
-[[events]]
-on = "workspace.created"
-platforms = ["windows"]
-command = ["target/release/pi_sidebar.exe", "ensure"]
-
-[[events]]
-on = "tab.focused"
-platforms = ["linux", "macos"]
-command = ["target/release/pi_sidebar", "ensure"]
-
-[[events]]
-on = "tab.focused"
-platforms = ["windows"]
-command = ["target/release/pi_sidebar.exe", "ensure"]
-
-[[events]]
-on = "workspace.focused"
-platforms = ["linux", "macos"]
-command = ["target/release/pi_sidebar", "ensure"]
-
-[[events]]
-on = "workspace.focused"
-platforms = ["windows"]
-command = ["target/release/pi_sidebar.exe", "ensure"]
-
-[[events]]
-on = "tab.created"
-platforms = ["linux", "macos"]
-command = ["target/release/pi_sidebar", "ensure"]
-
-[[events]]
-on = "tab.created"
-platforms = ["windows"]
-command = ["target/release/pi_sidebar.exe", "ensure"]
-
-[[events]]
-on = "pane.focused"
-platforms = ["linux", "macos"]
-command = ["target/release/pi_sidebar", "ensure"]
-
-[[events]]
-on = "pane.focused"
-platforms = ["windows"]
-command = ["target/release/pi_sidebar.exe", "ensure"]
+# Sidebar is MANUAL-ONLY: it opens exclusively through the `toggle` action, so
+# bind that to a key in Herdr's config.toml. The [[events]] blocks that used to
+# live here ran `ensure` on workspace/tab/pane create+focus, which auto-split a
+# sidebar pane into every new tab and made layouts jump around whenever a pane
+# appeared. Re-adding them restores the automatic behaviour; `ensure` itself is
+# kept because it stays reachable as a manual subcommand.
