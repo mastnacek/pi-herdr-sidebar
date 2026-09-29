@@ -15,19 +15,34 @@ pub struct HerdrPaneInfo {
     pub terminal_title: Option<String>,
     #[serde(rename = "terminal_title_stripped")]
     pub terminal_title_stripped: Option<String>,
-    #[serde(rename = "agentSession")]
+    /// Injected key is `agent_session` (herdr 0.9.1 pane list output);
+    /// `agentSession` kept as an alias for older envelopes.
+    #[serde(alias = "agentSession")]
     pub agent_session: Option<serde_json::Value>,
 }
 
 impl HerdrPaneInfo {
     /// Extract the pi session id from `agent_session` (shape:
-    /// `{"agent":"pi","kind":"id","value":"01a0cf71-..."}`).
+    /// `{"agent":"pi","kind":"id","value":"01a0cf71-..."}`). Newer Herdr
+    /// builds send `kind:"path"` with a full session-log path as `value`;
+    /// reduce that to its file stem so callers can match it against
+    /// session *file names* with `contains()`.
     pub fn session_id(&self) -> Option<String> {
-        self.agent_session
+        let value = self
+            .agent_session
             .as_ref()
             .and_then(|s| s.get("value"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .and_then(|v| v.as_str())?;
+        let stem = value
+            .rsplit('/')
+            .next()
+            .unwrap_or(value)
+            .trim_end_matches(".jsonl");
+        if stem.len() >= 8 {
+            Some(stem.to_string())
+        } else {
+            None
+        }
     }
 }
 

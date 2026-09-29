@@ -16,3 +16,18 @@ ansi-to-tui = "7.0"
 # Never needed on Windows builds, where the cfg(unix) block is compiled out.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Disk hygiene: this crate is built constantly (dev loop + pane rebuilds).
+# Debug info and incremental caches were ballooning target/ to 70+ GB and
+# every killed build leaked a multi-GB temp link archive. Slim profiles:
+# release stays small and self-contained, dev/test builds stay lean.
+[profile.release]
+strip = true
+
+[profile.dev]
+debug = false
+incremental = false
+
+[profile.test]
+debug = false
+incremental = false
