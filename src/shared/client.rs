@@ -61,9 +61,32 @@ pub struct HerdrClient {
     pub bin_path: String,
 }
 
+/// Can this binary actually be spawned? (~30 ms, paid once per process.)
+fn runnable(bin: &str) -> bool {
+    Command::new(bin)
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 impl HerdrClient {
     pub fn new() -> Self {
-        let bin_path = env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string());
+        let injected = env::var("HERDR_BIN_PATH").unwrap_or_else(|_| "herdr".to_string());
+        // A Herdr update leaves long-lived sessions and panes holding the
+        // previous release's path in HERDR_BIN_PATH. That exe can become
+        // unspawnable ("Permission denied"), and every call through it then
+        // yields nothing — the sidebar went blind with no error anywhere.
+        // Probe once, fall back to `herdr` from PATH.
+        let bin_path = if runnable(&injected) {
+            injected
+        } else if runnable("herdr") {
+            "herdr".to_string()
+        } else {
+            injected
+        };
         Self { bin_path }
     }
 

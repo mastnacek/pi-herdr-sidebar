@@ -47,31 +47,37 @@ fn main() -> io::Result<()> {
         "toggle" => {
             if let Err(e) = slices::actions::run_toggle() {
                 eprintln!("Error toggling sidebar: {}", e);
+                std::process::exit(1);
             }
         }
         "popup-action" => {
             if let Err(e) = slices::actions::run_popup() {
                 eprintln!("Error opening popup: {}", e);
+                std::process::exit(1);
             }
         }
         "notes-popup-action" => {
             if let Err(e) = slices::actions::run_notes_popup() {
                 eprintln!("Error opening notes modal: {}", e);
+                std::process::exit(1);
             }
         }
         "usage-popup-action" => {
             if let Err(e) = slices::actions::run_usage_popup() {
                 eprintln!("Error opening usage overview: {}", e);
+                std::process::exit(1);
             }
         }
         "switch-tab" => {
             if let Err(e) = slices::actions::run_switch_tab() {
                 eprintln!("Error switching tab: {}", e);
+                std::process::exit(1);
             }
         }
         "ensure" => {
             if let Err(e) = slices::actions::run_ensure() {
                 eprintln!("Error ensuring sidebar: {}", e);
+                std::process::exit(1);
             }
         }
         _ => {

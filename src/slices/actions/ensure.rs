@@ -81,10 +81,10 @@ pub fn set_snoozed(tab_id: &str, snoozed: bool) {
 
 /// Pick a pane in the event's tab to anchor the split against, preferring the
 /// pane that fired the event, then a pi agent pane, then any pane in the tab.
-/// Returns None when the tab has no panes yet — opening without an anchor
-/// lands in the currently active tab, so callers must wait for the next
-/// pane.focused event instead.
-fn anchor_pane(client: &HerdrClient, ctx: &PluginContext) -> Option<String> {
+/// Returns `Err` with the observed tab id and pane list when the tab has no
+/// panes yet — opening without an anchor lands in the currently active tab, so
+/// callers must wait for the next pane.focused event instead.
+fn anchor_pane(client: &HerdrClient, ctx: &PluginContext) -> Result<String, String> {
     let panes = client.list_panes();
     let in_tab = |p: &crate::shared::HerdrPaneInfo| {
         ctx.tab_id
@@ -92,21 +92,37 @@ fn anchor_pane(client: &HerdrClient, ctx: &PluginContext) -> Option<String> {
             .is_none_or(|tid| p.tab_id.as_deref() == Some(tid))
     };
 
-    // 1. The pane the event fired for.
-    if let Some(pid) = ctx.pane_id.as_deref() {
-        if let Some(p) = panes.iter().find(|p| p.pane_id == pid && in_tab(p)) {
+    let pick = || {
+        // 1. The pane the event fired for.
+        if let Some(pid) = ctx.pane_id.as_deref() {
+            if let Some(p) = panes.iter().find(|p| p.pane_id == pid && in_tab(p)) {
+                return Some(p.pane_id.clone());
+            }
+        }
+        // 2. A pi agent pane in the tab.
+        if let Some(p) = panes
+            .iter()
+            .find(|p| in_tab(p) && p.agent.as_deref() == Some("pi"))
+        {
             return Some(p.pane_id.clone());
         }
-    }
-    // 2. A pi agent pane in the tab.
-    if let Some(p) = panes
-        .iter()
-        .find(|p| in_tab(p) && p.agent.as_deref() == Some("pi"))
-    {
-        return Some(p.pane_id.clone());
-    }
-    // 3. Any pane in the tab.
-    panes.iter().find(|p| in_tab(p)).map(|p| p.pane_id.clone())
+        // 3. Any pane in the tab.
+        panes.iter().find(|p| in_tab(p)).map(|p| p.pane_id.clone())
+    };
+
+    pick().ok_or_else(|| {
+        format!(
+            "no pane to anchor the sidebar to in this tab (tab_id={:?}, pane_id={:?}, {} panes seen: {})",
+            ctx.tab_id,
+            ctx.pane_id,
+            panes.len(),
+            panes
+                .iter()
+                .map(|p| format!("{}/{}", p.tab_id.as_deref().unwrap_or("?"), p.pane_id))
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    })
 }
 
 /// Event handler for tab.created / tab.focused / pane.focused /
@@ -125,7 +141,7 @@ pub fn run_ensure() -> Result<(), String> {
     // Anchor required: without a pane in this tab, `plugin pane open` would
     // land in whatever tab is active right now. A later pane.focused event
     // gives us another chance.
-    let Some(anchor) = anchor_pane(&client, &ctx) else {
+    let Ok(anchor) = anchor_pane(&client, &ctx) else {
         return Ok(());
     };
 
@@ -162,8 +178,7 @@ pub fn run_toggle() -> Result<(), String> {
         return Ok(());
     }
 
-    let anchor = anchor_pane(&client, &ctx)
-        .ok_or_else(|| "no pane to anchor the sidebar to in this tab".to_string())?;
+    let anchor = anchor_pane(&client, &ctx)?;
     client.open_plugin_pane(entrypoint(), Some(&anchor))?;
     if let Some(tid) = ctx.tab_id.as_deref() {
         set_snoozed(tid, false);
