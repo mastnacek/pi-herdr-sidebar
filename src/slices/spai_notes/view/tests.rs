@@ -5,6 +5,7 @@
 //! Prints the rendered cells of the creation dialog with the `@` picker open,
 //! which is the surface that used to trigger a full rescan of every project.
 use super::*;
+use crate::slices::spai_notes::discovery::SpaiProjectSummary;
 use crate::slices::spai_notes::state::SpaiNotesState;
 use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
 use std::path::PathBuf;
@@ -53,5 +54,57 @@ fn preview_project_picker() {
         state.on_dialog_char_typed(c);
     }
 
+    println!("== split pane (90x22) ==");
     println!("{}", render(&state, 90, 22));
+    println!("== notes modal (130x40) ==");
+    println!("{}", render(&state, 130, 40));
+}
+
+/// Deterministic project list — no disk, no project cache involved.
+fn state_with_projects(count: usize) -> SpaiNotesState {
+    let mut state = SpaiNotesState::new(None);
+    state.projects = (0..count)
+        .map(|i| {
+            SpaiProjectSummary::new(
+                format!("proj-{i:02}"),
+                PathBuf::from(format!("D:/tmp/proj-{i:02}")),
+                PathBuf::from("D:/tmp/no-notes"),
+            )
+        })
+        .collect();
+    state
+}
+
+#[test]
+fn the_project_picker_scrolls_to_the_last_match() {
+    let mut state = state_with_projects(12);
+    state.open_creation_dialog();
+    state.on_dialog_char_typed('@');
+    assert_eq!(state.creation_dialog.suggestions.len(), 12, "no hard cap");
+
+    for _ in 0..11 {
+        state.next_suggestion();
+    }
+    assert_eq!(state.creation_dialog.autocomplete_selected, 11);
+
+    let frame = render(&state, 90, 22);
+    assert!(
+        frame.contains("proj-11"),
+        "last project is reachable:\n{frame}"
+    );
+    assert!(frame.contains("[12/12]"), "position shown:\n{frame}");
+    assert!(
+        !frame.contains("@proj-00"),
+        "the tail scrolled out instead of overflowing the box:\n{frame}"
+    );
+}
+
+#[test]
+fn a_short_list_needs_no_scrolling() {
+    let mut state = state_with_projects(3);
+    state.open_creation_dialog();
+    state.on_dialog_char_typed('@');
+    let frame = render(&state, 90, 22);
+    assert!(frame.contains("proj-00"), "first match visible:\n{frame}");
+    assert!(frame.contains("proj-02"), "last match visible:\n{frame}");
 }

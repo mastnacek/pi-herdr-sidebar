@@ -47,7 +47,6 @@ pub fn get_project_suggestions(
         }
     }
 
-    matches.truncate(8);
     matches
 }
 
