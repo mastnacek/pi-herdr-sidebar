@@ -123,6 +123,7 @@ impl SpaiNotesState {
             .projects
             .get_mut(self.selected_project_idx)
             .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
+        proj.ensure_items();
 
         let item = proj
             .items
@@ -155,6 +156,7 @@ impl SpaiNotesState {
             .projects
             .get_mut(self.selected_project_idx)
             .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
+        proj.ensure_items();
 
         let next_num = proj.items.len() + 1;
         let id = format!("SPAI-{:03}", next_num);

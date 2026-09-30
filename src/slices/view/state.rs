@@ -236,7 +236,7 @@ impl SidebarState {
             .map(Path::new);
         self.openrouter_credits = refresh_openrouter(pane_cwd, force);
 
-        self.spai_notes.refresh(pane_cwd);
+        self.spai_notes.refresh(pane_cwd, force);
 
         self.refresh_weather(force);
 

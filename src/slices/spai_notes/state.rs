@@ -5,9 +5,16 @@
 //! - [`super::state_edit`] — integrated edit dialog (`e`)
 //! - [`super::state_creation`] — creation dialog + quick note (`n`)
 use super::dialog_state::{NoteCreationDialog, NoteEditDialog};
-use super::discovery::{discover_spai_projects, SpaiProjectSummary};
+use super::discovery::{
+    discover_spai_projects, file_fingerprint, projects_cache_path, SpaiProjectSummary,
+};
 use super::note::SpaiNoteItem;
 use std::path::{Path, PathBuf};
+
+/// Cheap change signal: `(mtime, len)` of pi's project cache and of the selected
+/// project's notes dir. Two `stat()` calls stand in for what used to be a full
+/// re-read of every note on every refresh tick.
+type Fingerprint = (u64, u64, u64, u64);
 
 #[derive(Debug, Clone)]
 pub struct SpaiNotesState {
@@ -21,6 +28,7 @@ pub struct SpaiNotesState {
     pub status_message: Option<String>,
     pub creation_dialog: NoteCreationDialog,
     pub edit_dialog: NoteEditDialog,
+    projects_fingerprint: Fingerprint,
 }
 
 impl Default for SpaiNotesState {
@@ -32,7 +40,7 @@ impl Default for SpaiNotesState {
 impl SpaiNotesState {
     pub fn new(current_project_path: Option<PathBuf>) -> Self {
         let projects = discover_spai_projects(current_project_path.as_deref());
-        Self {
+        let mut state = Self {
             projects,
             selected_project_idx: 0,
             selected_item_idx: 0,
@@ -43,15 +51,48 @@ impl SpaiNotesState {
             status_message: None,
             creation_dialog: NoteCreationDialog::default(),
             edit_dialog: NoteEditDialog::default(),
-        }
+            projects_fingerprint: (0, 0, 0, 0),
+        };
+        state.ensure_selected_items();
+        state.projects_fingerprint = state.fingerprint();
+        state
     }
 
-    pub fn refresh(&mut self, current_project_path: Option<&Path>) {
+    pub fn refresh(&mut self, current_project_path: Option<&Path>, force: bool) {
+        let cwd_changed =
+            current_project_path.is_some_and(|cp| self.current_project_path.as_deref() != Some(cp));
         if let Some(cp) = current_project_path {
             self.current_project_path = Some(cp.to_path_buf());
         }
+
+        let fp = self.fingerprint();
+        if !force && !cwd_changed && fp == self.projects_fingerprint {
+            return;
+        }
+
         self.projects = discover_spai_projects(self.current_project_path.as_deref());
         self.clamp_indices();
+        self.ensure_selected_items();
+        self.projects_fingerprint = self.fingerprint();
+    }
+
+    fn fingerprint(&self) -> Fingerprint {
+        let cache = projects_cache_path()
+            .and_then(|p| file_fingerprint(&p))
+            .unwrap_or_default();
+        let notes = self
+            .projects
+            .get(self.selected_project_idx)
+            .and_then(|p| file_fingerprint(&p.spai_dir))
+            .unwrap_or_default();
+        (cache.0, cache.1, notes.0, notes.1)
+    }
+
+    /// Notes are read on demand — the viewer only ever shows one project.
+    fn ensure_selected_items(&mut self) {
+        if let Some(proj) = self.projects.get_mut(self.selected_project_idx) {
+            proj.ensure_items();
+        }
     }
 
     fn clamp_indices(&mut self) {
@@ -93,6 +134,7 @@ impl SpaiNotesState {
                 self.selected_project_idx = idx;
                 self.selected_item_idx = 0;
                 self.viewer_scroll = 0;
+                self.ensure_selected_items();
                 self.status_message = Some(format!("Přepnuto na: {}", self.projects[idx].name));
                 return;
             }
@@ -105,6 +147,7 @@ impl SpaiNotesState {
             self.selected_project_idx = (self.selected_project_idx + 1) % self.projects.len();
             self.selected_item_idx = 0;
             self.viewer_scroll = 0;
+            self.ensure_selected_items();
         }
     }
 
@@ -117,6 +160,7 @@ impl SpaiNotesState {
             }
             self.selected_item_idx = 0;
             self.viewer_scroll = 0;
+            self.ensure_selected_items();
         }
     }
 

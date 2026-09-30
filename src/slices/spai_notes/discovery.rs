@@ -1,7 +1,13 @@
 //! Discovery of projects with docs/spai or .pi/spai folders across workspace.
+//!
+//! Discovery is intentionally **lazy**: it resolves the project list (name + path)
+//! only. Note bodies are read on demand by [`SpaiProjectSummary::ensure_items`],
+//! so opening the `@project` picker costs a couple of `stat()` calls per project
+//! instead of reading and parsing every note of every project.
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 use super::note::SpaiNoteItem;
 use super::storage_format::parse_spai_markdown;
@@ -24,6 +30,7 @@ pub struct SpaiProjectSummary {
     pub path: PathBuf,
     pub spai_dir: PathBuf,
     pub items: Vec<SpaiNoteItem>,
+    items_loaded: bool,
 }
 
 impl SpaiProjectSummary {
@@ -33,10 +40,19 @@ impl SpaiProjectSummary {
             path,
             spai_dir,
             items: Vec::new(),
+            items_loaded: false,
         }
     }
 
-    pub fn scan_items(&mut self) {
+    /// Reads and parses the note files of this project, once.
+    pub fn ensure_items(&mut self) {
+        if !self.items_loaded {
+            self.scan_items();
+        }
+    }
+
+    fn scan_items(&mut self) {
+        self.items_loaded = true;
         self.items.clear();
         if !self.spai_dir.exists() {
             return;
@@ -64,6 +80,35 @@ impl SpaiProjectSummary {
     }
 }
 
+/// Cheap "does this project have notes?" probe: lists the directory, reads no file.
+pub fn dir_has_notes(spai_dir: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(spai_dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        name.ends_with(".md") && !name.starts_with('.')
+    })
+}
+
+/// `(mtime, len)` of a path — the cheap change signal used to skip rescans.
+pub fn file_fingerprint(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok()?;
+    let mtime = meta
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos() as u64;
+    Some((mtime, meta.len()))
+}
+
+/// Path of pi's project cache, the source of the project list.
+pub fn projects_cache_path() -> Option<PathBuf> {
+    dirs_home().map(|h| h.join(".pi").join("agent").join("pi-projects-cache.json"))
+}
+
 /// Discovers candidate SPAI directory inside a project path.
 pub fn find_spai_dir(project_path: &Path) -> Option<PathBuf> {
     let docs_spai = project_path.join("docs").join("spai");
@@ -75,11 +120,6 @@ pub fn find_spai_dir(project_path: &Path) -> Option<PathBuf> {
         return Some(dot_spai);
     }
     None
-}
-
-/// Locates ~/.pi/agent dir.
-fn get_pi_agent_dir() -> Option<PathBuf> {
-    dirs_home().map(|h| h.join(".pi").join("agent"))
 }
 
 fn dirs_home() -> Option<PathBuf> {
@@ -101,16 +141,14 @@ pub fn discover_spai_projects(current_project_cwd: Option<&Path>) -> Vec<SpaiPro
                 .and_then(|f| f.to_str())
                 .unwrap_or("Current")
                 .to_string();
-            let mut summary = SpaiProjectSummary::new(name, cwd.to_path_buf(), spai_dir);
-            summary.scan_items();
+            let summary = SpaiProjectSummary::new(name, cwd.to_path_buf(), spai_dir);
             seen_paths.insert(cwd.to_path_buf());
             projects.push(summary);
         }
     }
 
     // 2. Load from pi-projects-cache.json
-    if let Some(agent_dir) = get_pi_agent_dir() {
-        let cache_file = agent_dir.join("pi-projects-cache.json");
+    if let Some(cache_file) = projects_cache_path() {
         if let Ok(content) = fs::read_to_string(&cache_file) {
             if let Ok(cache) = serde_json::from_str::<ProjectsCache>(&content) {
                 for p in cache.projects {
@@ -120,10 +158,8 @@ pub fn discover_spai_projects(current_project_cwd: Option<&Path>) -> Vec<SpaiPro
                     }
                     if let Some(spai_dir) = find_spai_dir(&pb) {
                         seen_paths.insert(pb.clone());
-                        let mut summary = SpaiProjectSummary::new(p.name, pb, spai_dir);
-                        summary.scan_items();
-                        if !summary.items.is_empty() {
-                            projects.push(summary);
+                        if dir_has_notes(&spai_dir) {
+                            projects.push(SpaiProjectSummary::new(p.name, pb, spai_dir));
                         }
                     }
                 }
@@ -133,3 +169,6 @@ pub fn discover_spai_projects(current_project_cwd: Option<&Path>) -> Vec<SpaiPro
 
     projects
 }
+
+#[cfg(test)]
+mod tests;

@@ -34,7 +34,7 @@ pub fn open_external_editor(guard: &mut TerminalGuard, state: &mut SidebarState)
 
     match result {
         Ok(status) if status.success() => {
-            state.spai_notes.refresh(None);
+            state.spai_notes.refresh(None, true);
             state.spai_notes.status_message =
                 Some(format!("Externí editor ({}) dokončen", editor.display()));
         }

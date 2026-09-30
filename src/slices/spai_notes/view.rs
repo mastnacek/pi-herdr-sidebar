@@ -258,3 +258,6 @@ fn render_right_viewer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     frame.render_widget(viewer, area);
 }
+
+#[cfg(test)]
+mod tests;
