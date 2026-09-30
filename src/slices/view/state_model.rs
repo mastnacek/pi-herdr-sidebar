@@ -32,6 +32,27 @@ pub const TAB_LABELS: [&str; TAB_COUNT] = [
     " 5: Shortcuts ",
 ];
 
+/// Maps a mouse click column to a tab index by mirroring the exact geometry
+/// the `Tabs` widget (ratatui 0.29) uses when rendering into the header block:
+///
+/// - the block is bordered, so tabs start at column 1 (past the left border);
+/// - each tab cell is `padding_left` (1 space) + title + `padding_right` (1 space);
+/// - the divider (1 column) is drawn *between* tabs, not after the last one.
+///
+/// Any divergence from this math silently mis-routes clicks (or drops them) —
+/// keep it in lockstep with `render_header` in `view/ui.rs`.
+pub fn tab_index_at(col: u16) -> Option<usize> {
+    let mut x = 1u16; // left border of the header block
+    for (index, label) in TAB_LABELS.iter().enumerate() {
+        let width = label.chars().count() as u16 + 2; // padding left + right
+        if col >= x && col < x.saturating_add(width) {
+            return Some(index);
+        }
+        x += width + 1; // divider between tabs
+    }
+    None
+}
+
 impl Tab {
     pub fn from_index(index: usize) -> Self {
         match index {
@@ -94,4 +115,57 @@ pub struct SidebarState {
     pub weather_last_fetch: u64,
     pub spai_notes: crate::slices::spai_notes::SpaiNotesState,
     pub shortcuts: crate::slices::shortcuts::ShortcutsState,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Width of one rendered tab cell (padding + label), mirroring `tab_index_at`.
+    fn cell_width(label: &str) -> u16 {
+        label.chars().count() as u16 + 2
+    }
+
+    #[test]
+    fn click_on_each_tab_center_selects_that_tab() {
+        let mut x = 1u16; // left border
+        for (index, label) in TAB_LABELS.iter().enumerate() {
+            let center = x + cell_width(label) / 2;
+            assert_eq!(
+                tab_index_at(center),
+                Some(index),
+                "click at col {center} should hit tab {index} ({label})"
+            );
+            x += cell_width(label) + 1; // divider
+        }
+    }
+
+    #[test]
+    fn click_on_borders_and_gaps_does_not_crash_or_hit_wrong_tab() {
+        // Left border of the block: no tab there.
+        assert_eq!(tab_index_at(0), None);
+        // Divider column right after the last tab: strip is over, nothing to hit.
+        let mut x = 1u16;
+        for label in TAB_LABELS.iter() {
+            x += cell_width(label) + 1;
+        }
+        assert_eq!(tab_index_at(x), None);
+        // A column far past the strip.
+        assert_eq!(tab_index_at(500), None);
+    }
+
+    #[test]
+    fn first_and_last_boundaries_map_to_first_and_last_tab() {
+        // First cell starts at col 1 (past border).
+        assert_eq!(tab_index_at(1), Some(0));
+        let last = TAB_LABELS.len() - 1;
+        let mut x = 1u16;
+        for (i, label) in TAB_LABELS.iter().enumerate() {
+            if i == last {
+                break;
+            }
+            x += cell_width(label) + 1;
+        }
+        assert_eq!(tab_index_at(x), Some(last));
+    }
 }

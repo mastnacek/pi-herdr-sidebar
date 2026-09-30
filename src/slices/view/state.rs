@@ -173,16 +173,12 @@ impl SidebarState {
     }
 
     pub fn handle_mouse_click(&mut self, col: u16, row: u16) {
-        if row <= 3 {
-            // Hit-test from the same labels the header renders, so adding a tab
-            // cannot silently break clicking.
-            let mut edge = 0u16;
-            for (index, label) in super::state_model::TAB_LABELS.iter().enumerate() {
-                edge += label.chars().count() as u16 + 1; // +1 for the divider
-                if col < edge {
-                    self.set_tab(Tab::from_index(index));
-                    return;
-                }
+        // Header block: 3 rows tall (border, tabs row, border). Tabs row is the
+        // middle one, but a click on the top border row still belongs to the
+        // tab strip, so accept both.
+        if row <= 2 {
+            if let Some(index) = super::state_model::tab_index_at(col) {
+                self.set_tab(Tab::from_index(index));
             }
         }
     }
