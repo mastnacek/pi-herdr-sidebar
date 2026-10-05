@@ -1,5 +1,5 @@
 //! Background vectorization and AI facet classification triggers for S.P.A.I.
-use super::classify_service::classify_note;
+use super::classify_service::{classify_note, collect_taxonomy};
 use super::state::{AsyncProgress, SettingsState};
 use super::vector_service::vectorize_project_items_with_progress;
 use crate::slices::spai_notes::note::SpaiNoteItem;
@@ -101,6 +101,7 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
 
     let api_key = settings.api_key.clone();
     let model = settings.chat_model.clone();
+    let taxonomy = collect_taxonomy(&notes_state.projects);
 
     let mut notes_to_classify: Vec<SpaiNoteItem> = Vec::new();
     for p in &mut notes_state.projects {
@@ -125,7 +126,7 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
                 label: format!("Klasifikuji: {} ({}/{})", item.id, processed + 1, total),
             });
 
-            match classify_note(&api_key, &model, &item) {
+            match classify_note(&api_key, &model, &item, Some(&taxonomy)) {
                 Ok(facets) => {
                     if let Some(area) = facets.area {
                         item.facets.area = Some(area);
@@ -142,6 +143,16 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
                     if let Some(proj) = facets.project {
                         if item.facets.project.is_none() {
                             item.facets.project = Some(proj);
+                        }
+                    }
+                    if let Some(dl) = facets.deadline {
+                        if item.facets.deadline.is_none() {
+                            item.facets.deadline = Some(dl);
+                        }
+                    }
+                    if let Some(prio) = facets.priority {
+                        if item.facets.priority.is_none() {
+                            item.facets.priority = Some(prio);
                         }
                     }
 
