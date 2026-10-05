@@ -2,7 +2,8 @@
 use super::classify_prompt::{build_classification_prompt, Taxonomy, SYSTEM_PROMPT};
 use crate::slices::spai_notes::note::SpaiNoteItem;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 pub use super::classify_prompt::collect_taxonomy;
 
@@ -192,7 +193,7 @@ pub fn classify_note(
     let payload = serde_json::to_string(&req).map_err(|e| e.to_string())?;
     let auth_header = format!("Authorization: Bearer {}", api_key.trim());
 
-    let output = Command::new("curl")
+    let mut child = Command::new("curl")
         .args([
             "-s",
             "-m",
@@ -209,10 +210,21 @@ pub fn classify_note(
             "-H",
             "X-Title: Pi Herdr Sidebar SPAI",
             "-d",
-            &payload,
+            "@-",
         ])
-        .output()
-        .map_err(|e| format!("Chyba při volání curl: {}", e))?;
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Chyba při spouštění curl: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(payload.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Chyba při čekání na curl: {}", e))?;
 
     if !output.status.success() {
         return Err("Nepodařilo se připojit k OpenRouter API".to_string());

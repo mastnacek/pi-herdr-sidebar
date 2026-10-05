@@ -3,8 +3,9 @@ use super::state::AsyncProgress;
 use crate::slices::spai_notes::note::SpaiNoteItem;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
 
 #[derive(Serialize)]
@@ -41,7 +42,7 @@ pub struct ProjectVectorStore {
     pub vectors: HashMap<String, Vec<f64>>,
 }
 
-/// Calls OpenRouter `/v1/embeddings` with a batch of text inputs.
+/// Calls OpenRouter `/v1/embeddings` with a batch of text inputs using stdin.
 pub fn request_embeddings(
     api_key: &str,
     model: &str,
@@ -59,7 +60,7 @@ pub fn request_embeddings(
 
     let auth_header = format!("Authorization: Bearer {}", api_key.trim());
 
-    let output = Command::new("curl")
+    let mut child = Command::new("curl")
         .args([
             "-s",
             "-m",
@@ -76,10 +77,21 @@ pub fn request_embeddings(
             "-H",
             "X-Title: Pi Herdr Sidebar SPAI",
             "-d",
-            &payload,
+            "@-",
         ])
-        .output()
-        .map_err(|e| format!("Chyba při volání curl: {}", e))?;
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Chyba při spouštění curl: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(payload.as_bytes());
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Chyba při čekání na curl: {}", e))?;
 
     if !output.status.success() {
         return Err("Nepodařilo se připojit k OpenRouter API".to_string());
