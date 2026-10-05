@@ -28,7 +28,7 @@ pub fn build_hint_lines(
             " ▌ ⚠️  Podobné existující záznamy (dedup):",
             Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
         )]));
-        for m in similar {
+        for m in &similar {
             let pct = (m.similarity * 100.0).round() as u32;
             lines.push(Line::from(vec![
                 Span::styled(
@@ -51,6 +51,15 @@ pub fn build_hint_lines(
                 ),
             ]));
         }
+        lines.push(Line::from(vec![
+            Span::styled("   Akce: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Ctrl+O] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled("Otevřít existující  ", Style::default().fg(Color::Gray)),
+            Span::styled("[Ctrl+A] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled("Připojit k němu  ", Style::default().fg(Color::Gray)),
+            Span::styled("[Ctrl+U] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled("Změnit stav", Style::default().fg(Color::Gray)),
+        ]));
         lines.push(Line::raw(""));
     }
 

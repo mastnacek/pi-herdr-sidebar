@@ -70,7 +70,26 @@ pub fn handle_notes_dialogs(
 
     if state.spai_notes.creation_dialog.active {
         let ac_active = state.spai_notes.creation_dialog.autocomplete_active;
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
         match key.code {
+            KeyCode::Char('o') | KeyCode::Char('O') if ctrl => {
+                if state.spai_notes.open_first_similar_match() {
+                    return true;
+                }
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') if ctrl => {
+                if let Err(e) = state.spai_notes.append_to_first_similar_match() {
+                    state.spai_notes.status_message = Some(e);
+                }
+                return true;
+            }
+            KeyCode::Char('u') | KeyCode::Char('U') if ctrl => {
+                if let Err(e) = state.spai_notes.cycle_status_of_first_similar_match() {
+                    state.spai_notes.status_message = Some(e);
+                }
+                return true;
+            }
             KeyCode::Esc => {
                 if ac_active {
                     state.spai_notes.creation_dialog.autocomplete_active = false;
