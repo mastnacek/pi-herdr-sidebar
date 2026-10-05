@@ -136,9 +136,11 @@ pub fn vectorize_project_items_with_progress(
     let mut to_fetch_texts = Vec::new();
 
     for item in items {
-        if force_all || !vector_map.contains_key(&item.id) {
+        if force_all
+            || (!vector_map.contains_key(&item.file_name) && !vector_map.contains_key(&item.id))
+        {
             let text = format!("{}: {} [{}]", item.kind.as_str(), item.title, item.tags.join(" "));
-            to_fetch_ids.push(item.id.clone());
+            to_fetch_ids.push(item.file_name.clone());
             to_fetch_texts.push(text);
         }
     }

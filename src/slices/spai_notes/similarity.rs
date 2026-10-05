@@ -151,7 +151,10 @@ pub fn find_similar_notes_hybrid(
         let mut vector_sim = 0.0;
 
         if let (Some(cand), Some(stored_map)) = (candidate_vector, stored_vectors) {
-            if let Some(stored_vec) = stored_map.get(&item.id) {
+            if let Some(stored_vec) = stored_map
+                .get(&item.file_name)
+                .or_else(|| stored_map.get(&item.id))
+            {
                 vector_sim = cosine_similarity(cand, stored_vec);
             }
         }
