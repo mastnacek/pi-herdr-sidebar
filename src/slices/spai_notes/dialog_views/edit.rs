@@ -1,13 +1,13 @@
-//! Dialog rendering for SPAI notes (creation and inline editing).
-use super::dialog_state::EditField;
-use super::state::SpaiNotesState;
-use super::text_layout;
+//! SPAI Note inline edit dialog rendering.
 use crate::shared::theme;
+use crate::slices::spai_notes::dialog_state::EditField;
+use crate::slices::spai_notes::state::SpaiNotesState;
+use crate::slices::spai_notes::text_layout;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Clear, Paragraph},
+    widgets::{Block, BorderType, Paragraph},
     Frame,
 };
 
@@ -27,145 +27,6 @@ fn insert_cursor_marker(text: &str, char_idx: usize) -> String {
 
 fn char_len(text: &str) -> usize {
     text.chars().count()
-}
-
-/// Rows of the project picker that fit in `box_rows` (borders included), and the
-/// scroll offset that keeps `selected` on screen. Pure, so paging is testable
-/// without a terminal: the popup scrolls instead of clipping the tail.
-fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (u16, u16) {
-    let count16 = count as u16;
-    let visible = box_rows.saturating_sub(2).clamp(1, count16.max(1));
-    let sel = (selected as u16).min(count16.saturating_sub(1));
-    let scroll = (sel + 1).saturating_sub(visible);
-    (visible, scroll)
-}
-
-pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_area = theme::centered_percent(area, 64, 34);
-    theme::paint_backdrop(frame, dialog_area);
-
-    let raw = &state.creation_dialog.title_input;
-    let detected = super::input_highlighter::detect_spai_input(raw);
-
-    let header_title = format!(" ✍ SPAI Smart Input: {} ", detected.prefix_label);
-
-    let title_block = Block::bordered()
-        .title(Span::styled(
-            header_title,
-            Style::default().fg(detected.badge_color).bold(),
-        ))
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(detected.badge_color));
-
-    let mut input_spans = vec![Span::styled(
-        "  Vstup: ",
-        Style::default().fg(Color::DarkGray),
-    )];
-
-    if raw.is_empty() {
-        input_spans.push(Span::styled(
-            "| napište . úkol, ? nápad, - poznámku, ! prioritu...",
-            Style::default().fg(Color::DarkGray),
-        ));
-    } else {
-        let highlighted = super::input_highlighter::highlight_spai_input_spans(raw);
-        input_spans.extend(highlighted);
-        input_spans.push(Span::styled("█", Style::default().fg(Color::Yellow)));
-    }
-
-    let lines = vec![
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("  Detekovaný typ: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!(
-                    "[{} {}]",
-                    detected.prefix_glyph.trim(),
-                    detected.prefix_label
-                ),
-                Style::default().fg(detected.badge_color).bold(),
-            ),
-            Span::styled(
-                "   (Syntax: . / /. x z ? - ! @ :tag:)",
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]),
-        Line::raw(""),
-        Line::from(input_spans),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("  [Enter]", Style::default().fg(Color::Green).bold()),
-            Span::styled(" Uložit  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Tab]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" Přepnout typ  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Esc]", Style::default().fg(Color::Yellow)),
-            Span::styled(" Zrušit", Style::default().fg(Color::DarkGray)),
-        ]),
-    ];
-
-    let para = Paragraph::new(lines).block(title_block);
-    frame.render_widget(para, dialog_area);
-
-    if state.creation_dialog.autocomplete_active && !state.creation_dialog.suggestions.is_empty() {
-        let count = state.creation_dialog.suggestions.len();
-        let list_y = dialog_area.y + 6;
-        // Grow into whatever the face has left below the input line instead of a
-        // fixed 8-row box that silently clipped the last matches.
-        let box_rows = area.bottom().saturating_sub(list_y + 1).clamp(3, 14);
-        let selected = state.creation_dialog.autocomplete_selected;
-        let (visible, scroll) = picker_viewport(count, selected, box_rows);
-
-        let ac_area = Rect {
-            x: dialog_area.x + 4,
-            y: list_y,
-            width: dialog_area.width.saturating_sub(8),
-            height: visible + 2,
-        };
-
-        frame.render_widget(Clear, ac_area);
-
-        let ac_block = Block::bordered()
-            .title(format!(
-                " 📁 Projekt [{}/{}] [↑/↓, Tab/Enter] ",
-                selected + 1,
-                count
-            ))
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(Color::Cyan));
-
-        let mut ac_lines = Vec::new();
-        for (i, sug) in state.creation_dialog.suggestions.iter().enumerate() {
-            let is_sel = i == state.creation_dialog.autocomplete_selected;
-            let marker = if is_sel { "▶ " } else { "  " };
-            ac_lines.push(Line::from(vec![
-                Span::styled(
-                    marker,
-                    Style::default().fg(if is_sel {
-                        Color::Yellow
-                    } else {
-                        Color::DarkGray
-                    }),
-                ),
-                Span::styled(
-                    format!("{:<18}", sug.insert_text),
-                    Style::default()
-                        .fg(if is_sel { Color::Cyan } else { Color::White })
-                        .add_modifier(if is_sel {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
-                ),
-                Span::styled(
-                    format!(" {}", sug.path),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-
-        let ac_para = Paragraph::new(ac_lines).block(ac_block).scroll((scroll, 0));
-        frame.render_widget(ac_para, ac_area);
-    }
 }
 
 pub fn render_edit_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
@@ -195,8 +56,6 @@ pub fn render_edit_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
         state.edit_dialog.title_input.clone()
     };
 
-    // Keep the title cursor visible on long titles (1 cell per char is a good
-    // enough approximation here — titles are single-line Latin/Czech text).
     let title_inner_w = rows[0].width.saturating_sub(4).max(1) as usize;
     let title_offset = if title_focused && title_cursor >= title_inner_w {
         title_cursor.saturating_sub(title_inner_w.saturating_sub(1))
@@ -274,9 +133,6 @@ pub fn render_edit_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
             Color::DarkGray
         }));
 
-    // The body is pre-wrapped (see `text_layout`), so `scroll` is an exact row
-    // index and the cursor can be kept inside the viewport without depending on
-    // ratatui's unstable rendered-line-info API.
     let inner_w = rows[1].width.saturating_sub(2).max(1) as usize;
     let view_h = rows[1].height.saturating_sub(2).max(1) as usize;
     let body_rows = text_layout::wrap_rows(&body_text, inner_w);
@@ -343,22 +199,4 @@ pub fn render_edit_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
         ]),
     ]);
     frame.render_widget(hotkeys, rows[2]);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::picker_viewport;
-
-    #[test]
-    fn the_viewport_grows_with_the_box_and_follows_the_selection() {
-        // 8-row box → 6 rows of projects.
-        assert_eq!(picker_viewport(12, 0, 8), (6, 0));
-        assert_eq!(picker_viewport(12, 5, 8), (6, 0));
-        assert_eq!(picker_viewport(12, 6, 8), (6, 1));
-        assert_eq!(picker_viewport(12, 11, 8), (6, 6));
-        // A short list fits whole, no scrolling.
-        assert_eq!(picker_viewport(3, 2, 8), (3, 0));
-        // A taller box shows more rows.
-        assert_eq!(picker_viewport(12, 11, 14), (12, 0));
-    }
 }
