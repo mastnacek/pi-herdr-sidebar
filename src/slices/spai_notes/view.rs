@@ -43,9 +43,9 @@ pub fn render_spai_notes_tab(frame: &mut Frame, area: Rect, state: &SpaiNotesSta
     render_right_viewer(frame, main_chunks[1], state);
 
     if state.creation_dialog.active {
-        super::dialog_views::render_creation_dialog(frame, area, state);
+        super::dialog_views::render_creation_dialog(frame, frame.area(), state);
     } else if state.edit_dialog.active {
-        super::dialog_views::render_edit_dialog(frame, area, state);
+        super::dialog_views::render_edit_dialog(frame, frame.area(), state);
     }
 }
 

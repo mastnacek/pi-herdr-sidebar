@@ -61,21 +61,6 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
         super::shared_banner::render_shared_model_banner(frame, chunks[2], state);
         render_footer(frame, chunks[3], state);
     }
-
-    // Modal dialogs rendered on top covering full window area (header tabs & footer)
-    if state.spai_notes.creation_dialog.active {
-        crate::slices::spai_notes::dialog_views::render_creation_dialog(
-            frame,
-            area,
-            &state.spai_notes,
-        );
-    } else if state.spai_notes.edit_dialog.active {
-        crate::slices::spai_notes::dialog_views::render_edit_dialog(
-            frame,
-            area,
-            &state.spai_notes,
-        );
-    }
 }
 
 fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
