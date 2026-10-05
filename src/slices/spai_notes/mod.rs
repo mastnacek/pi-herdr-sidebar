@@ -1,5 +1,6 @@
 //! Spai Notes Slice
 pub mod autocomplete;
+pub mod dedup_engine;
 pub mod dialog_state;
 pub mod dialog_views;
 pub mod discovery;
@@ -7,6 +8,7 @@ pub mod external_editor;
 pub mod input_highlighter;
 pub mod note;
 pub mod note_io;
+pub mod note_writer;
 pub mod similarity;
 pub mod spai_prefixes;
 pub mod state;

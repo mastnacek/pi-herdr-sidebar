@@ -1,9 +1,8 @@
 //! Note items lifecycle and status cycling actions.
-use super::note::{SpaiFacets, SpaiNoteItem, SpaiStatus, SpaiType};
-use super::note_io::{create_note_file, next_spai_number, write_atomic};
+use super::note::{SpaiStatus, SpaiType};
+use super::note_io::write_atomic;
 use super::state::SpaiNotesState;
-use super::storage_format::{format_spai_markdown, slugify, update_body_status_prefix};
-use super::time_utils::current_timestamp_and_date;
+use super::storage_format::{format_spai_markdown, update_body_status_prefix};
 
 impl SpaiNotesState {
     pub fn cycle_selected_status(&mut self) -> Result<(), String> {
@@ -43,8 +42,8 @@ impl SpaiNotesState {
 
     pub fn create_quick_note_with_status(
         &mut self,
-        title: &str,
-        kind: SpaiType,
+        _title: &str,
+        _kind: SpaiType,
         status: SpaiStatus,
         body: &str,
     ) -> Result<String, String> {
@@ -54,61 +53,15 @@ impl SpaiNotesState {
             .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
         proj.ensure_items();
 
-        std::fs::create_dir_all(&proj.spai_dir)
-            .map_err(|e| format!("Složku docs/spai nelze vytvořit: {}", e))?;
+        // Delegate to the shared note_writer (disk-backed ids, create_new,
+        // dir creation). The caller passes `body` as the prefix line
+        // `"<glyph> <title>"`, so the writer's prefix detection resolves the
+        // same kind/status the dialog selected.
+        let written = super::note_writer::write_record(&proj, body.trim())?;
+        debug_assert_eq!(written.item.status, status, "glyph/status mismatch");
 
-        // Next id comes from the disk (max existing number + 1), never from
-        // items.len(), so deletions cannot cause id reuse — and pi-spai's own
-        // files in the same folder count too.
-        let mut next_num = next_spai_number(&proj.spai_dir, &proj.items);
-        let slug = slugify(title);
-        let (today, timestamp) = current_timestamp_and_date();
-
-        // create_new refuses on collision; bump the id and retry, so an id
-        // assigned by pi-spai in between can never cause an overwrite.
-        let mut item = None;
-        for _ in 0..100 {
-            let id = format!("SPAI-{:03}", next_num);
-            let file_path = proj
-                .spai_dir
-                .join(format!("{}-{}-{}.md", today, id, slug));
-            let candidate = SpaiNoteItem {
-                id,
-                title: title.to_string(),
-                kind,
-                status,
-                symbol: status.symbol().to_string(),
-                timestamp: timestamp.clone(),
-                tags: Vec::new(),
-                facets: SpaiFacets {
-                    project: Some(proj.name.clone()),
-                    project_path: Some(proj.path.to_string_lossy().to_string()),
-                    priority: None,
-                    deadline: None,
-                    ..Default::default()
-                },
-                body: body.to_string(),
-                file_path: file_path.clone(),
-                file_name: file_path
-                    .file_name()
-                    .and_then(|f| f.to_str())
-                    .unwrap_or("")
-                    .to_string(),
-                extra_frontmatter: Vec::new(),
-            };
-            let content = format_spai_markdown(&candidate);
-            match create_note_file(&file_path, &content) {
-                Ok(()) => {
-                    item = Some(candidate);
-                    break;
-                }
-                Err(_) => next_num += 1,
-            }
-        }
-        let item = item.ok_or_else(|| "Nelze najít volné SPAI ID".to_string())?;
-        let id = item.id.clone();
-
-        proj.items.insert(0, item);
+        let id = written.id.clone();
+        proj.items.insert(0, written.item);
         self.selected_item_idx = 0;
         self.viewer_scroll = 0;
 

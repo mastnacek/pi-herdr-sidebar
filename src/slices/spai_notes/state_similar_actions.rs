@@ -2,10 +2,9 @@
 //! editor: `Ctrl+D` runs the check on demand, `Ctrl+O/A/U` act on its results,
 //! and every UI tick only drains an already-finished background computation.
 use super::note::SpaiStatus;
-use super::similarity::{find_similar_notes, find_similar_notes_hybrid};
+use super::similarity::find_similar_notes;
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
-use std::sync::mpsc::channel;
 
 impl SpaiNotesState {
     /// Drains a finished background dedup computation into the panel. Purely
@@ -21,71 +20,38 @@ impl SpaiNotesState {
         }
     }
 
-    /// Runs the duplicate check for `query` on demand (Ctrl+D). With an API
-    /// key it vectorizes in the background; without one it falls back to local
-    /// text similarity + stored vectors, synchronously, without an error.
-    /// The overlay panel is shown in both cases.
+    /// Runs the duplicate check for `query` on demand (Ctrl+D) through the
+    /// shared engine. With an API key it vectorizes in the background; without
+    /// one it falls back to local text similarity + stored vectors,
+    /// synchronously, without an error. The overlay panel is shown always.
     pub fn run_dedup(&mut self, api_key: &str, model: &str, threshold: f64, query: String) {
         self.dedup.visible = true;
         self.dedup.matches.clear();
         self.dedup.receiver = None;
 
-        let raw = query.trim().to_string();
-        if raw.len() < 3 {
-            return; // nothing meaningful to compare
-        }
-
         let Some(proj) = self.projects.get(self.selected_project_idx) else {
             return;
         };
 
-        if api_key.trim().is_empty() {
-            // Local fallback: text similarity + stored vectors, no network.
-            let stored_vectors =
-                crate::slices::settings::load_project_vectors(&proj.path).map(|s| s.vectors);
-            self.dedup.matches = find_similar_notes_hybrid(
-                &raw,
-                &proj.items,
-                None,
-                stored_vectors.as_ref(),
-                threshold,
-                4,
-            );
-            self.dedup.is_evaluating = false;
-            return;
-        }
-
-        self.dedup.is_evaluating = true;
-        let (tx, rx) = channel();
-        self.dedup.receiver = Some(rx);
-
-        let key = api_key.to_string();
-        let emb_model = model.to_string();
-        let items = proj.items.clone();
-        let proj_path = proj.path.clone();
-
-        std::thread::spawn(move || {
-            let stored_vectors =
-                crate::slices::settings::load_project_vectors(&proj_path).map(|s| s.vectors);
-
-            let cand_vec = match crate::slices::settings::vector_service::request_embeddings(
-                &key, &emb_model, &[&raw],
-            ) {
-                Ok(mut vecs) => vecs.pop(),
-                Err(_) => None,
-            };
-
-            let matches = find_similar_notes_hybrid(
-                &raw,
-                &items,
-                cand_vec.as_deref(),
-                stored_vectors.as_ref(),
-                threshold,
-                4,
-            );
-
-            let _ = tx.send(matches);
+        let outcome = super::dedup_engine::run(super::dedup_engine::DedupRequest {
+            query,
+            items: proj.items.clone(),
+            project_path: proj.path.clone(),
+            api_key: api_key.to_string(),
+            model: model.to_string(),
+            threshold,
         });
+
+        match outcome {
+            super::dedup_engine::DedupOutcome::Ready(matches) => {
+                self.dedup.matches = matches;
+                self.dedup.is_evaluating = false;
+            }
+            super::dedup_engine::DedupOutcome::Running(rx) => {
+                self.dedup.is_evaluating = true;
+                self.dedup.receiver = Some(rx);
+            }
+        }
     }
 
     /// Hides the dedup overlay (Esc over the panel).
