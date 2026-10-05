@@ -78,16 +78,40 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
             Span::styled("Probíhá na pozadí — TUI zůstává plně interaktivní", Style::default().fg(Color::DarkGray).italic()),
         ]));
     } else {
+        let (status_text, status_color) = if state.total_records == 0 {
+            ("0 záznamů k indexování".to_string(), Color::DarkGray)
+        } else if state.vector_count >= state.total_records {
+            (
+                format!(
+                    "{}/{} záznamů indexováno (vektorový index aktuální)",
+                    state.vector_count, state.total_records
+                ),
+                Color::Green,
+            )
+        } else if state.vector_count > 0 {
+            (
+                format!(
+                    "{}/{} záznamů indexováno ({} čeká na [v] vektorizaci)",
+                    state.vector_count,
+                    state.total_records,
+                    state.total_records.saturating_sub(state.vector_count)
+                ),
+                Color::Yellow,
+            )
+        } else {
+            (
+                format!(
+                    "0/{} záznamů indexováno (stiskněte [v] pro vektorizaci)",
+                    state.total_records
+                ),
+                Color::Rgb(255, 184, 108),
+            )
+        };
+
         vec_lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled("Stav indexu: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!(
-                    "{} záznamů připraveno k sémantickému prohledávání",
-                    state.total_records
-                ),
-                Style::default().fg(Color::White),
-            ),
+            Span::styled(status_text, Style::default().fg(status_color).bold()),
         ]));
         vec_lines.push(Line::from(vec![
             Span::styled(

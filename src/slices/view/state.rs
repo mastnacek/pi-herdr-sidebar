@@ -243,6 +243,10 @@ impl SidebarState {
 
         self.spai_notes.refresh(pane_cwd, force);
 
+        let (total_notes, total_vectors) = self.spai_notes.count_notes_and_vectors();
+        self.settings.total_records = total_notes;
+        self.settings.vector_count = total_vectors;
+
         if let Some(w) = refresh_weather_telemetry(
             self.weather_location_index,
             &mut self.weather_last_fetch,
