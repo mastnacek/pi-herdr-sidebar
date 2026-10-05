@@ -48,7 +48,7 @@ struct OpenRouterError {
 }
 
 #[derive(Deserialize)]
-struct ParsedFacets {
+pub struct ParsedFacets {
     #[serde(default)]
     pub area: Option<String>,
     #[serde(default)]

@@ -6,12 +6,13 @@ pub mod models;
 pub mod models_cache;
 pub mod picker_view;
 pub mod state;
+pub mod state_cycling;
 pub mod storage;
 pub mod vector_service;
 pub mod view;
 
 pub use actions::{classify_facets_all, vectorize_all_records};
 pub use models::{filter_models, ModelInfo};
-pub use state::{ModelTarget, SettingsField, SettingsState};
+pub use state::{AsyncProgress, ModelTarget, SettingsField, SettingsState};
 pub use vector_service::{load_project_vectors, ProjectVectorStore};
 pub use view::render_settings_tab;

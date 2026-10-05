@@ -2,6 +2,7 @@
 use super::models::{filter_models, ModelInfo};
 use super::models_cache::{fetch_openrouter_models, load_cached_models, save_cached_models};
 use super::storage::{load_config_file, save_config_file};
+use std::sync::mpsc::Receiver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsField {
@@ -45,6 +46,16 @@ pub enum ModelTarget {
 }
 
 #[derive(Debug, Clone)]
+pub enum AsyncProgress {
+    Progress {
+        step: usize,
+        total: usize,
+        label: String,
+    },
+    Done(String),
+    Error(String),
+}
+
 pub struct SettingsState {
     pub api_key: String,
     pub chat_model: String,
@@ -56,12 +67,17 @@ pub struct SettingsState {
     pub status_message: Option<String>,
     pub vector_count: usize,
     pub total_records: usize,
-    pub vectorizing: bool,
     pub models: Vec<ModelInfo>,
     pub picker_active: bool,
     pub picker_target: ModelTarget,
     pub picker_search: String,
     pub picker_selected_idx: usize,
+    pub task_receiver: Option<Receiver<AsyncProgress>>,
+    pub is_busy: bool,
+    pub busy_label: String,
+    pub busy_step: usize,
+    pub busy_total: usize,
+    pub spinner_tick: usize,
 }
 
 impl Default for SettingsState {
@@ -96,7 +112,7 @@ impl SettingsState {
         let embed = if !embed_model.is_empty() {
             embed_model
         } else {
-            "openai/text-embedding-3-small".to_string()
+            "qwen/qwen3-embedding-8b".to_string()
         };
 
         Self {
@@ -110,13 +126,50 @@ impl SettingsState {
             status_message: None,
             vector_count: 0,
             total_records: 0,
-            vectorizing: false,
             models,
             picker_active: false,
             picker_target: ModelTarget::Chat,
             picker_search: String::new(),
             picker_selected_idx: 0,
+            task_receiver: None,
+            is_busy: false,
+            busy_label: String::new(),
+            busy_step: 0,
+            busy_total: 0,
+            spinner_tick: 0,
         }
+    }
+
+    pub fn poll_async(&mut self) {
+        let Some(rx) = &self.task_receiver else { return };
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                AsyncProgress::Progress { step, total, label } => {
+                    self.is_busy = true;
+                    self.busy_step = step;
+                    self.busy_total = total;
+                    self.busy_label = label;
+                }
+                AsyncProgress::Done(msg) => {
+                    self.is_busy = false;
+                    self.status_message = Some(msg);
+                    self.task_receiver = None;
+                    self.vector_count = self.busy_total;
+                    break;
+                }
+                AsyncProgress::Error(err) => {
+                    self.is_busy = false;
+                    self.status_message = Some(format!("❌ {}", err));
+                    self.task_receiver = None;
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn tick_animation(&mut self) {
+        self.spinner_tick = (self.spinner_tick + 1) % 10;
+        self.poll_async();
     }
 
     pub fn refresh_models(&mut self) {
@@ -189,76 +242,6 @@ impl SettingsState {
     pub fn picker_prev(&mut self) {
         if self.picker_selected_idx > 0 {
             self.picker_selected_idx -= 1;
-        }
-    }
-
-    pub fn next_chat_model(&mut self) {
-        if self.models.is_empty() {
-            return;
-        }
-        if let Some(idx) = self.models.iter().position(|m| m.id == self.chat_model) {
-            let next_idx = (idx + 1) % self.models.len();
-            self.chat_model = self.models[next_idx].id.clone();
-            self.save();
-        } else {
-            self.chat_model = self.models[0].id.clone();
-            self.save();
-        }
-    }
-
-    pub fn prev_chat_model(&mut self) {
-        if self.models.is_empty() {
-            return;
-        }
-        if let Some(idx) = self.models.iter().position(|m| m.id == self.chat_model) {
-            let prev_idx = (idx + self.models.len() - 1) % self.models.len();
-            self.chat_model = self.models[prev_idx].id.clone();
-            self.save();
-        } else {
-            self.chat_model = self.models[0].id.clone();
-            self.save();
-        }
-    }
-
-    pub fn next_embedding_model(&mut self) {
-        if self.models.is_empty() {
-            return;
-        }
-        if let Some(idx) = self.models.iter().position(|m| m.id == self.embedding_model) {
-            let next_idx = (idx + 1) % self.models.len();
-            self.embedding_model = self.models[next_idx].id.clone();
-            self.save();
-        } else {
-            self.embedding_model = self.models[0].id.clone();
-            self.save();
-        }
-    }
-
-    pub fn prev_embedding_model(&mut self) {
-        if self.models.is_empty() {
-            return;
-        }
-        if let Some(idx) = self.models.iter().position(|m| m.id == self.embedding_model) {
-            let prev_idx = (idx + self.models.len() - 1) % self.models.len();
-            self.embedding_model = self.models[prev_idx].id.clone();
-            self.save();
-        } else {
-            self.embedding_model = self.models[0].id.clone();
-            self.save();
-        }
-    }
-
-    pub fn increase_threshold(&mut self) {
-        if self.similarity_threshold <= 90 {
-            self.similarity_threshold += 5;
-            self.save();
-        }
-    }
-
-    pub fn decrease_threshold(&mut self) {
-        if self.similarity_threshold >= 35 {
-            self.similarity_threshold -= 5;
-            self.save();
         }
     }
 

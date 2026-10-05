@@ -50,8 +50,35 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
             Color::DarkGray
         }));
 
-    let vec_lines = vec![
-        Line::from(vec![
+    let mut vec_lines = Vec::new();
+    if state.is_busy {
+        let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let spinner = spinner_frames[state.spinner_tick % spinner_frames.len()];
+
+        let pct = if state.busy_total > 0 {
+            (state.busy_step * 100) / state.busy_total
+        } else {
+            0
+        };
+        let bar_len = 16;
+        let fill = (pct * bar_len) / 100;
+        let prog_bar = format!("{}{}", "█".repeat(fill), "░".repeat(bar_len.saturating_sub(fill)));
+
+        vec_lines.push(Line::from(vec![
+            Span::styled(format!("  {} ", spinner), Style::default().fg(Color::Yellow).bold()),
+            Span::styled(&state.busy_label, Style::default().fg(Color::Yellow).bold()),
+        ]));
+        vec_lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(format!("[{}] ", prog_bar), Style::default().fg(Color::Rgb(45, 213, 183))),
+            Span::styled(format!("{}/{} ({}%)", state.busy_step, state.busy_total, pct), Style::default().fg(Color::White)),
+        ]));
+        vec_lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled("Probíhá na pozadí — TUI zůstává plně interaktivní", Style::default().fg(Color::DarkGray).italic()),
+        ]));
+    } else {
+        vec_lines.push(Line::from(vec![
             Span::raw("    "),
             Span::styled("Stav indexu: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -61,8 +88,8 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
                 ),
                 Style::default().fg(Color::White),
             ),
-        ]),
-        Line::from(vec![
+        ]));
+        vec_lines.push(Line::from(vec![
             Span::styled(
                 if is_vec_sel { "  ▶ " } else { "    " },
                 Style::default().fg(Color::Yellow).bold(),
@@ -73,8 +100,8 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
                     .fg(if is_vec_sel { Color::Rgb(45, 213, 183) } else { Color::White })
                     .add_modifier(if is_vec_sel { Modifier::BOLD } else { Modifier::empty() }),
             ),
-        ]),
-        Line::from(vec![
+        ]));
+        vec_lines.push(Line::from(vec![
             Span::styled(
                 if is_cls_sel { "  ▶ " } else { "    " },
                 Style::default().fg(Color::Yellow).bold(),
@@ -85,8 +112,8 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
                     .fg(if is_cls_sel { Color::Rgb(255, 94, 219) } else { Color::White })
                     .add_modifier(if is_cls_sel { Modifier::BOLD } else { Modifier::empty() }),
             ),
-        ]),
-    ];
+        ]));
+    }
     let vec_para = Paragraph::new(vec_lines).block(vec_block);
     frame.render_widget(vec_para, rows[2]);
 

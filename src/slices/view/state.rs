@@ -236,6 +236,7 @@ impl SidebarState {
             .and_then(|p| p.cwd.as_deref())
             .map(Path::new);
         self.openrouter_credits = refresh_openrouter(pane_cwd, force);
+        self.settings.tick_animation();
 
         self.spai_notes.refresh(pane_cwd, force);
 

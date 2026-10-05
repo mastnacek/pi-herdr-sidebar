@@ -1,9 +1,11 @@
 //! Real OpenRouter embeddings vectorization service for SPAI notes.
+use super::state::AsyncProgress;
 use crate::slices::spai_notes::note::SpaiNoteItem;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc::Sender;
 
 #[derive(Serialize)]
 struct EmbeddingRequest<'a> {
@@ -110,12 +112,15 @@ pub fn request_embeddings(
     Ok(final_vecs)
 }
 
-/// Computes vectors for all items in a project and persists `.vectors.json`.
-pub fn vectorize_project_items(
+/// Computes vectors for all items in a project with live background progress reports.
+pub fn vectorize_project_items_with_progress(
     api_key: &str,
     model: &str,
     project_dir: &Path,
     items: &[SpaiNoteItem],
+    progress_tx: &Sender<AsyncProgress>,
+    processed_count: &mut usize,
+    total_records: usize,
 ) -> Result<usize, String> {
     if items.is_empty() {
         return Ok(0);
@@ -125,7 +130,6 @@ pub fn vectorize_project_items(
         .map(|s| s.vectors)
         .unwrap_or_default();
 
-    // Prepare inputs
     let mut to_fetch_ids = Vec::new();
     let mut to_fetch_texts = Vec::new();
 
@@ -135,17 +139,23 @@ pub fn vectorize_project_items(
         to_fetch_texts.push(text);
     }
 
-    // Process in batches of 16
     let batch_size = 16;
-    let mut indexed = 0;
+    let mut newly_indexed = 0;
 
     for (chunk_ids, chunk_texts) in to_fetch_ids.chunks(batch_size).zip(to_fetch_texts.chunks(batch_size)) {
+        let _ = progress_tx.send(AsyncProgress::Progress {
+            step: *processed_count,
+            total: total_records,
+            label: format!("Vektorizuji: {}/{} záznamů (model: {})", *processed_count, total_records, model),
+        });
+
         let refs: Vec<&str> = chunk_texts.iter().map(|s| s.as_str()).collect();
         let computed = request_embeddings(api_key, model, &refs)?;
 
         for (id, vec) in chunk_ids.iter().zip(computed) {
             vector_map.insert(id.clone(), vec);
-            indexed += 1;
+            newly_indexed += 1;
+            *processed_count += 1;
         }
     }
 
@@ -157,7 +167,7 @@ pub fn vectorize_project_items(
     };
 
     save_project_vectors(project_dir, &store)?;
-    Ok(indexed)
+    Ok(newly_indexed)
 }
 
 fn vectors_file_path(project_dir: &Path) -> PathBuf {
