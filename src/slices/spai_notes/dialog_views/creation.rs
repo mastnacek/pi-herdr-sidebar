@@ -1,4 +1,4 @@
-//! SPAI Smart Input creation dialog rendering with top input and side-by-side context.
+//! SPAI Smart Input creation dialog rendering with full width, multiline wrapped input, and clean context.
 use super::creation_parts::{build_hint_lines, build_project_picker_lines, build_shortcuts_line};
 use crate::shared::theme;
 use crate::slices::spai_notes::state::SpaiNotesState;
@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, BorderType, Clear, Paragraph},
+    widgets::{Block, BorderType, Clear, Paragraph, Wrap},
     Frame,
 };
 
@@ -23,9 +23,10 @@ pub(crate) fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (
 }
 
 pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_width = area.width.saturating_sub(4).clamp(68, 96);
-    let dialog_height = area.height.saturating_sub(2).clamp(18, 30);
-    let x = area.x + (area.width.saturating_sub(dialog_width)) / 2;
+    // Full width of the pane / sidebar window
+    let dialog_width = area.width;
+    let dialog_height = area.height.clamp(18, 36);
+    let x = area.x;
     let y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
     let dialog_area = Rect::new(x, y, dialog_width, dialog_height);
 
@@ -50,7 +51,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // 1. Top row: Smart Input Box
+            Constraint::Length(5), // 1. Top row: Smart Input Box (3 visible lines + borders)
             Constraint::Min(8),    // 2. Middle row: Type list (left) + Context & Dedup (right)
             Constraint::Length(1), // 3. Bottom row: Shortcuts footer
         ])
@@ -58,7 +59,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
 
     let raw = &state.creation_dialog.title_input;
 
-    // ── 1. Top row: Vstup (Smart Input Box) ─────────────────────────
+    // ── 1. Top row: Vstup (Full-width Multiline Smart Input Box) ────
     let input_block = Block::bordered()
         .title(Span::styled(
             " ▶ Zadání (Smart Input) ",
@@ -95,7 +96,9 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         ));
     }
 
-    let input_para = Paragraph::new(Line::from(input_spans)).block(input_block);
+    let input_para = Paragraph::new(Line::from(input_spans))
+        .block(input_block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(input_para, rows[0]);
 
     // ── 2. Middle row: Type list (left) and Context & Dedup (right) ─

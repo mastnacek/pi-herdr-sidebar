@@ -18,6 +18,7 @@ pub fn build_hint_lines(
     last_keystroke: Option<Instant>,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
+    let is_empty = raw_input.trim().is_empty();
 
     // 1. Live Deduplication / Warning Card (if duplicates detected or evaluating)
     if is_evaluating_vector {
@@ -33,7 +34,7 @@ pub fn build_hint_lines(
         lines.push(Line::from(vec![
             Span::styled("  ⚠️  ", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
             Span::styled(
-                "Nalezeny podobné existující záznamy (dedup):",
+                "Nalezeny podobné existující záznamy (sémantický dedup):",
                 Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
             ),
         ]));
@@ -82,8 +83,8 @@ pub fn build_hint_lines(
             )]));
             lines.push(Line::raw(""));
         }
-    } else {
-        // Fast local fallback
+    } else if !is_empty {
+        // Fast local fallback when typing
         let similar = find_similar_notes(raw_input, existing_items, 0.45, 2);
         if !similar.is_empty() {
             lines.push(Line::from(vec![
@@ -98,7 +99,13 @@ pub fn build_hint_lines(
                 lines.push(Line::from(vec![
                     Span::styled(
                         format!("    [{:>2}%] ", pct),
-                        Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+                        Style::default()
+                            .fg(if pct >= 70 {
+                                Color::Rgb(255, 83, 69)
+                            } else {
+                                Color::Rgb(255, 184, 108)
+                            })
+                            .bold(),
                     ),
                     Span::styled(
                         format!("{} ", m.symbol),
@@ -114,26 +121,27 @@ pub fn build_hint_lines(
         }
     }
 
-    // 2. Selected Type Description
-    lines.push(Line::from(vec![
-        Span::styled("  Popis: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(sel_opt.desc, Style::default().fg(Color::White)),
-    ]));
-    lines.push(Line::raw(""));
-
-    // 3. Examples
-    lines.push(Line::from(vec![
-        Span::styled("  Příklady zápisu:", Style::default().fg(Color::Rgb(45, 213, 183)).bold()),
-    ]));
-    for ex in sel_opt.examples {
+    // 2. Helper text and Examples: Only show when the input is empty!
+    if is_empty {
         lines.push(Line::from(vec![
-            Span::styled("    ", Style::default()),
-            Span::styled(*ex, Style::default().fg(Color::White)),
+            Span::styled("  Popis: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(sel_opt.desc, Style::default().fg(Color::White)),
         ]));
-    }
-    lines.push(Line::raw(""));
+        lines.push(Line::raw(""));
 
-    // 4. Cheat sheet
+        lines.push(Line::from(vec![
+            Span::styled("  Příklady zápisu:", Style::default().fg(Color::Rgb(45, 213, 183)).bold()),
+        ]));
+        for ex in sel_opt.examples {
+            lines.push(Line::from(vec![
+                Span::styled("    ", Style::default()),
+                Span::styled(*ex, Style::default().fg(Color::White)),
+            ]));
+        }
+        lines.push(Line::raw(""));
+    }
+
+    // 3. Cheat sheet (always accessible at bottom)
     lines.push(Line::from(vec![
         Span::styled("  SPAI Syntax:", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
         Span::styled("  @projekt ", Style::default().fg(Color::Cyan).bold()),
