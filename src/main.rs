@@ -95,6 +95,7 @@ fn parse_tab(args: &[String]) -> Option<Tab> {
     let i = args.iter().position(|a| a == "--tab")?;
     match args.get(i + 1)?.to_ascii_lowercase().as_str() {
         "notes" | "4" => Some(Tab::Notes),
+        "settings" | "config" | "6" => Some(Tab::Settings),
         "shortcuts" | "keys" | "5" => Some(Tab::Shortcuts),
         "mcp" | "3" => Some(Tab::Mcp),
         "skills" | "2" => Some(Tab::Skills),

@@ -117,9 +117,11 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
     // 4. Notes tab indicator (SPAI notes & fileviewer)
     let notes_spans = vec![Span::raw(super::state_model::TAB_LABELS[4])];
 
-    // 5. Shortcuts tab (keybindings). The usage overview is its own window, so
-    // there is nothing to animate here.
+    // 5. Shortcuts tab (keybindings).
     let shortcuts_spans = vec![Span::raw(super::state_model::TAB_LABELS[5])];
+
+    // 6. Settings tab (API key, models, vectorization)
+    let settings_spans = vec![Span::raw(super::state_model::TAB_LABELS[6])];
 
     let titles: Vec<Line> = vec![
         Line::from(zen_spans),
@@ -128,6 +130,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {
         Line::from(mcp_spans),
         Line::from(notes_spans),
         Line::from(shortcuts_spans),
+        Line::from(settings_spans),
     ];
 
     // Top status indicator: static dot in Zen tab or when idle; animated ONLY when agent is running in active tabs
@@ -187,6 +190,9 @@ fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
         }
         Tab::Shortcuts => {
             crate::slices::shortcuts::render_shortcuts_tab(frame, area, &state.shortcuts)
+        }
+        Tab::Settings => {
+            crate::slices::settings::render_settings_tab(frame, area, &state.settings)
         }
         Tab::Status => {
             if let Some(t) = &state.live {

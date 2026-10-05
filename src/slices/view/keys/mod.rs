@@ -1,9 +1,7 @@
 //! Keyboard dispatch for the sidebar event loop.
-//!
-//! Split out of `run_view` so the loop stays readable and each face's key
-//! handling sits in one place. The order of the blocks below is meaningful:
-//! active modals consume keys *before* the global quit check, and `Esc` always
-//! closes a modal rather than exiting the sidebar.
+pub mod dialogs;
+
+use self::dialogs::{handle_notes_dialogs, handle_settings_editing_key};
 use super::external::open_external_editor;
 use super::state::{SidebarState, Tab};
 use crate::shared::TerminalGuard;
@@ -11,13 +9,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 /// Handles one key press. Returns `true` when the sidebar should quit.
 pub fn handle_key(key: KeyEvent, state: &mut SidebarState, guard: &mut TerminalGuard) -> bool {
-    // Windows terminals emit Press AND Release events; react to presses only,
-    // otherwise 'w' cycles two weather locations per keystroke.
     if key.kind != KeyEventKind::Press {
         return false;
     }
 
-    if handle_notes_dialogs(&key, state, guard) {
+    if handle_notes_dialogs(&key, state, guard) || handle_settings_editing_key(&key, state) {
         return false;
     }
 
@@ -33,101 +29,6 @@ pub fn handle_key(key: KeyEvent, state: &mut SidebarState, guard: &mut TerminalG
     false
 }
 
-/// Creation dialog + integrated note editor. Returns `true` when the key was
-/// consumed by a dialog.
-fn handle_notes_dialogs(
-    key: &KeyEvent,
-    state: &mut SidebarState,
-    guard: &mut TerminalGuard,
-) -> bool {
-    if state.active_tab != Tab::Notes {
-        return false;
-    }
-
-    if state.spai_notes.creation_dialog.active {
-        let ac_active = state.spai_notes.creation_dialog.autocomplete_active;
-        match key.code {
-            KeyCode::Esc => {
-                if ac_active {
-                    state.spai_notes.creation_dialog.autocomplete_active = false;
-                } else {
-                    state.spai_notes.close_creation_dialog();
-                }
-            }
-            KeyCode::Up => {
-                if ac_active {
-                    state.spai_notes.prev_suggestion();
-                } else {
-                    state.spai_notes.prev_type();
-                }
-            }
-            KeyCode::Down => {
-                if ac_active {
-                    state.spai_notes.next_suggestion();
-                } else {
-                    state.spai_notes.next_type();
-                }
-            }
-            KeyCode::Tab => {
-                if ac_active {
-                    state.spai_notes.apply_selected_suggestion();
-                } else {
-                    state.spai_notes.apply_selected_type();
-                }
-            }
-            KeyCode::Enter => {
-                if ac_active {
-                    state.spai_notes.apply_selected_suggestion();
-                } else {
-                    let _ = state.spai_notes.submit_creation_dialog();
-                }
-            }
-            KeyCode::Backspace => state.spai_notes.on_dialog_backspace(),
-            KeyCode::Char(c) => state.spai_notes.on_dialog_char_typed(c),
-            _ => {}
-        }
-        return true;
-    }
-
-    if state.spai_notes.edit_dialog.active {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Esc => state.spai_notes.close_edit_dialog(),
-            KeyCode::Char('s') if ctrl => {
-                if let Err(err) = state.spai_notes.submit_edit_dialog() {
-                    state.spai_notes.status_message = Some(err);
-                }
-            }
-            // Ctrl+E — never a bare `E`. Inside a text field every printable key
-            // must insert its character: typing "Editace" used to spawn the
-            // external editor instead of typing.
-            KeyCode::Char('e') | KeyCode::Char('E') if ctrl => {
-                state.spai_notes.close_edit_dialog();
-                open_external_editor(guard, state);
-            }
-            KeyCode::Enter => state.spai_notes.on_edit_enter(),
-            KeyCode::Tab | KeyCode::BackTab => state.spai_notes.toggle_edit_field(),
-            KeyCode::Backspace => state.spai_notes.on_edit_backspace(),
-            KeyCode::Delete => state.spai_notes.on_edit_delete(),
-            KeyCode::Left => state.spai_notes.on_edit_cursor_left(),
-            KeyCode::Right => state.spai_notes.on_edit_cursor_right(),
-            KeyCode::Up => state.spai_notes.on_edit_cursor_vertical(false),
-            KeyCode::Down => state.spai_notes.on_edit_cursor_vertical(true),
-            KeyCode::Home => state.spai_notes.on_edit_cursor_line_start(),
-            KeyCode::End => state.spai_notes.on_edit_cursor_line_end(),
-            KeyCode::PageUp => state.spai_notes.scroll_edit_body(false, 5),
-            KeyCode::PageDown => state.spai_notes.scroll_edit_body(true, 5),
-            KeyCode::Char(c) if !ctrl && !key.modifiers.contains(KeyModifiers::ALT) => {
-                state.spai_notes.on_edit_char_typed(c)
-            }
-            _ => {}
-        }
-        return true;
-    }
-
-    false
-}
-
 fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut TerminalGuard) {
     match key.code {
         KeyCode::Tab => state.next_tab(),
@@ -135,6 +36,19 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Left | KeyCode::Char('h') => {
             if state.active_tab == Tab::Notes {
                 state.spai_notes.prev_project();
+            } else if state.active_tab == Tab::Settings {
+                match state.settings.selected_field {
+                    crate::slices::settings::SettingsField::ChatModel => {
+                        state.settings.prev_chat_model()
+                    }
+                    crate::slices::settings::SettingsField::EmbeddingModel => {
+                        state.settings.prev_embedding_model()
+                    }
+                    crate::slices::settings::SettingsField::SimilarityThreshold => {
+                        state.settings.decrease_threshold()
+                    }
+                    _ => state.prev_tab(),
+                }
             } else {
                 state.prev_tab();
             }
@@ -142,6 +56,19 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Right | KeyCode::Char('l') => {
             if state.active_tab == Tab::Notes {
                 state.spai_notes.next_project();
+            } else if state.active_tab == Tab::Settings {
+                match state.settings.selected_field {
+                    crate::slices::settings::SettingsField::ChatModel => {
+                        state.settings.next_chat_model()
+                    }
+                    crate::slices::settings::SettingsField::EmbeddingModel => {
+                        state.settings.next_embedding_model()
+                    }
+                    crate::slices::settings::SettingsField::SimilarityThreshold => {
+                        state.settings.increase_threshold()
+                    }
+                    _ => state.next_tab(),
+                }
             } else {
                 state.next_tab();
             }
@@ -152,6 +79,7 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Char('3') => state.set_tab(Tab::Mcp),
         KeyCode::Char('4') => state.set_tab(Tab::Notes),
         KeyCode::Char('5') => state.set_tab(Tab::Shortcuts),
+        KeyCode::Char('6') => state.set_tab(Tab::Settings),
         KeyCode::Char('p') if state.active_tab == Tab::Notes => {
             state.spai_notes.jump_to_active_project();
         }
@@ -182,14 +110,61 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Char('x') if state.active_tab == Tab::Notes => {
             let _ = state.spai_notes.cycle_selected_status();
         }
+        KeyCode::Char('v') | KeyCode::Char('V') if state.active_tab == Tab::Settings => {
+            crate::slices::settings::vectorize_all_records(
+                &mut state.settings,
+                &mut state.spai_notes,
+            );
+        }
+        KeyCode::Char('f') | KeyCode::Char('F') if state.active_tab == Tab::Settings => {
+            crate::slices::settings::classify_facets_all(
+                &mut state.settings,
+                &mut state.spai_notes,
+            );
+        }
+        KeyCode::Char('e') if state.active_tab == Tab::Settings => {
+            state.settings.start_editing_api_key();
+        }
+        KeyCode::Char('+') | KeyCode::Char('=') if state.active_tab == Tab::Settings => {
+            state.settings.increase_threshold();
+        }
+        KeyCode::Char('-') | KeyCode::Char('_') if state.active_tab == Tab::Settings => {
+            state.settings.decrease_threshold();
+        }
+        KeyCode::Enter if state.active_tab == Tab::Settings => {
+            match state.settings.selected_field {
+                crate::slices::settings::SettingsField::ApiKey => {
+                    state.settings.start_editing_api_key();
+                }
+                crate::slices::settings::SettingsField::VectorizeAction => {
+                    crate::slices::settings::vectorize_all_records(
+                        &mut state.settings,
+                        &mut state.spai_notes,
+                    );
+                }
+                crate::slices::settings::SettingsField::ClassifyAction => {
+                    crate::slices::settings::classify_facets_all(
+                        &mut state.settings,
+                        &mut state.spai_notes,
+                    );
+                }
+                _ => {}
+            }
+        }
         KeyCode::Up | KeyCode::Char('k') => match state.active_tab {
             Tab::Notes => state.spai_notes.prev_item(),
             Tab::Shortcuts => state.shortcuts.prev(),
+            Tab::Settings => {
+                state.settings.selected_field = state.settings.selected_field.prev();
+            }
             _ => state.scroll_up(1),
         },
         KeyCode::Down | KeyCode::Char('j') => match state.active_tab {
             Tab::Notes => state.spai_notes.next_item(),
             Tab::Shortcuts => state.shortcuts.next(),
+            Tab::Settings => {
+                state.settings.selected_field = state.settings.selected_field.next();
+            }
             _ => state.scroll_down(1),
         },
         KeyCode::PageUp => match state.active_tab {
@@ -217,7 +192,6 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
             }
         }
         KeyCode::Char('w') => state.cycle_weather_location(),
-        KeyCode::Char('c') => state.copy_weather_report(),
         _ => {}
     }
 }

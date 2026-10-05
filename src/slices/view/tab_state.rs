@@ -29,6 +29,7 @@ pub fn slug(tab: Tab) -> &'static str {
         Tab::Mcp => "mcp",
         Tab::Notes => "notes",
         Tab::Shortcuts => "shortcuts",
+        Tab::Settings => "settings",
     }
 }
 
@@ -41,6 +42,7 @@ pub fn from_slug(value: &str) -> Option<Tab> {
         "mcp" => Some(Tab::Mcp),
         "notes" => Some(Tab::Notes),
         "shortcuts" => Some(Tab::Shortcuts),
+        "settings" => Some(Tab::Settings),
         _ => None,
     }
 }

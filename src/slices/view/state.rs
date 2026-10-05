@@ -65,6 +65,7 @@ impl SidebarState {
             weather_last_fetch: 0,
             spai_notes: crate::slices::spai_notes::SpaiNotesState::new(None),
             shortcuts: crate::slices::shortcuts::ShortcutsState::new(),
+            settings: crate::slices::settings::SettingsState::load(),
         };
 
         state.refresh(true);
@@ -106,7 +107,7 @@ impl SidebarState {
             let tab_id = match tab {
                 Tab::Status => "status",
                 Tab::Skills => "skills",
-                Tab::Zen | Tab::Mcp | Tab::Notes | Tab::Shortcuts => return,
+                Tab::Zen | Tab::Mcp | Tab::Notes | Tab::Shortcuts | Tab::Settings => return,
             };
 
             let col = if let Some(snap) = &self.snapshot {

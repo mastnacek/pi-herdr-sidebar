@@ -16,10 +16,11 @@ pub enum Tab {
     Mcp = 3,
     Notes = 4,
     Shortcuts = 5,
+    Settings = 6,
 }
 
 /// Number of tabs; keep in sync with [`Tab`] and [`TAB_LABELS`].
-pub const TAB_COUNT: usize = 6;
+pub const TAB_COUNT: usize = 7;
 
 /// Tab bar labels, in index order. Single source of truth so the header and the
 /// click hit-testing cannot drift apart.
@@ -30,6 +31,7 @@ pub const TAB_LABELS: [&str; TAB_COUNT] = [
     " 3: MCP ",
     " 4: Notes ",
     " 5: Shortcuts ",
+    " 6: Settings ",
 ];
 
 /// Maps a mouse click column to a tab index by mirroring the exact geometry
@@ -61,6 +63,7 @@ impl Tab {
             3 => Tab::Mcp,
             4 => Tab::Notes,
             5 => Tab::Shortcuts,
+            6 => Tab::Settings,
             _ => Tab::Status,
         }
     }
@@ -115,6 +118,7 @@ pub struct SidebarState {
     pub weather_last_fetch: u64,
     pub spai_notes: crate::slices::spai_notes::SpaiNotesState,
     pub shortcuts: crate::slices::shortcuts::ShortcutsState,
+    pub settings: crate::slices::settings::SettingsState,
 }
 
 #[cfg(test)]
