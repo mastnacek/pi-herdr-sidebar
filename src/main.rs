@@ -17,6 +17,7 @@ fn main() -> io::Result<()> {
     let command = args.get(1).map(|s| s.as_str()).unwrap_or("view");
     let startup = Startup {
         tab: parse_tab(&args),
+        open_scratch: args.iter().any(|a| a == "--scratch"),
     };
 
     match command {
@@ -53,6 +54,12 @@ fn main() -> io::Result<()> {
         "popup-action" => {
             if let Err(e) = slices::actions::run_popup() {
                 eprintln!("Error opening popup: {}", e);
+                std::process::exit(1);
+            }
+        }
+        "scratch-popup-action" => {
+            if let Err(e) = slices::actions::run_scratch_popup() {
+                eprintln!("Error opening scratchpad modal: {}", e);
                 std::process::exit(1);
             }
         }

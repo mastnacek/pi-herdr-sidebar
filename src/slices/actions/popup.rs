@@ -42,6 +42,16 @@ pub fn run_popup() -> Result<(), String> {
 
 /// Opens the SPAI Notes face as a large modal over the active workspace —
 /// same mechanic the Kanban board uses (`placement = "popup"`).
+/// Opens the Scratchpad as a fullscreen modal over the active workspace.
+pub fn run_scratch_popup() -> Result<(), String> {
+    let entrypoint = if cfg!(windows) {
+        "scratch-popup-win"
+    } else {
+        "scratch-popup"
+    };
+    open_entrypoint(entrypoint, "scratchpad modal")
+}
+
 pub fn run_notes_popup() -> Result<(), String> {
     let entrypoint = if cfg!(windows) {
         "notes-popup-win"

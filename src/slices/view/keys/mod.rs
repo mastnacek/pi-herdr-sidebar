@@ -2,6 +2,8 @@
 pub mod creation;
 pub mod dialogs;
 pub mod edit;
+pub mod scratch;
+pub mod scratch_input;
 
 use self::dialogs::{handle_notes_dialogs, handle_settings_dialogs};
 use super::external::open_external_editor;
@@ -12,6 +14,17 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 /// Handles one key press. Returns `true` when the sidebar should quit.
 pub fn handle_key(key: KeyEvent, state: &mut SidebarState, guard: &mut TerminalGuard) -> bool {
     if key.kind != KeyEventKind::Press {
+        return false;
+    }
+
+    // Global Ctrl+N opens the Scratchpad from anywhere.
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('n') {
+        scratch::open_scratch(state);
+        return false;
+    }
+
+    // The Scratchpad owns the keyboard while open.
+    if state.spai_notes.scratch.open && scratch::handle_scratch_key(&key, state) {
         return false;
     }
 

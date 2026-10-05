@@ -39,6 +39,8 @@ pub enum ViewMode {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Startup {
     pub tab: Option<Tab>,
+    /// Open the Scratchpad modal immediately (`popup --scratch`).
+    pub open_scratch: bool,
 }
 
 pub fn run_view(
@@ -49,6 +51,9 @@ pub fn run_view(
     let mut state = SidebarState::new(snapshot_override);
     if let Some(tab) = startup.tab {
         state.set_tab(tab);
+    }
+    if startup.open_scratch {
+        state.spai_notes.open_scratch(state.state_dir.clone());
     }
 
     // If we have a snapshot file, acquire single-instance lock to avoid multiple renderers racing

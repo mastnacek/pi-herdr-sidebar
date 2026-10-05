@@ -61,6 +61,11 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
         super::shared_banner::render_shared_model_banner(frame, chunks[2], state);
         render_footer(frame, chunks[3], state);
     }
+
+    // Fullscreen Scratchpad modal (Ctrl+N) sits above everything.
+    if state.spai_notes.scratch.open {
+        crate::slices::spai_notes::scratch::view::render_scratch(frame, area, &state.spai_notes);
+    }
 }
 
 fn render_header(frame: &mut Frame, area: Rect, state: &SidebarState) {

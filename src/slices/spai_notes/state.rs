@@ -30,6 +30,8 @@ pub struct SpaiNotesState {
     pub delete_confirm_active: bool,
     pub creation_dialog: NoteCreationDialog,
     pub edit_dialog: NoteEditDialog,
+    /// Scratchpad modal (docs/scratchpad_mode_plan.md).
+    pub scratch: super::scratch::state::ScratchState,
     /// On-demand duplicate-check panel (Ctrl+D); polls a finished background
     /// job only — never runs on its own.
     pub dedup: DedupPanel,
@@ -57,6 +59,7 @@ impl SpaiNotesState {
             delete_confirm_active: false,
             creation_dialog: NoteCreationDialog::default(),
             edit_dialog: NoteEditDialog::default(),
+            scratch: super::scratch::state::ScratchState::default(),
             dedup: DedupPanel::default(),
             projects_fingerprint: (0, 0, 0, 0),
         };

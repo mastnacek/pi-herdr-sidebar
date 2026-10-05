@@ -240,6 +240,7 @@ impl SidebarState {
 
         // Dedup runs only on Ctrl+D; every tick just drains a finished job.
         self.spai_notes.poll_dedup_receiver();
+        crate::slices::spai_notes::scratch::poll_background(&mut self.spai_notes);
 
         self.spai_notes.refresh(pane_cwd, force);
 

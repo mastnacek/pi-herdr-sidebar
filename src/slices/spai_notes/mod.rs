@@ -11,6 +11,7 @@ pub mod note_io;
 pub mod note_writer;
 pub mod similarity;
 pub mod spai_prefixes;
+pub mod scratch;
 pub mod state;
 pub mod state_creation;
 pub mod state_edit;

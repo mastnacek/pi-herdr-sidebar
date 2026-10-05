@@ -40,6 +40,26 @@ height = 24
 command = ["target/release/pi_sidebar.exe", "popup"]
 platforms = ["windows"]
 
+# Fullscreen Scratchpad: free typing, one SPAI-marked line = one record file
+# on Ctrl+S. Same modal mechanic as the Notes editor.
+[[panes]]
+id = "scratch-popup"
+title = "Pi Herdr Scratchpad"
+placement = "popup"
+width = "92%"
+height = "88%"
+command = ["target/release/pi_sidebar", "popup", "--scratch"]
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "scratch-popup-win"
+title = "Pi Herdr Scratchpad"
+placement = "popup"
+width = "92%"
+height = "88%"
+command = ["target/release/pi_sidebar.exe", "popup", "--scratch"]
+platforms = ["windows"]
+
 # Large modal devoted to the SPAI Notes editor — same mechanic as the Kanban
 # board (`placement = "popup"`), opened straight on the Notes face.
 [[panes]]
@@ -125,6 +145,20 @@ id = "popup-win"
 title = "Open Pi Herdr Sidebar Popup"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar.exe", "popup-action"]
+platforms = ["windows"]
+
+[[actions]]
+id = "scratch"
+title = "Open Pi Herdr Scratchpad (modal)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "scratch-popup-action"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "scratch-win"
+title = "Open Pi Herdr Scratchpad (modal)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "scratch-popup-action"]
 platforms = ["windows"]
 
 [[actions]]
