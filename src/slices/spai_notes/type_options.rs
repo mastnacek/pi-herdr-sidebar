@@ -26,7 +26,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Todo,
-        color: Color::Rgb(241, 252, 121), // Yellow
+        color: Color::Rgb(255, 215, 0), // Gold
     },
     SpaiTypeOption {
         symbol: "/ ",
@@ -39,7 +39,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Working,
-        color: Color::Rgb(241, 252, 121), // Yellow
+        color: Color::Rgb(0, 255, 255), // Cyan
     },
     SpaiTypeOption {
         symbol: "/. ",
@@ -52,7 +52,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Waiting,
-        color: Color::Rgb(189, 147, 249), // Purple
+        color: Color::Rgb(255, 107, 107), // Coral
     },
     SpaiTypeOption {
         symbol: "x ",
@@ -65,7 +65,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Done,
-        color: Color::Rgb(55, 244, 153), // Green
+        color: Color::Rgb(144, 238, 144), // Light green
     },
     SpaiTypeOption {
         symbol: "z ",
@@ -78,25 +78,25 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Cancelled,
-        color: Color::Rgb(135, 145, 170), // Muted Gray
+        color: Color::Rgb(127, 140, 141), // Dim gray
     },
     SpaiTypeOption {
         symbol: "? ",
         display_sym: "?",
-        name: "Nápad (inbox)",
-        desc: "Nápad nebo myšlenka k pozdějšímu zpracování",
+        name: "Nápad (idea)",
+        desc: "Myšlenka, nápad k pozdějšímu zpracování",
         examples: &[
             "? @projekt nový nápad na funkci",
             "? prozkoumat novou knihovnu pro TUI",
         ],
         kind: SpaiType::Idea,
         status: SpaiStatus::Idea,
-        color: Color::Rgb(255, 121, 198), // Pink
+        color: Color::Rgb(186, 85, 211), // Violet
     },
     SpaiTypeOption {
         symbol: "- ",
         display_sym: "-",
-        name: "Poznámka",
+        name: "Poznámka (note)",
         desc: "Běžná textová poznámka nebo zápisek",
         examples: &[
             "- @projekt zápis ze standupu",
@@ -104,7 +104,59 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         ],
         kind: SpaiType::Note,
         status: SpaiStatus::Note,
-        color: Color::Rgb(139, 233, 253), // Cyan
+        color: Color::Rgb(127, 179, 255), // Slate blue
+    },
+    SpaiTypeOption {
+        symbol: "* ",
+        display_sym: "*",
+        name: "Výhra (win)",
+        desc: "Co se dnes povedlo, úspěch nebo milník",
+        examples: &[
+            "* @projekt úspěšně nasazena v1.0",
+            "* vyřešen dlouhodobý memory leak",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Win,
+        color: Color::Rgb(163, 230, 53), // Lime
+    },
+    SpaiTypeOption {
+        symbol: "% ",
+        display_sym: "%",
+        name: "Průser (fuckup)",
+        desc: "Co se nepovedlo a co nás to naučilo",
+        examples: &[
+            "% @projekt výpadek prod DB po špatné migraci",
+            "% zapomenutý rollback plán pro deploy",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Fuckup,
+        color: Color::Rgb(214, 69, 69), // Crimson
+    },
+    SpaiTypeOption {
+        symbol: "; ",
+        display_sym: ";",
+        name: "Skutek dne (skutek)",
+        desc: "Hlavní dnešní počin nebo klíčový skutek",
+        examples: &[
+            "; @projekt dokončen kompletní refaktoring API",
+            "; schválena nová architektura systému",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Skutek,
+        color: Color::Rgb(255, 94, 219), // Magenta
+    },
+    SpaiTypeOption {
+        symbol: "# ",
+        display_sym: "#",
+        name: "Inbox capture",
+        desc: "Rychlý záchyt myšlenky do inboxu",
+        examples: &[
+            "# @projekt rychlý záchyt požadavku",
+            "# zkontrolovat logy z produkce",
+        ],
+        kind: SpaiType::Idea,
+        status: SpaiStatus::Inbox,
+        color: Color::Rgb(78, 205, 196), // Teal
     },
     SpaiTypeOption {
         symbol: "!- ",
@@ -166,7 +218,11 @@ mod tests {
         assert_eq!(find_type_option_index("z test"), Some(4));
         assert_eq!(find_type_option_index("? test"), Some(5));
         assert_eq!(find_type_option_index("- test"), Some(6));
-        assert_eq!(find_type_option_index("!- test"), Some(7));
+        assert_eq!(find_type_option_index("* test"), Some(7));
+        assert_eq!(find_type_option_index("% test"), Some(8));
+        assert_eq!(find_type_option_index("; test"), Some(9));
+        assert_eq!(find_type_option_index("# test"), Some(10));
+        assert_eq!(find_type_option_index("!- test"), Some(11));
         assert_eq!(find_type_option_index("plain text"), None);
     }
 }

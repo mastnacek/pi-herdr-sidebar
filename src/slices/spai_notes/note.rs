@@ -37,6 +37,9 @@ pub enum SpaiStatus {
     Idea,
     Note,
     Inbox,
+    Win,
+    Fuckup,
+    Skutek,
 }
 
 impl SpaiStatus {
@@ -50,6 +53,9 @@ impl SpaiStatus {
             SpaiStatus::Idea => "idea",
             SpaiStatus::Note => "note",
             SpaiStatus::Inbox => "inbox",
+            SpaiStatus::Win => "win",
+            SpaiStatus::Fuckup => "fuckup",
+            SpaiStatus::Skutek => "skutek",
         }
     }
 
@@ -62,6 +68,9 @@ impl SpaiStatus {
             "idea" => SpaiStatus::Idea,
             "note" => SpaiStatus::Note,
             "inbox" => SpaiStatus::Inbox,
+            "win" => SpaiStatus::Win,
+            "fuckup" => SpaiStatus::Fuckup,
+            "skutek" => SpaiStatus::Skutek,
             _ => SpaiStatus::Todo,
         }
     }
@@ -74,7 +83,11 @@ impl SpaiStatus {
             SpaiStatus::Done => SpaiStatus::Cancelled,
             SpaiStatus::Cancelled => SpaiStatus::Todo,
             SpaiStatus::Idea => SpaiStatus::Todo,
-            SpaiStatus::Note | SpaiStatus::Inbox => SpaiStatus::Todo,
+            SpaiStatus::Note
+            | SpaiStatus::Inbox
+            | SpaiStatus::Win
+            | SpaiStatus::Fuckup
+            | SpaiStatus::Skutek => SpaiStatus::Todo,
         }
     }
 
@@ -86,7 +99,11 @@ impl SpaiStatus {
             SpaiStatus::Done => "x",
             SpaiStatus::Cancelled => "z",
             SpaiStatus::Idea => "?",
-            SpaiStatus::Note | SpaiStatus::Inbox => "-",
+            SpaiStatus::Note => "-",
+            SpaiStatus::Inbox => "#",
+            SpaiStatus::Win => "*",
+            SpaiStatus::Fuckup => "%",
+            SpaiStatus::Skutek => ";",
         }
     }
 
@@ -100,6 +117,9 @@ impl SpaiStatus {
             SpaiStatus::Idea => "[?]",
             SpaiStatus::Note => "[-]",
             SpaiStatus::Inbox => "[#]",
+            SpaiStatus::Win => "[*]",
+            SpaiStatus::Fuckup => "[%]",
+            SpaiStatus::Skutek => "[;]",
         }
     }
 }

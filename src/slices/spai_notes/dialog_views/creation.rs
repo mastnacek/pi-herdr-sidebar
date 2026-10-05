@@ -23,7 +23,7 @@ pub(crate) fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (
 
 pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     let dialog_width = area.width.saturating_sub(4).clamp(60, 84);
-    let dialog_height = 17u16.min(area.height.saturating_sub(2)).max(12);
+    let dialog_height = 15u16.min(area.height.saturating_sub(4)).max(12);
     let x = area.x + (area.width.saturating_sub(dialog_width)) / 2;
     let y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
     let dialog_area = Rect::new(x, y, dialog_width, dialog_height);
@@ -49,7 +49,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(7),    // type list + hint window
+            Constraint::Min(6),    // type list + hint window
             Constraint::Length(3), // input box
             Constraint::Length(1), // shortcuts footer
         ])
@@ -107,7 +107,10 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         ]);
         type_lines.push(line);
     }
-    let type_para = Paragraph::new(type_lines).block(list_block);
+    let (_visible, scroll) = picker_viewport(SPAI_TYPE_OPTIONS.len(), sel_idx, top_cols[0].height);
+    let type_para = Paragraph::new(type_lines)
+        .block(list_block)
+        .scroll((scroll, 0));
     frame.render_widget(type_para, top_cols[0]);
 
     // ── Right column: Nápověda / Hint okno ──────────────────────────
