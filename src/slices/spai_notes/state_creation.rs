@@ -62,7 +62,6 @@ impl SpaiNotesState {
             for p in &[
                 "/. ", "/· ", "/.", "/·", "!- ", "!-", ". ", ".", "/ ", "/", "x ", "X ", "x",
                 "X", "z ", "Z ", "z", "Z", "? ", "?", "- ", "-", "* ", "*", "% ", "%", "; ", ";",
-                "# ", "#",
             ] {
                 if rest.starts_with(p) {
                     rest = &rest[p.len()..];
@@ -147,7 +146,6 @@ impl SpaiNotesState {
         let mut clean_title = raw_input.as_str();
         for p in &[
             "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ", "* ", "% ", "; ",
-            "# ",
         ] {
             if clean_title.starts_with(p) {
                 clean_title = &clean_title[p.len()..];

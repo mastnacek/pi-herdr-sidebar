@@ -33,8 +33,7 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
         SpaiStatus::Done => "x ",
         SpaiStatus::Cancelled => "z ",
         SpaiStatus::Idea => "? ",
-        SpaiStatus::Note => "- ",
-        SpaiStatus::Inbox => "# ",
+        SpaiStatus::Note | SpaiStatus::Inbox => "- ",
         SpaiStatus::Win => "* ",
         SpaiStatus::Fuckup => "% ",
         SpaiStatus::Skutek => "; ",
@@ -54,7 +53,6 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
         let mut matched_len = 0;
         for p in &[
             "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ", "* ", "% ", "; ",
-            "# ",
         ] {
             if trimmed.starts_with(p) {
                 matched_len = p.len();

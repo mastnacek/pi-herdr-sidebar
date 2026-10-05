@@ -146,19 +146,6 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         color: Color::Rgb(255, 94, 219), // Magenta
     },
     SpaiTypeOption {
-        symbol: "# ",
-        display_sym: "#",
-        name: "Inbox capture",
-        desc: "Rychlý záchyt myšlenky do inboxu",
-        examples: &[
-            "# @projekt rychlý záchyt požadavku",
-            "# zkontrolovat logy z produkce",
-        ],
-        kind: SpaiType::Idea,
-        status: SpaiStatus::Inbox,
-        color: Color::Rgb(78, 205, 196), // Teal
-    },
-    SpaiTypeOption {
         symbol: "!- ",
         display_sym: "!-",
         name: "Kritická událost",
@@ -221,8 +208,7 @@ mod tests {
         assert_eq!(find_type_option_index("* test"), Some(7));
         assert_eq!(find_type_option_index("% test"), Some(8));
         assert_eq!(find_type_option_index("; test"), Some(9));
-        assert_eq!(find_type_option_index("# test"), Some(10));
-        assert_eq!(find_type_option_index("!- test"), Some(11));
+        assert_eq!(find_type_option_index("!- test"), Some(10));
         assert_eq!(find_type_option_index("plain text"), None);
     }
 }
