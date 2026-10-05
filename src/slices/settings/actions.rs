@@ -79,7 +79,7 @@ pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut Spa
     });
 }
 
-/// Triggers background 5D facet classification for unclassified records.
+/// Triggers background 5D facet classification for all records using OpenRouter Chat.
 pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
     if settings.is_busy {
         return;
@@ -102,25 +102,23 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
     let api_key = settings.api_key.clone();
     let model = settings.chat_model.clone();
 
-    let mut unclassified: Vec<SpaiNoteItem> = Vec::new();
+    let mut notes_to_classify: Vec<SpaiNoteItem> = Vec::new();
     for p in &mut notes_state.projects {
         p.ensure_items();
         for item in &p.items {
-            if item.facets.area.is_none() || item.facets.effort.is_none() {
-                unclassified.push(item.clone());
-            }
+            notes_to_classify.push(item.clone());
         }
     }
 
     std::thread::spawn(move || {
-        let total = unclassified.len();
+        let total = notes_to_classify.len();
         if total == 0 {
-            let _ = tx.send(AsyncProgress::Done("Všechny záznamy již mají 5D facety".to_string()));
+            let _ = tx.send(AsyncProgress::Done("Žádné záznamy ke klasifikaci".to_string()));
             return;
         }
 
         let mut processed = 0;
-        for mut item in unclassified {
+        for mut item in notes_to_classify {
             let _ = tx.send(AsyncProgress::Progress {
                 step: processed,
                 total,
@@ -166,8 +164,8 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
         }
 
         let _ = tx.send(AsyncProgress::Done(format!(
-            "✅ 5D AI Klasifikace dokončena: {} záznamů zatříděno modelem {}",
-            processed, model
+            "✅ 5D AI Klasifikace dokončena: {}/{} záznamů zatříděno modelem {}",
+            processed, total, model
         )));
     });
 }

@@ -14,7 +14,7 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
         return;
     }
 
-    let popup_area = theme::centered_percent(area, 85, 80);
+    let popup_area = theme::centered_percent(area, 90, 85);
 
     f.render_widget(Clear, popup_area);
 
@@ -46,9 +46,10 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // Search input
-            Constraint::Min(6),    // Models list
-            Constraint::Length(1), // Footer
+            Constraint::Length(2), // 1. Search input
+            Constraint::Min(5),    // 2. Models list
+            Constraint::Length(4), // 3. Model Details Box
+            Constraint::Length(1), // 4. Footer
         ])
         .split(inner);
 
@@ -108,7 +109,7 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
     lines.push(Line::from(vec![
         Span::raw("  "),
         Span::styled(
-            format!("{:<32}", "Model"),
+            format!("{:<34}", "Model"),
             Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -120,7 +121,7 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
             Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("{:>10}", pos_indicator),
+            format!("{:>12}", pos_indicator),
             Style::default().fg(Color::Rgb(139, 233, 253)).add_modifier(Modifier::BOLD),
         ),
     ]));
@@ -144,8 +145,8 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
             let is_selected = i == state.picker_selected_idx;
             let prefix = if is_selected { "▶ " } else { "  " };
 
-            let name_display = if m.name.len() > 30 {
-                format!("{}...", &m.name[..27])
+            let name_display = if m.name.len() > 32 {
+                format!("{}...", &m.name[..29])
             } else {
                 m.name.clone()
             };
@@ -174,7 +175,7 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
                         Style::default().fg(Color::DarkGray)
                     },
                 ),
-                Span::styled(format!("{:<32}", name_display), line_style),
+                Span::styled(format!("{:<34}", name_display), line_style),
                 Span::styled(
                     format!("{:<8}", m.context_label()),
                     if is_selected {
@@ -197,7 +198,53 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
 
     f.render_widget(Paragraph::new(lines), list_area);
 
-    // 3. Footer
+    // 3. Selected Model Details Box
+    let detail_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::DarkGray))
+        .title(Span::styled(
+            " ℹ Detail vybraného modelu ",
+            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
+        ));
+
+    let mut detail_lines = Vec::new();
+    if let Some(sel_model) = filtered.get(state.picker_selected_idx) {
+        detail_lines.push(Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(&sel_model.name, Style::default().fg(Color::Cyan).bold()),
+            Span::styled(format!(" ({})", sel_model.id), Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("  [{}]", sel_model.modality), Style::default().fg(Color::Yellow)),
+        ]));
+
+        let desc = if sel_model.description.is_empty() {
+            "Bez doplňujícího popisu v katalogu."
+        } else if sel_model.description.len() > 110 {
+            &sel_model.description[..107]
+        } else {
+            &sel_model.description
+        };
+        detail_lines.push(Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(desc, Style::default().fg(Color::White)),
+        ]));
+
+        detail_lines.push(Line::from(vec![
+            Span::styled("  Kontext: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(sel_model.context_label(), Style::default().fg(Color::Rgb(139, 233, 253))),
+            Span::styled("  Max výstup: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(sel_model.max_output_label(), Style::default().fg(Color::Rgb(139, 233, 253))),
+            Span::styled("  Cena: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(sel_model.price_label(), Style::default().fg(if sel_model.is_free { Color::Green } else { Color::Yellow })),
+        ]));
+    } else {
+        detail_lines.push(Line::from(vec![
+            Span::styled("  Žádný model nevybrán.", Style::default().fg(Color::DarkGray)),
+        ]));
+    }
+    f.render_widget(Paragraph::new(detail_lines).block(detail_block), chunks[2]);
+
+    // 4. Footer
     let footer_line = Line::from(vec![
         Span::styled(" [↑/↓] ", Style::default().fg(Color::Rgb(139, 233, 253))),
         Span::styled("Vybrat  ", Style::default().fg(Color::Gray)),
@@ -208,5 +255,5 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
         Span::styled("[r] ", Style::default().fg(Color::Rgb(139, 233, 253))),
         Span::styled("Obnovit katalog", Style::default().fg(Color::Gray)),
     ]);
-    f.render_widget(Paragraph::new(footer_line), chunks[2]);
+    f.render_widget(Paragraph::new(footer_line), chunks[3]);
 }

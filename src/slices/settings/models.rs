@@ -8,10 +8,13 @@ pub struct ModelInfo {
     pub name: String,
     pub description: String,
     pub context_length: u64,
+    pub max_output_tokens: u64,
     pub prompt_price_m: f64,     // $ per 1M prompt tokens
     pub completion_price_m: f64, // $ per 1M completion tokens
     pub is_free: bool,
     pub is_embedding: bool,
+    pub modality: String,
+    pub tokenizer: String,
 }
 
 impl ModelInfo {
@@ -21,6 +24,10 @@ impl ModelInfo {
 
     pub fn context_label(&self) -> String {
         format_context(self.context_length)
+    }
+
+    pub fn max_output_label(&self) -> String {
+        format_context(self.max_output_tokens)
     }
 }
 
@@ -57,11 +64,19 @@ struct OpenRouterPricingRaw {
 }
 
 #[derive(Deserialize)]
+struct OpenRouterTopProviderRaw {
+    #[serde(default)]
+    max_completion_tokens: Option<u64>,
+}
+
+#[derive(Deserialize)]
 struct OpenRouterArchitectureRaw {
     #[serde(default)]
     modality: Option<String>,
     #[serde(default)]
     output_modalities: Option<Vec<String>>,
+    #[serde(default)]
+    tokenizer: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -77,6 +92,8 @@ struct OpenRouterModelRaw {
     pricing: Option<OpenRouterPricingRaw>,
     #[serde(default)]
     architecture: Option<OpenRouterArchitectureRaw>,
+    #[serde(default)]
+    top_provider: Option<OpenRouterTopProviderRaw>,
 }
 
 #[derive(Deserialize)]
@@ -121,14 +138,27 @@ pub fn parse_openrouter_json(body: &str) -> Vec<ModelInfo> {
             let name = m.name.unwrap_or_else(|| m.id.clone());
             let description = m.description.unwrap_or_default();
             let context_length = m.context_length.unwrap_or(0);
+            let max_output_tokens = m
+                .top_provider
+                .as_ref()
+                .and_then(|tp| tp.max_completion_tokens)
+                .unwrap_or(0);
+
+            let modality = m
+                .architecture
+                .as_ref()
+                .and_then(|a| a.modality.clone())
+                .unwrap_or_else(|| "text->text".to_string());
+
+            let tokenizer = m
+                .architecture
+                .as_ref()
+                .and_then(|a| a.tokenizer.clone())
+                .unwrap_or_default();
 
             let is_embedding = m.id.to_lowercase().contains("embed")
                 || name.to_lowercase().contains("embed")
-                || m.architecture
-                    .as_ref()
-                    .and_then(|a| a.modality.as_ref())
-                    .map(|modality| modality.contains("embedding"))
-                    .unwrap_or(false)
+                || modality.contains("embedding")
                 || m.architecture
                     .as_ref()
                     .and_then(|a| a.output_modalities.as_ref())
@@ -140,10 +170,13 @@ pub fn parse_openrouter_json(body: &str) -> Vec<ModelInfo> {
                 name,
                 description,
                 context_length,
+                max_output_tokens,
                 prompt_price_m: prompt_m,
                 completion_price_m: completion_m,
                 is_free,
                 is_embedding,
+                modality,
+                tokenizer,
             }
         })
         .collect()
@@ -178,9 +211,13 @@ mod tests {
                     "id": "anthropic/claude-3.7-sonnet",
                     "name": "Anthropic: Claude 3.7 Sonnet",
                     "context_length": 200000,
+                    "description": "Hybrid reasoning model.",
                     "pricing": {
                         "prompt": "0.000003",
                         "completion": "0.000015"
+                    },
+                    "top_provider": {
+                        "max_completion_tokens": 64000
                     }
                 },
                 {
@@ -203,6 +240,7 @@ mod tests {
         assert_eq!(models.len(), 2);
         assert_eq!(models[0].id, "anthropic/claude-3.7-sonnet");
         assert_eq!(models[0].context_label(), "200k");
+        assert_eq!(models[0].max_output_label(), "64k");
         assert_eq!(models[0].prompt_price_m, 3.0);
         assert_eq!(models[0].completion_price_m, 15.0);
         assert_eq!(models[0].price_label(), "$3.00 / $15.00 /1M");
@@ -222,20 +260,26 @@ mod tests {
                 name: "Anthropic Claude".to_string(),
                 description: String::new(),
                 context_length: 200_000,
+                max_output_tokens: 64_000,
                 prompt_price_m: 3.0,
                 completion_price_m: 15.0,
                 is_free: false,
                 is_embedding: false,
+                modality: "text->text".to_string(),
+                tokenizer: "Claude".to_string(),
             },
             ModelInfo {
                 id: "qwen/qwen3-embedding-8b".to_string(),
                 name: "Qwen3 Embedding 8B".to_string(),
                 description: String::new(),
                 context_length: 32_768,
+                max_output_tokens: 0,
                 prompt_price_m: 0.01,
                 completion_price_m: 0.0,
                 is_free: false,
                 is_embedding: true,
+                modality: "text->embeddings".to_string(),
+                tokenizer: "Qwen".to_string(),
             },
         ];
 
