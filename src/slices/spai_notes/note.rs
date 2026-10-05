@@ -131,6 +131,15 @@ pub struct SpaiNoteItem {
     pub file_name: String,
 }
 
+impl SpaiNoteItem {
+    /// Formatted creation date in `dd.mm.yy` format.
+    pub fn short_date(&self) -> String {
+        super::time_utils::format_short_date(&self.timestamp)
+            .or_else(|| super::time_utils::format_short_date(&self.file_name))
+            .unwrap_or_else(|| "--.--.--".to_string())
+    }
+}
+
 /// Matches standard SPAI prefix on raw lines (. / /. x z ? -)
 pub fn parse_spai_prefix(line: &str) -> Option<(&'static str, SpaiType, SpaiStatus)> {
     let trimmed = line.trim_start();

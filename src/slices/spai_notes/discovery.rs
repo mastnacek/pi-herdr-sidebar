@@ -44,6 +44,21 @@ impl SpaiProjectSummary {
         }
     }
 
+    pub fn with_items(
+        name: String,
+        path: PathBuf,
+        spai_dir: PathBuf,
+        items: Vec<SpaiNoteItem>,
+    ) -> Self {
+        Self {
+            name,
+            path,
+            spai_dir,
+            items,
+            items_loaded: true,
+        }
+    }
+
     /// Reads and parses the note files of this project, once.
     pub fn ensure_items(&mut self) {
         if !self.items_loaded {

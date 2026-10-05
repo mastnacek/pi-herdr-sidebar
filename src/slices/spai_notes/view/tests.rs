@@ -108,3 +108,44 @@ fn a_short_list_needs_no_scrolling() {
     assert!(frame.contains("proj-00"), "first match visible:\n{frame}");
     assert!(frame.contains("proj-02"), "last match visible:\n{frame}");
 }
+
+#[test]
+fn item_list_renders_short_date_instead_of_spai_id() {
+    let mut state = SpaiNotesState::new(None);
+    let item = crate::slices::spai_notes::note::SpaiNoteItem {
+        id: "SPAI-042".to_string(),
+        title: "Test Note Title".to_string(),
+        kind: crate::slices::spai_notes::note::SpaiType::Todo,
+        status: crate::slices::spai_notes::note::SpaiStatus::Todo,
+        symbol: ".".to_string(),
+        timestamp: "2026-09-24 10:57:47".to_string(),
+        tags: vec![],
+        facets: crate::slices::spai_notes::note::SpaiFacets {
+            project: None,
+            project_path: None,
+            priority: None,
+            deadline: None,
+        },
+        body: ". Test Note Title\n".to_string(),
+        file_path: PathBuf::from("2026-09-24-SPAI-042-test.md"),
+        file_name: "2026-09-24-SPAI-042-test.md".to_string(),
+    };
+    state.projects = vec![SpaiProjectSummary::with_items(
+        "proj-01".to_string(),
+        PathBuf::from("D:/tmp/proj-01"),
+        PathBuf::from("D:/tmp/proj-01/docs/spai"),
+        vec![item],
+    )];
+
+    let frame = render(&state, 90, 22);
+    // Left pane must display the shortened timestamp in dd.mm.yy format: 24.09.26
+    assert!(
+        frame.contains("24.09.26"),
+        "frame should contain formatted short date '24.09.26':\n{frame}"
+    );
+    // Left pane list row must NOT contain the old "SPAI-042" column format (though the viewer header on the right pane shows full info)
+    assert!(
+        frame.contains("▶ [.] 24.09.26 Test Note Title"),
+        "list row should have marker, glyph, dd.mm.yy date, and title:\n{frame}"
+    );
+}

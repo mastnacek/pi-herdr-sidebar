@@ -142,8 +142,10 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                 Color::White
             };
 
-            let title_display = if item.title.len() > 28 {
-                format!("{}...", &item.title[..25])
+            let title_chars_count = item.title.chars().count();
+            let title_display = if title_chars_count > 28 {
+                let s: String = item.title.chars().take(25).collect();
+                format!("{}...", s)
             } else {
                 item.title.clone()
             };
@@ -162,7 +164,7 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                     Style::default().fg(glyph_color).bold(),
                 ),
                 Span::styled(
-                    format!("{:<9}", item.id),
+                    format!("{:<9}", item.short_date()),
                     Style::default().fg(Color::DarkGray),
                 ),
                 Span::styled(
