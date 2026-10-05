@@ -5,6 +5,7 @@
 //! correctly. Pure position arithmetic lives in [`super::text_cursor`], the
 //! body's row wrapping in [`super::text_layout`].
 use super::dialog_state::EditField;
+use super::note_io::write_atomic;
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
 use super::text_cursor::{byte_of, char_len, line_bounds, move_line};
@@ -169,13 +170,24 @@ impl SpaiNotesState {
 
         let item = proj
             .items
-            .get_mut(self.selected_item_idx)
+            .get(self.selected_item_idx)
             .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
 
-        item.title = new_title;
-        item.body = new_body;
-        let updated_content = format_spai_markdown(item);
-        std::fs::write(&item.file_path, updated_content).map_err(|e| e.to_string())?;
+        // Write first (crash-safe, atomically), then update the in-memory
+        // state, so a failed write never leaves the UI describing a disk
+        // state that does not exist.
+        let mut updated = item.clone();
+        updated.title = new_title;
+        updated.body = new_body;
+        let updated_content = format_spai_markdown(&updated);
+        write_atomic(&updated.file_path, &updated_content)?;
+
+        let item = proj
+            .items
+            .get_mut(self.selected_item_idx)
+            .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
+        item.title = updated.title;
+        item.body = updated.body;
         self.status_message = Some("Poznámka uložena".to_string());
         self.close_edit_dialog();
 

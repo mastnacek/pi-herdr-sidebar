@@ -1,5 +1,6 @@
 //! SPAI markdown formatting and body status prefix updates.
 use crate::slices::spai_notes::note::{SpaiNoteItem, SpaiStatus};
+use crate::slices::spai_notes::spai_prefixes::SPAI_PREFIXES;
 
 /// Creates a safe URL/file slug from title.
 pub fn slugify(text: &str) -> String {
@@ -55,11 +56,7 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
 
         let indent = &line[..line.len() - trimmed.len()];
         let mut matched_len = 0;
-        for p in &[
-            "/. ", "/· ", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ", "!- ", "!+ ",
-            "!= ", "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", "/ ", "x ", "X ", "z ", "Z ",
-            "? ", "- ", "+ ", "= ", "* ", "% ", "~ ", "$ ", "♥ ", "h ", "# ",
-        ] {
+        for p in SPAI_PREFIXES {
             if trimmed.starts_with(p) {
                 matched_len = p.len();
                 break;
@@ -80,18 +77,41 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
         return format!("{}{}\n", new_prefix, body.trim());
     }
 
-    lines.join("\n")
+    // Preserve the original newline style and any trailing newline.
+    let crlf = body.contains("\r\n");
+    let had_trailing_newline = body.ends_with('\n');
+    let mut out = if crlf {
+        lines.join("\r\n")
+    } else {
+        lines.join("\n")
+    };
+    if had_trailing_newline {
+        out.push_str(if crlf { "\r\n" } else { "\n" });
+    }
+    out
+}
+
+/// Escapes a YAML double-quoted scalar (backslash first, then the quote).
+fn escape_yaml_scalar(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Builds markdown content with standard SPAI YAML frontmatter and 5D facets.
+///
+/// Unknown frontmatter keys captured by the parser ([`SpaiNoteItem::extra_frontmatter`])
+/// are re-emitted verbatim so that edits and status cycles are lossless for
+/// keys this tool does not model. The `source:` default is only written when
+/// the file does not already carry its own value.
 pub fn format_spai_markdown(item: &SpaiNoteItem) -> String {
     let mut out = String::new();
     out.push_str("---\n");
     out.push_str(&format!("type: {}\n", item.kind.as_str()));
-    out.push_str(&format!("title: \"{}\"\n", item.title.replace('"', "\\\"")));
+    out.push_str(&format!("title: \"{}\"\n", escape_yaml_scalar(&item.title)));
     out.push_str(&format!("timestamp: {}\n", item.timestamp));
     out.push_str(&format!("status: {}\n", item.status.as_str()));
-    out.push_str("source: pi-spai\n");
+    if !item.extra_frontmatter.iter().any(|(k, _)| k == "source") {
+        out.push_str("source: pi-spai\n");
+    }
 
     if !item.tags.is_empty() {
         out.push_str(&format!("tags: [{}]\n", item.tags.join(", ")));
@@ -134,6 +154,9 @@ pub fn format_spai_markdown(item: &SpaiNoteItem) -> String {
     }
 
     out.push_str(&format!("spai_symbol: '{}'\n", item.symbol));
+    for (key, value) in &item.extra_frontmatter {
+        out.push_str(&format!("{}: {}\n", key, value));
+    }
     out.push_str("---\n\n");
 
     out.push_str(&format!("# {}: {}\n\n", item.id, item.title));

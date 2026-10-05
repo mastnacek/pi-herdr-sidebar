@@ -1,6 +1,8 @@
 //! Creation dialog behaviour for the SPAI Notes tab (`n` shortcut).
 use super::note::SpaiType;
+use super::spai_prefixes::strip_leading_prefix;
 use super::state::SpaiNotesState;
+use super::text_cursor::{byte_of, char_len};
 use super::type_options::SPAI_TYPE_OPTIONS;
 
 impl SpaiNotesState {
@@ -33,11 +35,10 @@ impl SpaiNotesState {
     }
 
     pub fn on_dialog_char_typed(&mut self, c: char) {
-        let mut chars: Vec<char> = self.creation_dialog.title_input.chars().collect();
-        let idx = self.creation_dialog.cursor.min(chars.len());
-        chars.insert(idx, c);
-        self.creation_dialog.title_input = chars.into_iter().collect();
-        self.creation_dialog.cursor = idx + 1;
+        let cursor = self.creation_dialog.cursor.min(char_len(&self.creation_dialog.title_input));
+        let idx = byte_of(&self.creation_dialog.title_input, cursor);
+        self.creation_dialog.title_input.insert(idx, c);
+        self.creation_dialog.cursor = cursor + 1;
         self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
         self.creation_dialog.vector_evaluated = false;
         self.creation_dialog.is_evaluating_vector = false;
@@ -46,13 +47,15 @@ impl SpaiNotesState {
     }
 
     pub fn on_dialog_backspace(&mut self) {
-        let mut chars: Vec<char> = self.creation_dialog.title_input.chars().collect();
-        if self.creation_dialog.cursor > 0 && !chars.is_empty() {
-            let idx = self.creation_dialog.cursor - 1;
-            if idx < chars.len() {
-                chars.remove(idx);
-                self.creation_dialog.title_input = chars.into_iter().collect();
-                self.creation_dialog.cursor = idx;
+        let cursor = self.creation_dialog.cursor;
+        if cursor > 0 {
+            let buf = &mut self.creation_dialog.title_input;
+            let len = char_len(buf);
+            if cursor <= len {
+                let start = byte_of(buf, cursor - 1);
+                let end = byte_of(buf, cursor);
+                buf.replace_range(start..end, "");
+                self.creation_dialog.cursor = cursor - 1;
             }
         }
         self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
@@ -63,10 +66,12 @@ impl SpaiNotesState {
     }
 
     pub fn on_dialog_delete(&mut self) {
-        let mut chars: Vec<char> = self.creation_dialog.title_input.chars().collect();
-        if self.creation_dialog.cursor < chars.len() {
-            chars.remove(self.creation_dialog.cursor);
-            self.creation_dialog.title_input = chars.into_iter().collect();
+        let cursor = self.creation_dialog.cursor;
+        let buf = &mut self.creation_dialog.title_input;
+        if cursor < char_len(buf) {
+            let start = byte_of(buf, cursor);
+            let end = byte_of(buf, cursor + 1);
+            buf.replace_range(start..end, "");
         }
         self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
         self.creation_dialog.vector_evaluated = false;
@@ -114,20 +119,9 @@ impl SpaiNotesState {
     pub fn apply_selected_type(&mut self) {
         if let Some(opt) = SPAI_TYPE_OPTIONS.get(self.creation_dialog.type_selection) {
             let raw = self.creation_dialog.title_input.trim_start();
-            let mut rest = raw;
-            for p in &[
-                "/. ", "/· ", "/.", "/·", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ",
-                "!- ", "!+ ", "!= ", "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", ".", "/ ",
-                "/", "x ", "X ", "x", "X", "z ", "Z", "z ", "Z", "? ", "?", "- ", "-", "+ ", "+",
-                "= ", "=", "* ", "*", "% ", "%", "~ ", "~", "$ ", "$", "♥ ", "♥", "h ", "h",
-                "# ", "#",
-            ] {
-                if rest.starts_with(p) {
-                    rest = &rest[p.len()..];
-                    break;
-                }
-            }
-            let rest = rest.trim_start();
+            // Only a full prefix (symbol + space) is stripped, so plain words
+            // like "hello" or "xylofon" keep their first letter.
+            let rest = strip_leading_prefix(raw).unwrap_or(raw).trim_start();
             self.creation_dialog.title_input = format!("{}{}", opt.symbol, rest);
             self.creation_dialog.cursor = self.creation_dialog.title_input.chars().count();
             self.update_autocomplete();
@@ -200,20 +194,11 @@ impl SpaiNotesState {
 
         let detected = super::input_highlighter::detect_spai_input(&raw_input);
 
-        let mut clean_title = raw_input.as_str();
-        for p in &[
-            "/. ", "/· ", "/.", "/·", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ",
-            "!- ", "!+ ", "!= ", "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", ".", "/ ",
-            "/", "x ", "X ", "x", "X", "z ", "Z", "z ", "Z", "? ", "?", "- ", "-", "+ ", "+",
-            "= ", "=", "* ", "*", "% ", "%", "~ ", "~", "$ ", "$", "♥ ", "♥", "h ", "h",
-            "# ", "#",
-        ] {
-            if clean_title.starts_with(p) {
-                clean_title = &clean_title[p.len()..];
-                break;
-            }
-        }
-        let clean_title = clean_title.trim();
+        // Only a full prefix (symbol + space) is stripped — see spai_prefixes —
+        // so "hello" stays "hello".
+        let clean_title = strip_leading_prefix(&raw_input)
+            .unwrap_or(&raw_input)
+            .trim();
         let title_to_use = if clean_title.is_empty() {
             raw_input.clone()
         } else {

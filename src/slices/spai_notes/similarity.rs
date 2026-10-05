@@ -214,6 +214,7 @@ mod tests {
             body: String::new(),
             file_path: std::path::PathBuf::new(),
             file_name: "test.md".to_string(),
+            extra_frontmatter: Vec::new(),
         }];
 
         let mut vectors = HashMap::new();

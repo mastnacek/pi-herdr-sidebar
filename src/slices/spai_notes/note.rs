@@ -187,6 +187,10 @@ pub struct SpaiNoteItem {
     pub body: String,
     pub file_path: PathBuf,
     pub file_name: String,
+    /// Unknown frontmatter keys (in original order), preserved so that edits
+    /// and status cycles are lossless for keys this parser does not model —
+    /// e.g. `source:` or keys written by other tools into the same folder.
+    pub extra_frontmatter: Vec<(String, String)>,
 }
 
 impl SpaiNoteItem {

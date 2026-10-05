@@ -160,12 +160,15 @@ impl SpaiNotesState {
             .ok_or_else(|| format!("Záznam {} nenalezen", target_id))?;
 
         let (ts, _) = super::time_utils::current_timestamp_and_date();
-        item.body
+        let mut updated = item.clone();
+        updated
+            .body
             .push_str(&format!("\n\n- [{}] Aktualizace: {}", ts, text_to_append));
 
-        let formatted = format_spai_markdown(item);
-        std::fs::write(&item.file_path, formatted)
+        let formatted = format_spai_markdown(&updated);
+        super::note_io::write_atomic(&updated.file_path, &formatted)
             .map_err(|e| format!("Chyba při zápisu: {}", e))?;
+        item.body = updated.body;
 
         self.close_creation_dialog();
         self.status_message = Some(format!("Připojeno k existujícímu {}", target_id));
@@ -189,11 +192,17 @@ impl SpaiNotesState {
             .find(|it| it.id == target_id)
             .ok_or_else(|| format!("Záznam {} nenalezen", target_id))?;
 
-        let next_status = item.status.next_cycle();
-        item.status = next_status;
-        let formatted = format_spai_markdown(item);
-        std::fs::write(&item.file_path, formatted)
+        // Write first, mutate only on success.
+        let mut updated = item.clone();
+        updated.status = updated.status.next_cycle();
+        updated.symbol = updated.status.symbol().to_string();
+        let formatted = format_spai_markdown(&updated);
+        super::note_io::write_atomic(&updated.file_path, &formatted)
             .map_err(|e| format!("Chyba při zápisu: {}", e))?;
+        let next_status = updated.status;
+        item.status = next_status;
+        item.symbol = updated.symbol;
+        item.body = updated.body;
 
         self.status_message = Some(format!(
             "Změněn stav {} na {}",

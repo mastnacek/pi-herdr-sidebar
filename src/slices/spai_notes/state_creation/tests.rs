@@ -62,3 +62,65 @@ fn typing_prefix_syncs_type_selection() {
     assert_eq!(state.creation_dialog.type_selection, 6); // Note (with priority !)
     assert_eq!(state.creation_dialog.selected_kind, SpaiType::Note);
 }
+
+use std::fs;
+
+fn temp_project() -> std::path::PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("spai_create_{}_{}", std::process::id(), nanos));
+    fs::create_dir_all(dir.join("docs").join("spai")).unwrap();
+    dir
+}
+
+fn submit_title(word: &str) -> String {
+    let project = temp_project();
+    let mut state = SpaiNotesState::new(Some(project.clone()));
+    let idx = state
+        .projects
+        .iter()
+        .position(|p| p.path == project)
+        .expect("temp project discovered");
+    state.selected_project_idx = idx;
+    state.open_creation_dialog();
+    // Title is set directly (no keystroke sync) so the test exercises the
+    // submit-time stripping, not live type detection.
+    state.creation_dialog.title_input = word.to_string();
+    state.creation_dialog.cursor = word.chars().count();
+    state.submit_creation_dialog().expect("note created");
+    state
+        .selected_item()
+        .expect("item inserted")
+        .title
+        .clone()
+}
+
+#[test]
+fn submit_keeps_plain_words_intact() {
+    // Regression: the old prefix list contained bare letters ("x", "h", "-",
+    // ...), so "hello" became "ello" and "xylofon" became "ylofon".
+    for word in ["hello", "xylofon", "zrušení zakázky", "+420peněz"] {
+        assert_eq!(submit_title(word), word, "title {word:?} must survive submit");
+    }
+}
+
+#[test]
+fn submit_still_strips_real_prefixes() {
+    assert_eq!(submit_title(". hello"), "hello");
+    assert_eq!(submit_title("x hotovo"), "hotovo");
+}
+
+#[test]
+fn apply_selected_type_keeps_plain_words_intact() {
+    let mut state = SpaiNotesState::new(None);
+    state.open_creation_dialog();
+    // Direct assignment: "xylofon" is not a prefix, selection stays Todo.
+    state.creation_dialog.title_input = "xylofon".to_string();
+    state.creation_dialog.cursor = 7;
+    state.creation_dialog.type_selection = 0;
+    state.apply_selected_type();
+    assert_eq!(state.creation_dialog.title_input, ". xylofon", "first letter preserved");
+}
+

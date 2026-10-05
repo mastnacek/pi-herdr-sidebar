@@ -130,6 +130,7 @@ fn item_list_renders_short_date_instead_of_spai_id() {
         body: ". Test Note Title\n".to_string(),
         file_path: PathBuf::from("2026-09-24-SPAI-042-test.md"),
         file_name: "2026-09-24-SPAI-042-test.md".to_string(),
+        extra_frontmatter: Vec::new(),
     };
     state.projects = vec![SpaiProjectSummary::with_items(
         "proj-01".to_string(),
@@ -168,6 +169,7 @@ fn viewer_preview_hides_the_file_name() {
         body: ". Test Note Title\n".to_string(),
         file_path: PathBuf::from("2026-09-24-SPAI-042-test.md"),
         file_name: "2026-09-24-SPAI-042-test.md".to_string(),
+        extra_frontmatter: Vec::new(),
     };
     state.projects = vec![SpaiProjectSummary::with_items(
         "proj-01".to_string(),
