@@ -1,4 +1,5 @@
 //! SPAI Smart Input creation dialog rendering with live type list & hint window.
+use super::creation_parts::{build_hint_lines, build_project_picker_lines, build_shortcuts_line};
 use crate::shared::theme;
 use crate::slices::spai_notes::state::SpaiNotesState;
 use crate::slices::spai_notes::type_options::SPAI_TYPE_OPTIONS;
@@ -22,8 +23,8 @@ pub(crate) fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (
 }
 
 pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_width = area.width.saturating_sub(4).clamp(60, 84);
-    let dialog_height = 15u16.min(area.height.saturating_sub(4)).max(12);
+    let dialog_width = area.width.saturating_sub(4).clamp(64, 96);
+    let dialog_height = area.height.saturating_sub(2).clamp(18, 32);
     let x = area.x + (area.width.saturating_sub(dialog_width)) / 2;
     let y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
     let dialog_area = Rect::new(x, y, dialog_width, dialog_height);
@@ -49,7 +50,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(6),    // type list + hint window
+            Constraint::Min(10),   // type list + hint window
             Constraint::Length(3), // input box
             Constraint::Length(1), // shortcuts footer
         ])
@@ -59,8 +60,8 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
     let top_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(27), // type list
-            Constraint::Min(20),    // hint details
+            Constraint::Length(28), // type list
+            Constraint::Min(25),    // hint details
         ])
         .split(rows[0]);
 
@@ -113,7 +114,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         .scroll((scroll, 0));
     frame.render_widget(type_para, top_cols[0]);
 
-    // ── Right column: Nápověda / Hint okno ──────────────────────────
+    // ── Right column: Nápověda & kompletní syntaxe ───────────────────
     let hint_block = Block::bordered()
         .title(Span::styled(
             format!(" Nápověda: {} ", sel_opt.name),
@@ -122,25 +123,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(sel_opt.color));
 
-    let mut hint_lines = vec![
-        Line::from(vec![Span::styled(
-            format!(" {}", sel_opt.desc),
-            Style::default().fg(Color::Rgb(220, 220, 220)),
-        )]),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            " ▌ Příklady zápisu:",
-            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
-        )]),
-    ];
-
-    for ex in sel_opt.examples {
-        hint_lines.push(Line::from(vec![
-            Span::styled("   ", Style::default()),
-            Span::styled(*ex, Style::default().fg(Color::White)),
-        ]));
-    }
-
+    let hint_lines = build_hint_lines(sel_opt);
     let hint_para = Paragraph::new(hint_lines).block(hint_block);
     frame.render_widget(hint_para, top_cols[1]);
 
@@ -167,7 +150,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         ));
         input_spans.push(Span::styled(
             format!(
-                " [Tab: vložit {}] nebo začněte psát název...",
+                " [Tab: vložit {}] nebo začněte psát (např. !. @projekt !high úkol)...",
                 sel_opt.symbol
             ),
             Style::default().fg(Color::DarkGray),
@@ -186,45 +169,20 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
     frame.render_widget(input_para, rows[1]);
 
     // ── Bottom row: Klávesové zkratky ───────────────────────────────
-    let shortcuts_line = Line::from(vec![
-        Span::styled(
-            "  [↑/↓]",
-            Style::default().fg(Color::Rgb(241, 252, 121)).bold(),
-        ),
-        Span::styled(" Vybrat typ   ", Style::default().fg(Color::Rgb(193, 196, 151))),
-        Span::styled(
-            "[Tab]",
-            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
-        ),
-        Span::styled(
-            " Vložit prefix / @Projekt   ",
-            Style::default().fg(Color::Rgb(193, 196, 151)),
-        ),
-        Span::styled(
-            "[Enter]",
-            Style::default().fg(Color::Rgb(55, 244, 153)).bold(),
-        ),
-        Span::styled(" Uložit   ", Style::default().fg(Color::Rgb(193, 196, 151))),
-        Span::styled(
-            "[Esc]",
-            Style::default().fg(Color::Rgb(241, 252, 121)).bold(),
-        ),
-        Span::styled(" Zrušit", Style::default().fg(Color::Rgb(193, 196, 151))),
-    ]);
+    let shortcuts_line = build_shortcuts_line();
     frame.render_widget(Paragraph::new(shortcuts_line), rows[2]);
 
     // ── Autocomplete popup for @project ─────────────────────────────
     if state.creation_dialog.autocomplete_active && !state.creation_dialog.suggestions.is_empty() {
         let count = state.creation_dialog.suggestions.len();
-        let list_y = rows[1].bottom();
-        let box_rows = area.bottom().saturating_sub(list_y).clamp(3, 10);
+        let box_rows = (dialog_area.height.saturating_sub(10)).clamp(4, 8);
         let selected = state.creation_dialog.autocomplete_selected;
         let (visible, scroll) = picker_viewport(count, selected, box_rows);
 
         let ac_area = Rect {
-            x: rows[1].x + 2,
-            y: list_y.min(area.bottom().saturating_sub(visible + 2)),
-            width: rows[1].width.saturating_sub(4),
+            x: dialog_area.x + 4,
+            y: dialog_area.y + 2,
+            width: dialog_area.width.saturating_sub(8),
             height: visible + 2,
         };
 
@@ -239,40 +197,8 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Rgb(45, 213, 183)));
 
-        let mut ac_lines = Vec::new();
-        for (i, sug) in state.creation_dialog.suggestions.iter().enumerate() {
-            let is_sel = i == state.creation_dialog.autocomplete_selected;
-            let marker = if is_sel { "▶ " } else { "  " };
-            ac_lines.push(Line::from(vec![
-                Span::styled(
-                    marker,
-                    Style::default().fg(if is_sel {
-                        Color::Rgb(241, 252, 121)
-                    } else {
-                        Color::DarkGray
-                    }),
-                ),
-                Span::styled(
-                    format!("{:<18}", sug.insert_text),
-                    Style::default()
-                        .fg(if is_sel {
-                            Color::Rgb(45, 213, 183)
-                        } else {
-                            Color::White
-                        })
-                        .add_modifier(if is_sel {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
-                ),
-                Span::styled(
-                    format!(" {}", sug.path),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]));
-        }
-
+        let ac_lines =
+            build_project_picker_lines(&state.creation_dialog.suggestions, selected);
         let ac_para = Paragraph::new(ac_lines).block(ac_block).scroll((scroll, 0));
         frame.render_widget(ac_para, ac_area);
     }
