@@ -161,6 +161,9 @@ impl SettingsState {
             let filtered = self.filtered_picker_models();
             if let Some(chosen) = filtered.get(self.picker_selected_idx) {
                 (Some(chosen.id.clone()), Some(chosen.name.clone()))
+            } else if !self.picker_search.trim().is_empty() {
+                let custom = self.picker_search.trim().to_string();
+                (Some(custom.clone()), Some(custom))
             } else {
                 (None, None)
             }

@@ -3,7 +3,7 @@ use super::state::{ModelTarget, SettingsState};
 use crate::shared::theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
@@ -113,58 +113,74 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
         ),
     ]));
 
-    for (i, m) in filtered.iter().enumerate().skip(scroll).take(max_rows.saturating_sub(1)) {
-        let is_selected = i == state.picker_selected_idx;
-        let prefix = if is_selected { "▶ " } else { "  " };
-
-        let name_display = if m.name.len() > 30 {
-            format!("{}...", &m.name[..27])
-        } else {
-            m.name.clone()
-        };
-
-        let price_str = m.price_label();
-        let price_color = if m.is_free {
-            Color::Green
-        } else if m.prompt_price_m > 10.0 {
-            Color::Yellow
-        } else {
-            Color::Gray
-        };
-
-        let line_style = if is_selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
+    if filtered.is_empty() && !state.picker_search.is_empty() {
         lines.push(Line::from(vec![
+            Span::styled("  ▶ ", Style::default().fg(Color::Yellow).bold()),
+            Span::styled("Použít vlastní model ID: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&state.picker_search, Style::default().fg(Color::Cyan).bold()),
+            Span::styled("  [Enter pro uložení]", Style::default().fg(Color::DarkGray)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
             Span::styled(
-                prefix,
-                if is_selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::DarkGray)
-                },
-            ),
-            Span::styled(format!("{:<32}", name_display), line_style),
-            Span::styled(
-                format!("{:<8}", m.context_label()),
-                if is_selected {
-                    line_style
-                } else {
-                    Style::default().fg(Color::Rgb(139, 233, 253))
-                },
-            ),
-            Span::styled(
-                format!("{:<20}", price_str),
-                if is_selected {
-                    line_style
-                } else {
-                    Style::default().fg(price_color)
-                },
+                "Model nebyl nalezen v OpenRouter katalogu, ale můžete jej zadat přímo.",
+                Style::default().fg(Color::DarkGray).italic(),
             ),
         ]));
+    } else {
+        for (i, m) in filtered.iter().enumerate().skip(scroll).take(max_rows.saturating_sub(1)) {
+            let is_selected = i == state.picker_selected_idx;
+            let prefix = if is_selected { "▶ " } else { "  " };
+
+            let name_display = if m.name.len() > 30 {
+                format!("{}...", &m.name[..27])
+            } else {
+                m.name.clone()
+            };
+
+            let price_str = m.price_label();
+            let price_color = if m.is_free {
+                Color::Green
+            } else if m.prompt_price_m > 10.0 {
+                Color::Yellow
+            } else {
+                Color::Gray
+            };
+
+            let line_style = if is_selected {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            lines.push(Line::from(vec![
+                Span::styled(
+                    prefix,
+                    if is_selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                ),
+                Span::styled(format!("{:<32}", name_display), line_style),
+                Span::styled(
+                    format!("{:<8}", m.context_label()),
+                    if is_selected {
+                        line_style
+                    } else {
+                        Style::default().fg(Color::Rgb(139, 233, 253))
+                    },
+                ),
+                Span::styled(
+                    format!("{:<20}", price_str),
+                    if is_selected {
+                        line_style
+                    } else {
+                        Style::default().fg(price_color)
+                    },
+                ),
+            ]));
+        }
     }
 
     f.render_widget(Paragraph::new(lines), list_area);
