@@ -1,127 +1,127 @@
-# Plán: Scratchpad – nový celoobrazovkový režim v pi-herdr-sidebar
+# Plan: Scratchpad - a new fullscreen modal mode in pi-herdr-sidebar
 
-## Cíl
-Zkratkou otevřít **celoobrazovkový modál**, kam se píše volný text. Řádek se SPAI značkou (`. / x ? - # * % ;`) se po **Ctrl+S** stane záznamem a **fyzickým souborem** v `docs/spai` projektu, který řádek cituje přes `@projekt`. Bez `@` jde záznam do aktuálního projektu. Dva režimy (Edit / Read), tři rozsahy (Nový / Projekt / Vše), v Read filtry (fuzzy, sémantické), uložený řádek je vizuálně odlišen.
+## Goal
+Open a **fullscreen modal** with a shortcut and just type free text. A line carrying a SPAI mark (`. / x ? - # * % ;`) becomes a record and a **physical file** in the `docs/spai` folder of the project cited with `@project`, on **Ctrl+S**. With no `@`, the record goes to the current project. Two modes (Edit / Read), three scopes (New / Project / All), filters in Read mode (fuzzy, semantic), and a saved line is visibly distinct.
 
-## Co už existuje (nevymýšlíme znovu)
-| Potřeba | Zdroj ve vašem kódu |
+## What already exists (not reinvented)
+| Need | Source in your code |
 |---|---|
-| Edit/Read režimy, záznam jako jednotka | `piprompt-core` (`app/readmode.rs`, `slices/spai/record.rs`) – **jen vzor**, sidebar na něj nezávisí |
-| SPAI značky, detekce typu | sidebar `input_highlighter::detect_spai_input`, `type_options` |
-| `@projekt` dokončování | `spai_notes/autocomplete.rs` |
-| Zápis souboru záznamu | `format_spai_markdown`, `create_quick_note_with_status` |
-| Dedup (textový + vektorový) | `similarity.rs`, `state_similar_actions.rs`, `settings::vector_service` |
-| Slova z dokumentů projektu | **vynecháno** (zpomaluje) |
+| Edit/Read modes, the record as the unit | `piprompt-core` (`app/readmode.rs`, `slices/spai/record.rs`) - **a model only**, the sidebar does not depend on it |
+| SPAI marks, type detection | sidebar `input_highlighter::detect_spai_input`, `type_options` |
+| `@project` completion | `spai_notes/autocomplete.rs` |
+| Writing a record file | `format_spai_markdown`, `create_quick_note_with_status` |
+| Dedup (text + vector) | `similarity.rs`, `state_similar_actions.rs`, `settings::vector_service` |
+| Words from project documents | **out of scope** (slows things down) |
 
 > [!IMPORTANT]
-> `piprompt` ukládá jen jeden `draft.md`, soubory záznamů do projektů nezapisuje. To je právě nová funkce a patří do sidebaru, kde už zápis, vektory i OpenRouter jsou.
+> `piprompt` only saves a single `draft.md`; it does not write record files into projects. That is exactly the new feature, and it belongs in the sidebar, where file writing, vectors and OpenRouter already live.
 
-## Rozhodnuto (z vašich odpovědí)
-- Nové **modální celoobrazovkové okno** v `pi-herdr-sidebar`, vyvolané zkratkou.
-- Rozsahy: **Nový** (jen nové řádky) · **Projekt** (načtou se záznamy aktuálního projektu jako řádky) · **Vše** (záznamy všech projektů).
-- **Ctrl+S** ukládá záznamy; **Ctrl+D** spustí dedup na požadání; výsledek v modálním okně **pod vytvářeným řádkem**.
-- Uložený řádek zůstane na místě, **tlumeně/kurzívou** se štítkem `✓ → projekt SPAI-014`, v Read režimu jde otevřít.
+## Decisions (from your answers)
+- A new **fullscreen modal window** in `pi-herdr-sidebar`, opened by a shortcut.
+- Scopes: **New** (new lines only) · **Project** (records of the current project loaded as lines) · **All** (records of all projects).
+- **Ctrl+S** saves records; **Ctrl+D** runs dedup on demand; the result is a modal window **under the line being created**.
+- A saved line stays in place, shown **dimmed/italic** with a label `✓ → project SPAI-014`; in Read mode it can be opened.
 
-## Uživatelský tok
+## User flow
 ```mermaid
 flowchart LR
-  A["Zkratka: otevřít Scratch"] --> B["Edit: píšu řádky ('. Opravit build @herdr')"]
-  B -->|Ctrl+D| D["Dedup popup pod řádkem"]
+  A["Shortcut: open Scratch"] --> B["Edit: type lines ('. Fix build @herdr')"]
+  B -->|Ctrl+D| D["Dedup popup under the line"]
   D -->|Ctrl+O / A / U / Esc| B
-  B -->|Ctrl+S| S["Pro každý nový řádek se značkou: projekt z @, jinak aktuální → soubor"]
-  S --> L["Řádek: ✓ → herdr SPAI-014 (tlumený)"]
-  B -->|Esc| R["Read: navigace, filtry, akce nad záznamem"]
+  B -->|Ctrl+S| S["Each new marked line: project from @, else current → file"]
+  S --> L["Line: ✓ → herdr SPAI-014 (dimmed)"]
+  B -->|Esc| R["Read: navigate, filter, act on a record"]
   R -->|i| B
 ```
 
-## Návrh
+## Design
 
-### Architektura (VSA)
-Slice se **nesmí importovat jiné slice**, proto nový kód patří do existující slice `spai_notes` jako podmodul `spai_notes/scratch/` (sdílí `note`, `storage_format`, `discovery`, `similarity`). Napojení v `view/keys` a `view/ui` stejně jako dnešní dialogy. Soubory < 300 ř.
+### Architecture (VSA)
+A slice **must not import other slices**, so the new code lives inside the existing `spai_notes` slice as a submodule `spai_notes/scratch/` (sharing `note`, `storage_format`, `discovery`, `similarity`). It is wired in `view/keys` and `view/ui` the same way the current dialogs are. Files stay under 300 lines.
 
 ```
 spai_notes/scratch/
-  mod.rs          export, ScratchState
+  mod.rs          exports, ScratchState
   state.rs        mode, scope, buffer, cursor, dirty
   line_model.rs   Line { text, origin: New | Saved{path,id,project} }
-  scope.rs        načtení řádků pro Nový/Projekt/Vše
-  save.rs         Ctrl+S pipeline (routing, zápis, přepnutí řádku na Saved)
-  dedup.rs        Ctrl+D, popup state, výsledky per řádek
-  filter.rs       parser filtru + fuzzy + sémantika
-  edit_keys.rs    Edit režim
-  read_keys.rs    Read režim
-  draft.rs        autosave neuložených řádků
+  scope.rs        loading lines for New/Project/All
+  save.rs         Ctrl+S pipeline (routing, write, switch line to Saved)
+  dedup.rs        Ctrl+D, popup state, per-line results
+  filter.rs       filter parser + fuzzy + semantic
+  edit_keys.rs    Edit mode
+  read_keys.rs    Read mode
+  draft.rs        autosave of unsaved lines
   view.rs / view_lines.rs / view_footer.rs / dedup_popup.rs
 ```
 
-### 1. Zápis (Edit režim)
-- Plná plocha, jeden buffer, **jeden řádek = jeden záznam** (pokračovací řádky bez značky patří k předchozímu záznamu, stejné pravidlo jako v piprompt `record_at`).
-- Zvýraznění a `@projekt` dokončování existující (`highlight_spai_input_spans`, `autocomplete`).
-- Patička: režim `-- EDIT --`, klávesy, a **nápověda jen k typu aktuálního řádku** (z `SPAI_TYPE_OPTIONS`) + `→ cílový projekt` odvozený z `@` (živý náhled routingu).
-- Prózový řádek bez značky se neukládá, zůstane jako poznámka ve scratchi (beze štítku).
+### 1. Writing (Edit mode)
+- Full area, one buffer, **one line = one record** (continuation lines without a mark belong to the previous record, the same rule as piprompt's `record_at`).
+- Existing highlighting and `@project` completion are reused (`highlight_spai_input_spans`, `autocomplete`).
+- Footer: mode `-- EDIT --`, keys, **hint for the type of the current line only** (from `SPAI_TYPE_OPTIONS`) and `→ target project` derived from `@` (live routing preview).
+- A prose line without a mark is not saved; it stays in the scratchpad as plain text with no label.
 
-### 2. Ctrl+S – uložení do souborů
-Pro každý nový řádek se značkou:
-1. **Projekt**: první `@mention`, který odpovídá projektu (jméno nebo cesta); jinak aktuální projekt; jinak řádek zůstane a zobrazí se chyba (žádná ztráta).
-2. **ID**: `max(číslo v docs/spai) + 1` čteno z disku, soubor přes `create_new` s opakováním při kolizi (oprava z review, jinak hrozí přepsání).
-3. **Zápis**: `format_spai_markdown` do `docs/spai`, atomicky (`.tmp` + rename); adresář se vytvoří, pokud chybí.
-4. Řádek se přepne na `Saved{path,id,project}` – nelze už editovat v bufferu (změna jen přes Read akce / Notes editor), takže se text a soubor nerozejdou.
-5. Souhrn do patičky: `Uloženo 3 · herdr SPAI-014, SPAI-015 · pi-spai SPAI-022`. Chyba jednoho řádku neblokuje ostatní.
-6. **Undo poslední dávky**: `u` v Read smaže soubory vzniklé poslední Ctrl+S (cesty známe), levný a bezpečný.
+### 2. Ctrl+S - saving to files
+For every new line with a mark:
+1. **Project**: the first `@mention` that matches a project (name or path); otherwise the current project; otherwise the line stays and an error is shown (nothing is lost).
+2. **ID**: `max(number in docs/spai) + 1`, read from disk; the file is created with `create_new`, retrying on collision (the fix from the review, otherwise files could be overwritten).
+3. **Write**: `format_spai_markdown` into `docs/spai`, atomically (`.tmp` + rename); the directory is created if missing.
+4. The line switches to `Saved{path,id,project}` and is no longer editable in the buffer (changes only via Read actions / the Notes editor), so text and file cannot diverge.
+5. Summary in the footer: `Saved 3 · herdr SPAI-014, SPAI-015 · pi-spai SPAI-022`. A failure on one line does not block the others.
+6. **Undo of the last batch**: `u` in Read mode deletes the files created by the last Ctrl+S (paths are known); cheap and safe.
 
-### 3. Ctrl+D – dedup na požadání
-- Jen pro řádek pod kurzorem; **žádný automatický dotaz** (ani časovač). Bez API klíče lokální textová shoda + uložené vektory.
-- Výsledek v modálním okně ukotveném **pod řádkem** (podobnost, ID, název). Uvnitř: `↑/↓` výběr, `Ctrl+O` otevřít, `Ctrl+A` připojit k vybranému, `Ctrl+U` změnit stav, `Esc` zavřít.
-- Logiku z `state_similar_actions.rs` vytáhnout do funkcí bez vazby na `creation_dialog` (vstup: text + projekt), ať ji používají oba dialogy.
-- Ctrl+S nikdy neblokuje. Pokud má řádek čerstvý výsledek Ctrl+D nad prahem, zobrazí se v patičce upozornění `⚠ podobné: SPAI-009` (bez dotazu).
+### 3. Ctrl+D - dedup on demand
+- Only for the line under the cursor; **no automatic request** (no timer). Without an API key: local text match + stored vectors.
+- The result is a modal window anchored **under the line** (similarity, ID, title). Inside: `↑/↓` select, `Ctrl+O` open, `Ctrl+A` append to the selected one, `Ctrl+U` change status, `Esc` close.
+- Extract the logic from `state_similar_actions.rs` into functions with no tie to `creation_dialog` (input: text + project), so both dialogs share it.
+- Ctrl+S never blocks. If a line has a fresh Ctrl+D result above the threshold, a footer warning `⚠ similar: SPAI-009` is shown (no prompt).
 
-### 4. Read režim a filtry
-Navigace po záznamech (ne po řádcích), `Esc` přepíná Edit ↔ Read, `i` zpět, `q`/`Esc` zavře (neuložené řádky: dotaz).
+### 4. Read mode and filters
+Navigation by records (not lines); `Esc` toggles Edit ↔ Read, `i` goes back, `q`/`Esc` closes (unsaved lines: ask first).
 
-| Klávesa v Read | Akce |
+| Key in Read | Action |
 |---|---|
-| `↑/↓`, `j/k`, `g/G` | záznam nahoru/dolů |
-| `Tab` / `Shift+Tab` | rozsah Nový → Projekt → Vše |
-| `Enter`, `o` | otevřít záznam (Notes editor) |
-| `x`, `s` | hotovo / cyklus stavu (zápis do souboru) |
-| `/` | **fuzzy filtr** (název, tělo, tagy) |
-| `~` | **sémantický filtr** (spustí se `Enter`, jeden embedding dotazu + cosine nad uloženými vektory) |
-| `f` / `F` | cyklus stavů: otevřené → vše → hotové / zrušit filtr |
-| `u` | vrátit poslední dávku uložení |
+| `↑/↓`, `j/k`, `g/G` | record up/down |
+| `Tab` / `Shift+Tab` | scope New → Project → All |
+| `Enter`, `o` | open the record (Notes editor) |
+| `x`, `s` | done / cycle status (writes the file) |
+| `/` | **fuzzy filter** (title, body, tags) |
+| `~` | **semantic filter** (runs on `Enter`: one query embedding + cosine over stored vectors) |
+| `f` / `F` | cycle status: open → all → done / clear filter |
+| `u` | undo the last save batch |
 
-Filtr je skládací (AND), tokeny v jednom řádku: `/build @herdr :ui: !vysoká` (fuzzy text, projekt, tag, priorita). Fuzzy skórování: malý čistý modul `filter.rs` (subsequence skóre s bonusem za začátek slova, normalizace češtiny existující `normalize_czech`); nápad i testy převzaté z `piprompt-core/fuzzy` (zkopírováno, bez závislosti na crate – případné sdílení později).
+Filters compose (AND), tokens in a single line: `/build @herdr :ui: !high` (fuzzy text, project, tag, priority). Fuzzy scoring is a small pure module `filter.rs` (subsequence score with a word-start bonus, Czech normalisation via the existing `normalize_czech`); the idea and tests are taken from `piprompt-core/fuzzy` (copied, no crate dependency; sharing can come later).
 
-### 5. Rozsahy a výkon
-- **Nový**: prázdný buffer (+ obnovený draft).
-- **Projekt**: `ensure_items()` jen aktuálního projektu; řádek = `symbol id název` seřazené od nejnovějších.
-- **Vše**: líně po projektech (existující `ensure_items`), vykreslení virtualizované (jen viditelná okna), cache dle `file_fingerprint`; filtr běží nad načteným.
+### 5. Scopes and performance
+- **New**: empty buffer (+ restored draft).
+- **Project**: `ensure_items()` for the current project only; line = `symbol id title`, newest first.
+- **All**: lazily per project (existing `ensure_items`), rendering virtualised (visible window only), cache keyed by `file_fingerprint`; the filter runs over what is loaded.
 
-### 6. Vizuál uloženého řádku
-`✓ → herdr SPAI-014` jako štítek na konci řádku + řádek tlumený a kurzívou (`Modifier::DIM | ITALIC`). Hotové (`x`) přeškrtnuté jako dnes v highlighteru; `* % ;` nepřeškrtávat.
+### 6. Saved-line visuals
+A trailing label `✓ → herdr SPAI-014` plus the whole line dimmed and italic (`Modifier::DIM | ITALIC`). Done (`x`) stays struck through as in the highlighter; `* % ;` are not struck through.
 
-### 7. Draft a zkratka
-- Neuložené řádky se autosavují do `HERDR_PLUGIN_STATE_DIR/scratch-draft.md` (ne do zdrojového stromu), obnoví se při příštím otevření.
-- Zkratka: globální `Ctrl+N` (v dialogu nepoužito, v Notes `n` je jiné). Doplňkově akce v `herdr-plugin.toml` pro klávesovou vazbu z Herdru. **Potvrďte klávesu.**
+### 7. Draft and shortcut
+- Unsaved lines are autosaved to `HERDR_PLUGIN_STATE_DIR/scratch-draft.md` (never the source tree) and restored on the next open.
+- Shortcut: global `Ctrl+N` (unused in dialogs; `n` in Notes is separate). Additionally an action in `herdr-plugin.toml` so Herdr can bind a key. **Please confirm the key.**
 
-### 8. Předpoklady z review (fáze 0)
-Scratch stojí na zápisu souborů, proto nejdřív: (a) jedna tabulka prefixů bez ořezávání prvního písmene, (b) alokace ID z disku + `create_new`, (c) atomický zápis. Bez nich by hromadné ukládání z řádků násobilo chyby.
+### 8. Prerequisites from the review (phase 0)
+Scratch relies on writing files, so first: (a) one prefix table that does not strip the first letter, (b) ID allocation from disk + `create_new`, (c) atomic write. Without them bulk saving would multiply the bugs.
 
-## Fáze
-1. **Fáze 0** – prefixy, ID, atomický zápis, extrakce `note_writer` (společný pro dialog i scratch), extrakce dedup funkcí.
-2. **Fáze 1** – Edit + Ctrl+S + štítek `✓` + draft.
-3. **Fáze 2** – Ctrl+D popup.
-4. **Fáze 3** – Read + rozsahy + fuzzy filtr.
-5. **Fáze 4** – sémantický filtr, `u` (undo dávky).
+## Phases
+1. **Phase 0** - prefixes, IDs, atomic write, extract a shared `note_writer` (for the dialog and for scratch), extract the dedup functions.
+2. **Phase 1** - Edit + Ctrl+S + `✓` label + draft.
+3. **Phase 2** - Ctrl+D popup.
+4. **Phase 3** - Read + scopes + fuzzy filter.
+5. **Phase 4** - semantic filter, `u` (undo batch).
 
-## Otevřené otázky (neblokující, mají výchozí volbu)
+## Open questions (non-blocking, each has a default)
 > [!NOTE]
-> 1. Klávesa `Ctrl+N` pro otevření (změním na požádání).
-> 2. Ctrl+S při podobném záznamu: výchozí = jen upozornění v patičce, neblokuje. Chcete potvrzovací dotaz?
-> 3. Prózové řádky bez značky: výchozí = zůstanou ve scratchi, neukládají se. Nebo je ukládat jako `-` poznámku?
-> 4. Editace uloženého řádku: výchozí = jen přes Read (`Enter` → editor). Povolit editaci přímo v bufferu (hrozí rozdíl text vs. soubor)?
+> 1. `Ctrl+N` to open (will change on request).
+> 2. Ctrl+S on a similar record: default = footer warning only, no confirmation. Want a confirmation prompt?
+> 3. Prose lines without a mark: default = stay in the scratchpad, not saved. Or save them as a `-` note?
+> 4. Editing a saved line: default = only via Read (`Enter` → editor). Allow editing directly in the buffer (risk: text vs. file drift)?
 
-## Verifikace
-- `cargo test`: routing `@projekt` → správná složka, fallback na aktuální, neznámý `@x` → řádek zůstane; unikátnost ID při dávce 3 řádků a po smazání; částečná chyba nezničí ostatní; undo dávky; fuzzy skóre a parser filtru; Ctrl+D neběží bez zkratky; Saved řádek není editovatelný; draft se obnoví.
-- `#[ignore]` dev‑preview snímky: prázdný Edit, řádek s typem (patička), po uložení (`✓`), dedup popup pod řádkem, Read s filtrem, rozsah Vše.
-- Živě: zavřít pane, `cargo build --release`, `herdr pane read <id> --source visible`; kontrola vzniklých souborů v `docs/spai` dvou projektů.
-- Commit + push v `plugins/pi-herdr-sidebar` po každé fázi.
+## Verification
+- `cargo test`: `@project` routes to the right folder, fallback to current, unknown `@x` → line stays; ID uniqueness in a batch of 3 lines and after a delete; a partial failure does not destroy the rest; undo of a batch; fuzzy scoring and filter parser; Ctrl+D does not run without the shortcut; a Saved line is not editable; the draft is restored.
+- `#[ignore]` dev-preview frames: empty Edit, a line with a type (footer), after save (`✓`), dedup popup under the line, Read with a filter, scope All.
+- Live: close the pane, `cargo build --release`, `herdr pane read <id> --source visible`; check the files created in `docs/spai` of two projects.
+- Commit + push in `plugins/pi-herdr-sidebar` after each phase.
