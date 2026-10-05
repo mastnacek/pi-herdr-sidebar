@@ -159,3 +159,20 @@ pub fn refresh_weather_telemetry(
         force,
     ))
 }
+
+pub fn load_live_session(
+    file: Option<&Path>,
+    session_id: &str,
+    live_session_mtime: &mut Option<SystemTime>,
+    current_live: &Option<LiveTelemetry>,
+    force: bool,
+) -> Option<LiveTelemetry> {
+    let file = file?;
+    let meta = std::fs::metadata(file).ok()?;
+    let mtime = meta.modified().ok();
+    if !force && current_live.is_some() && *live_session_mtime == mtime {
+        return current_live.clone();
+    }
+    *live_session_mtime = mtime;
+    crate::slices::telemetry::parse_session(file, session_id)
+}

@@ -7,12 +7,15 @@ use ratatui::{
     style::{Color, Style, Stylize},
     text::{Line, Span},
 };
+use std::time::Instant;
 
 pub fn build_hint_lines(
     sel_opt: &SpaiTypeOption,
     raw_input: &str,
     existing_items: &[SpaiNoteItem],
     debounced_matches: &[SimilarNoteMatch],
+    is_evaluating_vector: bool,
+    last_keystroke: Option<Instant>,
 ) -> Vec<Line<'static>> {
     let mut lines = vec![
         Line::from(vec![Span::styled(
@@ -22,19 +25,18 @@ pub fn build_hint_lines(
         Line::raw(""),
     ];
 
-    // Live Semantic Deduplication / Similarity check (debounced vector + fast local)
-    let similar = if !debounced_matches.is_empty() {
-        debounced_matches.to_vec()
-    } else {
-        find_similar_notes(raw_input, existing_items, 0.45, 3)
-    };
-
-    if !similar.is_empty() {
+    if is_evaluating_vector {
         lines.push(Line::from(vec![Span::styled(
-            " ▌ ⚠️  Podobné existující záznamy (živý sémantický dedup):",
+            " ▌ ⠋ Vektorizuji zápis a porovnávám přes OpenRouter...",
+            Style::default().fg(Color::Yellow).bold(),
+        )]));
+        lines.push(Line::raw(""));
+    } else if !debounced_matches.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            " ▌ ⚠️  Podobné existující záznamy (sémantický dedup):",
             Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
         )]));
-        for m in &similar {
+        for m in debounced_matches {
             let pct = (m.similarity * 100.0).round() as u32;
             let tag_label = if m.is_vector_match { "[Vektor] " } else { "" };
             lines.push(Line::from(vec![
@@ -68,6 +70,48 @@ pub fn build_hint_lines(
             Span::styled("Změnit stav", Style::default().fg(Color::Gray)),
         ]));
         lines.push(Line::raw(""));
+    } else if let Some(last) = last_keystroke {
+        if raw_input.trim().len() >= 3 && last.elapsed().as_millis() < 2200 {
+            let left_secs = (2200u64.saturating_sub(last.elapsed().as_millis() as u64) as f64) / 1000.0;
+            lines.push(Line::from(vec![Span::styled(
+                format!(" ▌ ⏳ Dokončete psaní (vektorová kontrola za {:.1}s)...", left_secs),
+                Style::default().fg(Color::DarkGray).italic(),
+            )]));
+            lines.push(Line::raw(""));
+        }
+    } else {
+        // Instant local check fallback
+        let similar = find_similar_notes(raw_input, existing_items, 0.45, 3);
+        if !similar.is_empty() {
+            lines.push(Line::from(vec![Span::styled(
+                " ▌ ⚠️  Podobné existující záznamy (živý textový dedup):",
+                Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+            )]));
+            for m in &similar {
+                let pct = (m.similarity * 100.0).round() as u32;
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("   [{:>2}%] ", pct),
+                        Style::default()
+                            .fg(if pct >= 70 {
+                                Color::Rgb(255, 83, 69)
+                            } else {
+                                Color::Rgb(255, 184, 108)
+                            })
+                            .bold(),
+                    ),
+                    Span::styled(
+                        format!("{} ", m.symbol),
+                        Style::default().fg(Color::Yellow).bold(),
+                    ),
+                    Span::styled(
+                        format!("{}: {}", m.id, m.title),
+                        Style::default().fg(Color::White),
+                    ),
+                ]));
+            }
+            lines.push(Line::raw(""));
+        }
     }
 
     lines.push(Line::from(vec![Span::styled(

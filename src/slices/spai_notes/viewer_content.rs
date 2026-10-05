@@ -1,4 +1,4 @@
-//! Formatter for the right-hand SPAI note viewer.
+//! Formatter for the right-hand SPAI note viewer with 5D facets display.
 use super::note::{SpaiNoteItem, SpaiStatus};
 use ratatui::{
     style::{Color, Style, Stylize},
@@ -10,7 +10,7 @@ pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
 
     lines.push(Line::raw(""));
 
-    // Metadata header
+    // 1. Status & Kind
     let status_color = match item.status {
         SpaiStatus::Done => Color::Rgb(55, 244, 153),
         SpaiStatus::Working => Color::Rgb(241, 252, 121),
@@ -65,13 +65,42 @@ pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
         Span::styled(item.file_name.clone(), Style::default().fg(Color::DarkGray)),
     ]));
 
+    // 2. 5D Facets Metadata Section
+    let mut facet_spans = Vec::new();
+    if let Some(area) = &item.facets.area {
+        facet_spans.push(Span::styled(" Oblast: ", Style::default().fg(Color::DarkGray)));
+        facet_spans.push(Span::styled(area.clone(), Style::default().fg(Color::Rgb(45, 213, 183)).bold()));
+    }
+    if let Some(effort) = &item.facets.effort {
+        facet_spans.push(Span::styled("  Náročnost: ", Style::default().fg(Color::DarkGray)));
+        facet_spans.push(Span::styled(effort.clone(), Style::default().fg(Color::Rgb(241, 252, 121))));
+    }
+    if let Some(urgency) = &item.facets.urgency {
+        facet_spans.push(Span::styled("  Naléhavost: ", Style::default().fg(Color::DarkGray)));
+        facet_spans.push(Span::styled(urgency.clone(), Style::default().fg(Color::Rgb(255, 121, 198))));
+    }
+    if let Some(who) = &item.facets.who {
+        facet_spans.push(Span::styled("  Řešitel: ", Style::default().fg(Color::DarkGray)));
+        facet_spans.push(Span::styled(who.clone(), Style::default().fg(Color::Rgb(189, 147, 249))));
+    }
+    if let Some(dl) = &item.facets.deadline {
+        facet_spans.push(Span::styled("  Termín: ", Style::default().fg(Color::DarkGray)));
+        facet_spans.push(Span::styled(dl.clone(), Style::default().fg(Color::Rgb(255, 83, 69)).bold()));
+    }
+
+    if !facet_spans.is_empty() {
+        let mut f_line = vec![Span::styled("  5D Facety:", Style::default().fg(Color::DarkGray).bold())];
+        f_line.extend(facet_spans);
+        lines.push(Line::from(f_line));
+    }
+
     lines.push(Line::styled(
         "  ───────────────────────────────────────────",
         Style::default().fg(Color::DarkGray),
     ));
     lines.push(Line::raw(""));
 
-    // Body lines
+    // 3. Body lines
     for line in item.body.lines() {
         if line.starts_with("# ") {
             lines.push(Line::styled(

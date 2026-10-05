@@ -2,9 +2,9 @@
 use super::autocomplete::ProjectSuggestion;
 use super::note::SpaiType;
 use super::similarity::SimilarNoteMatch;
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-#[derive(Debug, Clone)]
 pub struct NoteCreationDialog {
     pub active: bool,
     pub title_input: String,
@@ -17,6 +17,9 @@ pub struct NoteCreationDialog {
     pub debounced_query: String,
     pub debounced_matches: Vec<SimilarNoteMatch>,
     pub candidate_vector: Option<Vec<f64>>,
+    pub is_evaluating_vector: bool,
+    pub vector_evaluated: bool,
+    pub dedup_receiver: Option<Receiver<Vec<SimilarNoteMatch>>>,
 }
 
 impl Default for NoteCreationDialog {
@@ -33,6 +36,42 @@ impl Default for NoteCreationDialog {
             debounced_query: String::new(),
             debounced_matches: Vec::new(),
             candidate_vector: None,
+            is_evaluating_vector: false,
+            vector_evaluated: false,
+            dedup_receiver: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for NoteCreationDialog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NoteCreationDialog")
+            .field("active", &self.active)
+            .field("title_input", &self.title_input)
+            .field("selected_kind", &self.selected_kind)
+            .field("debounced_matches", &self.debounced_matches)
+            .field("is_evaluating_vector", &self.is_evaluating_vector)
+            .finish()
+    }
+}
+
+impl Clone for NoteCreationDialog {
+    fn clone(&self) -> Self {
+        Self {
+            active: self.active,
+            title_input: self.title_input.clone(),
+            selected_kind: self.selected_kind,
+            type_selection: self.type_selection,
+            autocomplete_active: self.autocomplete_active,
+            autocomplete_selected: self.autocomplete_selected,
+            suggestions: self.suggestions.clone(),
+            last_keystroke: self.last_keystroke,
+            debounced_query: self.debounced_query.clone(),
+            debounced_matches: self.debounced_matches.clone(),
+            candidate_vector: self.candidate_vector.clone(),
+            is_evaluating_vector: self.is_evaluating_vector,
+            vector_evaluated: self.vector_evaluated,
+            dedup_receiver: None,
         }
     }
 }

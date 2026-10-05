@@ -239,13 +239,19 @@ impl SidebarState {
         self.settings.tick_animation();
 
         let dedup_thresh = self.settings.similarity_threshold as f64 / 100.0;
-        self.spai_notes.poll_debounced_dedup(dedup_thresh);
+        self.spai_notes.poll_debounced_dedup(
+            &self.settings.api_key,
+            &self.settings.embedding_model,
+            dedup_thresh,
+        );
 
         self.spai_notes.refresh(pane_cwd, force);
 
-        let (total_notes, total_vectors) = self.spai_notes.count_notes_and_vectors();
+        let (total_notes, total_vectors, total_classified) =
+            self.spai_notes.count_notes_vectors_facets();
         self.settings.total_records = total_notes;
         self.settings.vector_count = total_vectors;
+        self.settings.classified_count = total_classified;
 
         if let Some(w) = refresh_weather_telemetry(
             self.weather_location_index,
@@ -358,36 +364,24 @@ impl SidebarState {
             .find(|p| self.target_pane_id.as_deref() == Some(p.pane_id.as_str()))
             .and_then(|p| p.cwd.clone());
 
-        if let Some(session_id) = herdr_session {
+        let (file, sid) = if let Some(session_id) = herdr_session {
             let prefix = session_id.get(..8).unwrap_or(&session_id).to_string();
             let cwd = pane_cwd.clone().unwrap_or_default();
             let file = crate::slices::telemetry::find_session_file(&prefix, &cwd)
                 .or_else(|| crate::slices::telemetry::find_session_file(&session_id, &cwd))
                 .or_else(|| crate::slices::telemetry::find_newest_session(pane_cwd.as_deref()));
-            self.load_live_from(file, &session_id, force);
+            (file, session_id)
         } else {
             let file = crate::slices::telemetry::find_newest_session_scoped(pane_cwd.as_deref());
-            self.load_live_from(file, "", force);
-        }
-    }
-
-    fn load_live_from(&mut self, file: Option<std::path::PathBuf>, session_id: &str, force: bool) {
-        let Some(file) = file else {
-            self.live = None;
-            return;
+            (file, String::new())
         };
 
-        let Ok(meta) = std::fs::metadata(&file) else {
-            self.live = None;
-            return;
-        };
-        let mtime = meta.modified().ok();
-        if !force && self.live.is_some() && mtime == self.live_session_mtime {
-            return;
-        }
-        self.live_session_mtime = mtime;
-        if let Some(t) = crate::slices::telemetry::parse_session(&file, session_id) {
-            self.live = Some(t);
-        }
+        self.live = super::state_refresh::load_live_session(
+            file.as_deref(),
+            &sid,
+            &mut self.live_session_mtime,
+            &self.live,
+            force,
+        );
     }
 }

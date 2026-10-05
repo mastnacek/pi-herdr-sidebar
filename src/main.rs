@@ -74,6 +74,30 @@ fn main() -> io::Result<()> {
                 std::process::exit(1);
             }
         }
+        "-v" | "vectorize" | "vectorize-missing" => {
+            let mut settings = slices::settings::SettingsState::load();
+            let mut spai_notes = slices::spai_notes::SpaiNotesState::new(None);
+            slices::settings::vectorize_missing_records(&mut settings, &mut spai_notes);
+            println!("{}", settings.status_message.unwrap_or_default());
+        }
+        "-va" | "vectorize-all" => {
+            let mut settings = slices::settings::SettingsState::load();
+            let mut spai_notes = slices::spai_notes::SpaiNotesState::new(None);
+            slices::settings::vectorize_all_records(&mut settings, &mut spai_notes);
+            println!("{}", settings.status_message.unwrap_or_default());
+        }
+        "-f" | "classify" | "classify-missing" => {
+            let mut settings = slices::settings::SettingsState::load();
+            let mut spai_notes = slices::spai_notes::SpaiNotesState::new(None);
+            slices::settings::classify_missing_facets(&mut settings, &mut spai_notes);
+            println!("{}", settings.status_message.unwrap_or_default());
+        }
+        "-fa" | "classify-all" => {
+            let mut settings = slices::settings::SettingsState::load();
+            let mut spai_notes = slices::spai_notes::SpaiNotesState::new(None);
+            slices::settings::classify_all_facets(&mut settings, &mut spai_notes);
+            println!("{}", settings.status_message.unwrap_or_default());
+        }
         "switch-tab" => {
             if let Err(e) = slices::actions::run_switch_tab() {
                 eprintln!("Error switching tab: {}", e);

@@ -11,8 +11,10 @@ pub enum SettingsField {
     ChatModel,
     EmbeddingModel,
     SimilarityThreshold,
-    VectorizeAction,
-    ClassifyAction,
+    VectorizeMissingAction,
+    VectorizeAllAction,
+    ClassifyMissingAction,
+    ClassifyAllAction,
 }
 
 impl SettingsField {
@@ -21,20 +23,24 @@ impl SettingsField {
             Self::ApiKey => Self::ChatModel,
             Self::ChatModel => Self::EmbeddingModel,
             Self::EmbeddingModel => Self::SimilarityThreshold,
-            Self::SimilarityThreshold => Self::VectorizeAction,
-            Self::VectorizeAction => Self::ClassifyAction,
-            Self::ClassifyAction => Self::ApiKey,
+            Self::SimilarityThreshold => Self::VectorizeMissingAction,
+            Self::VectorizeMissingAction => Self::VectorizeAllAction,
+            Self::VectorizeAllAction => Self::ClassifyMissingAction,
+            Self::ClassifyMissingAction => Self::ClassifyAllAction,
+            Self::ClassifyAllAction => Self::ApiKey,
         }
     }
 
     pub fn prev(self) -> Self {
         match self {
-            Self::ApiKey => Self::ClassifyAction,
+            Self::ApiKey => Self::ClassifyAllAction,
             Self::ChatModel => Self::ApiKey,
             Self::EmbeddingModel => Self::ChatModel,
             Self::SimilarityThreshold => Self::EmbeddingModel,
-            Self::VectorizeAction => Self::SimilarityThreshold,
-            Self::ClassifyAction => Self::VectorizeAction,
+            Self::VectorizeMissingAction => Self::SimilarityThreshold,
+            Self::VectorizeAllAction => Self::VectorizeMissingAction,
+            Self::ClassifyMissingAction => Self::VectorizeAllAction,
+            Self::ClassifyAllAction => Self::ClassifyMissingAction,
         }
     }
 }
@@ -66,6 +72,7 @@ pub struct SettingsState {
     pub api_key_input: String,
     pub status_message: Option<String>,
     pub vector_count: usize,
+    pub classified_count: usize,
     pub total_records: usize,
     pub models: Vec<ModelInfo>,
     pub picker_active: bool,
@@ -125,6 +132,7 @@ impl SettingsState {
             api_key_input: String::new(),
             status_message: None,
             vector_count: 0,
+            classified_count: 0,
             total_records: 0,
             models,
             picker_active: false,

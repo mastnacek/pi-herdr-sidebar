@@ -17,7 +17,7 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
         .constraints([
             Constraint::Length(3), // 1. API Key Card
             Constraint::Length(7), // 2. Model Selection Card
-            Constraint::Length(5), // 3. Vectorization & Actions Card
+            Constraint::Length(7), // 3. Vectorization & Actions Card
             Constraint::Length(4), // 4. Similarity Threshold Slider Card
             Constraint::Min(2),    // 5. Status message / Info
             Constraint::Length(2), // 6. Footer Hotkeys
@@ -31,13 +31,15 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
     render_models_card(frame, rows[1], state);
 
     // ── 3. Vectorization & Dedup Index Card ─────────────────────────
-    let is_vec_sel = state.selected_field == SettingsField::VectorizeAction;
-    let is_cls_sel = state.selected_field == SettingsField::ClassifyAction;
-    let is_actions_focused = is_vec_sel || is_cls_sel;
+    let is_vec_missing_sel = state.selected_field == SettingsField::VectorizeMissingAction;
+    let is_vec_all_sel = state.selected_field == SettingsField::VectorizeAllAction;
+    let is_cls_missing_sel = state.selected_field == SettingsField::ClassifyMissingAction;
+    let is_cls_all_sel = state.selected_field == SettingsField::ClassifyAllAction;
+    let is_actions_focused = is_vec_missing_sel || is_vec_all_sel || is_cls_missing_sel || is_cls_all_sel;
 
     let vec_block = Block::bordered()
         .title(Span::styled(
-            theme::field_title("⚡ Vektorizace & Sémantický Index", is_actions_focused),
+            theme::field_title("⚡ Vektorizace & 5D AI Index", is_actions_focused),
             Style::default()
                 .fg(if is_actions_focused { Color::Yellow } else { Color::White })
                 .bold(),
@@ -78,63 +80,76 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
             Span::styled("Probíhá na pozadí — TUI zůstává plně interaktivní", Style::default().fg(Color::DarkGray).italic()),
         ]));
     } else {
-        let (status_text, status_color) = if state.total_records == 0 {
-            ("0 záznamů k indexování".to_string(), Color::DarkGray)
+        let (vec_status_text, vec_status_color) = if state.total_records == 0 {
+            ("0 záznamů".to_string(), Color::DarkGray)
         } else if state.vector_count >= state.total_records {
-            (
-                format!(
-                    "{}/{} záznamů indexováno (vektorový index aktuální)",
-                    state.vector_count, state.total_records
-                ),
-                Color::Green,
-            )
-        } else if state.vector_count > 0 {
-            (
-                format!(
-                    "{}/{} záznamů indexováno ({} čeká na [v] vektorizaci)",
-                    state.vector_count,
-                    state.total_records,
-                    state.total_records.saturating_sub(state.vector_count)
-                ),
-                Color::Yellow,
-            )
+            (format!("{}/{} (aktuální)", state.vector_count, state.total_records), Color::Green)
         } else {
-            (
-                format!(
-                    "0/{} záznamů indexováno (stiskněte [v] pro vektorizaci)",
-                    state.total_records
-                ),
-                Color::Rgb(255, 184, 108),
-            )
+            (format!("{}/{} ({} chybí)", state.vector_count, state.total_records, state.total_records.saturating_sub(state.vector_count)), Color::Yellow)
+        };
+
+        let (cls_status_text, cls_status_color) = if state.total_records == 0 {
+            ("0 záznamů".to_string(), Color::DarkGray)
+        } else if state.classified_count >= state.total_records {
+            (format!("{}/{} (kompletní)", state.classified_count, state.total_records), Color::Green)
+        } else {
+            (format!("{}/{} ({} chybí)", state.classified_count, state.total_records, state.total_records.saturating_sub(state.classified_count)), Color::Yellow)
         };
 
         vec_lines.push(Line::from(vec![
             Span::raw("    "),
-            Span::styled("Stav indexu: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(status_text, Style::default().fg(status_color).bold()),
+            Span::styled("Vektory: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(vec_status_text, Style::default().fg(vec_status_color).bold()),
+            Span::raw("    "),
+            Span::styled("5D Facety: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(cls_status_text, Style::default().fg(cls_status_color).bold()),
         ]));
+
         vec_lines.push(Line::from(vec![
             Span::styled(
-                if is_vec_sel { "  ▶ " } else { "    " },
+                if is_vec_missing_sel { "  ▶ " } else { "    " },
                 Style::default().fg(Color::Yellow).bold(),
             ),
             Span::styled(
-                "[v] Spustit vektorizaci všech záznamů (Re-embed all)",
+                "[v] Vektorizovat chybějící",
                 Style::default()
-                    .fg(if is_vec_sel { Color::Rgb(45, 213, 183) } else { Color::White })
-                    .add_modifier(if is_vec_sel { Modifier::BOLD } else { Modifier::empty() }),
+                    .fg(if is_vec_missing_sel { Color::Rgb(45, 213, 183) } else { Color::White })
+                    .add_modifier(if is_vec_missing_sel { Modifier::BOLD } else { Modifier::empty() }),
             ),
-        ]));
-        vec_lines.push(Line::from(vec![
+            Span::styled("   ", Style::default()),
             Span::styled(
-                if is_cls_sel { "  ▶ " } else { "    " },
+                if is_vec_all_sel { "▶ " } else { "  " },
                 Style::default().fg(Color::Yellow).bold(),
             ),
             Span::styled(
-                "[f] Spustit 5D AI klasifikaci facetů (area/effort/urgency/who)",
+                "[V/va] Převektorizovat vše",
                 Style::default()
-                    .fg(if is_cls_sel { Color::Rgb(255, 94, 219) } else { Color::White })
-                    .add_modifier(if is_cls_sel { Modifier::BOLD } else { Modifier::empty() }),
+                    .fg(if is_vec_all_sel { Color::Rgb(45, 213, 183) } else { Color::White })
+                    .add_modifier(if is_vec_all_sel { Modifier::BOLD } else { Modifier::empty() }),
+            ),
+        ]));
+
+        vec_lines.push(Line::from(vec![
+            Span::styled(
+                if is_cls_missing_sel { "  ▶ " } else { "    " },
+                Style::default().fg(Color::Yellow).bold(),
+            ),
+            Span::styled(
+                "[f] Doplnit chybějící 5D facety",
+                Style::default()
+                    .fg(if is_cls_missing_sel { Color::Rgb(255, 94, 219) } else { Color::White })
+                    .add_modifier(if is_cls_missing_sel { Modifier::BOLD } else { Modifier::empty() }),
+            ),
+            Span::styled("   ", Style::default()),
+            Span::styled(
+                if is_cls_all_sel { "▶ " } else { "  " },
+                Style::default().fg(Color::Yellow).bold(),
+            ),
+            Span::styled(
+                "[F/fa] Překlasifikovat vše",
+                Style::default()
+                    .fg(if is_cls_all_sel { Color::Rgb(255, 94, 219) } else { Color::White })
+                    .add_modifier(if is_cls_all_sel { Modifier::BOLD } else { Modifier::empty() }),
             ),
         ]));
     }
@@ -197,11 +212,11 @@ pub fn render_settings_tab(frame: &mut Frame, area: Rect, state: &SettingsState)
     // ── 6. Footer Hotkeys ───────────────────────────────────────────
     let footer_line = Line::from(vec![
         Span::styled(" [↑/↓] ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Vybrat pole   ", Style::default().fg(Color::White)),
-        Span::styled("[←/→] ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Změnit model   ", Style::default().fg(Color::White)),
-        Span::styled("[Enter] ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Hledat/Spustit   ", Style::default().fg(Color::White)),
+        Span::styled("Vybrat   ", Style::default().fg(Color::White)),
+        Span::styled("[v/V] ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Vektorizovat   ", Style::default().fg(Color::White)),
+        Span::styled("[f/F] ", Style::default().fg(Color::DarkGray)),
+        Span::styled("5D Klasifikovat   ", Style::default().fg(Color::White)),
         Span::styled("[r] ", Style::default().fg(Color::DarkGray)),
         Span::styled("Obnovit katalog", Style::default().fg(Color::White)),
     ]);

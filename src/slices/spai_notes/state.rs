@@ -112,17 +112,23 @@ impl SpaiNotesState {
         }
     }
 
-    pub fn count_notes_and_vectors(&mut self) -> (usize, usize) {
+    pub fn count_notes_vectors_facets(&mut self) -> (usize, usize, usize) {
         let mut total_notes = 0;
         let mut total_vectors = 0;
+        let mut total_classified = 0;
         for p in &mut self.projects {
             p.ensure_items();
             total_notes += p.items.len();
+            for item in &p.items {
+                if item.facets.area.is_some() && item.facets.effort.is_some() {
+                    total_classified += 1;
+                }
+            }
             if let Some(store) = crate::slices::settings::load_project_vectors(&p.path) {
                 total_vectors += store.vectors.len();
             }
         }
-        (total_notes, total_vectors)
+        (total_notes, total_vectors, total_classified)
     }
 
     pub fn current_items(&self) -> &[SpaiNoteItem] {

@@ -7,8 +7,21 @@ use crate::slices::spai_notes::storage_format::format_spai_markdown;
 use crate::slices::spai_notes::SpaiNotesState;
 use std::sync::mpsc::channel;
 
-/// Triggers background vectorization of all records across discovered projects.
+/// Triggers background vectorization for only missing records.
+pub fn vectorize_missing_records(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
+    run_vectorize_worker(settings, notes_state, false);
+}
+
+/// Triggers background vectorization for all records (force re-embed all).
 pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
+    run_vectorize_worker(settings, notes_state, true);
+}
+
+fn run_vectorize_worker(
+    settings: &mut SettingsState,
+    notes_state: &mut SpaiNotesState,
+    force_all: bool,
+) {
     if settings.is_busy {
         return;
     }
@@ -23,7 +36,11 @@ pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut Spa
     let (tx, rx) = channel();
     settings.task_receiver = Some(rx);
     settings.is_busy = true;
-    settings.busy_label = "Příprava vektorizace...".to_string();
+    settings.busy_label = if force_all {
+        "Převektorizace všech záznamů...".to_string()
+    } else {
+        "Vektorizace chybějících záznamů...".to_string()
+    };
     settings.busy_step = 0;
     settings.busy_total = 0;
 
@@ -50,7 +67,7 @@ pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut Spa
         let _ = tx.send(AsyncProgress::Progress {
             step: 0,
             total: total_records,
-            label: format!("Indexuji {} záznamů...", total_records),
+            label: format!("Indexuji záznamy (model: {})...", model),
         });
 
         let mut processed = 0;
@@ -63,6 +80,7 @@ pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut Spa
                 &model,
                 &project_path,
                 &items,
+                force_all,
                 &tx,
                 &mut processed,
                 total_records,
@@ -73,14 +91,27 @@ pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut Spa
         }
 
         let _ = tx.send(AsyncProgress::Done(format!(
-            "✅ Vektorizace dokončena: {}/{} záznamů indexováno modelem {}",
-            processed, total_records, model
+            "✅ Vektorizace dokončena: {} záznamů zpracováno modelem {}",
+            processed, model
         )));
     });
 }
 
-/// Triggers background 5D facet classification for all records using OpenRouter Chat.
-pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
+/// Triggers background 5D facet classification for unclassified records only.
+pub fn classify_missing_facets(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
+    run_classify_worker(settings, notes_state, false);
+}
+
+/// Triggers background 5D facet classification for all records (force re-classify all).
+pub fn classify_all_facets(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
+    run_classify_worker(settings, notes_state, true);
+}
+
+fn run_classify_worker(
+    settings: &mut SettingsState,
+    notes_state: &mut SpaiNotesState,
+    force_all: bool,
+) {
     if settings.is_busy {
         return;
     }
@@ -95,7 +126,11 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
     let (tx, rx) = channel();
     settings.task_receiver = Some(rx);
     settings.is_busy = true;
-    settings.busy_label = "Příprava 5D klasifikace...".to_string();
+    settings.busy_label = if force_all {
+        "Překlasifikace všech 5D facetů...".to_string()
+    } else {
+        "Doplnění chybějících 5D facetů...".to_string()
+    };
     settings.busy_step = 0;
     settings.busy_total = 0;
 
@@ -107,14 +142,16 @@ pub fn classify_facets_all(settings: &mut SettingsState, notes_state: &mut SpaiN
     for p in &mut notes_state.projects {
         p.ensure_items();
         for item in &p.items {
-            notes_to_classify.push(item.clone());
+            if force_all || item.facets.area.is_none() || item.facets.effort.is_none() {
+                notes_to_classify.push(item.clone());
+            }
         }
     }
 
     std::thread::spawn(move || {
         let total = notes_to_classify.len();
         if total == 0 {
-            let _ = tx.send(AsyncProgress::Done("Žádné záznamy ke klasifikaci".to_string()));
+            let _ = tx.send(AsyncProgress::Done("Všechny záznamy již mají 5D facety".to_string()));
             return;
         }
 

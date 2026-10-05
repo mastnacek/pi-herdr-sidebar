@@ -1,30 +1,45 @@
 //! Actions and debounced evaluation on duplicate / similar notes detected during Smart Note creation.
 use super::note::SpaiStatus;
+use super::similarity::{find_similar_notes_hybrid, SimilarNoteMatch};
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
+use std::sync::mpsc::channel;
+use std::time::Duration;
 
 impl SpaiNotesState {
-    /// Polls debounced deduplication check when typing pauses for >= 300ms.
-    pub fn poll_debounced_dedup(&mut self, threshold: f64) {
+    /// Polls debounced deduplication check: 2.2s delay after typing pauses, then vectorizes via OpenRouter.
+    pub fn poll_debounced_dedup(&mut self, api_key: &str, model: &str, threshold: f64) {
         if !self.creation_dialog.active {
             return;
         }
+
+        // 1. Check if background vector evaluation returned results
+        if let Some(rx) = &self.creation_dialog.dedup_receiver {
+            if let Ok(matches) = rx.try_recv() {
+                self.creation_dialog.debounced_matches = matches;
+                self.creation_dialog.is_evaluating_vector = false;
+                self.creation_dialog.vector_evaluated = true;
+                self.creation_dialog.dedup_receiver = None;
+            }
+        }
+
+        // 2. Trigger background vectorization 2.2s after user stops typing
         let Some(last) = self.creation_dialog.last_keystroke else {
             return;
         };
-        if last.elapsed() < std::time::Duration::from_millis(300) {
+
+        if last.elapsed() < Duration::from_millis(2200) {
             return;
         }
 
-        let raw = self.creation_dialog.title_input.trim();
-        if raw == self.creation_dialog.debounced_query {
+        if self.creation_dialog.is_evaluating_vector || self.creation_dialog.vector_evaluated {
             return;
         }
 
-        self.creation_dialog.debounced_query = raw.to_string();
-
+        let raw = self.creation_dialog.title_input.trim().to_string();
         if raw.len() < 3 {
             self.creation_dialog.debounced_matches.clear();
+            self.creation_dialog.vector_evaluated = true;
             return;
         }
 
@@ -32,17 +47,57 @@ impl SpaiNotesState {
             return;
         };
 
-        let stored_vectors =
-            crate::slices::settings::load_project_vectors(&proj.path).map(|s| s.vectors);
+        self.creation_dialog.is_evaluating_vector = true;
+        self.creation_dialog.vector_evaluated = true;
 
-        self.creation_dialog.debounced_matches = super::similarity::find_similar_notes_hybrid(
-            raw,
-            &proj.items,
-            self.creation_dialog.candidate_vector.as_deref(),
-            stored_vectors.as_ref(),
-            threshold,
-            4,
-        );
+        if !api_key.trim().is_empty() {
+            let (tx, rx) = channel();
+            self.creation_dialog.dedup_receiver = Some(rx);
+
+            let key = api_key.to_string();
+            let emb_model = model.to_string();
+            let items = proj.items.clone();
+            let proj_path = proj.path.clone();
+
+            std::thread::spawn(move || {
+                let stored_vectors =
+                    crate::slices::settings::load_project_vectors(&proj_path).map(|s| s.vectors);
+
+                let cand_vec = match crate::slices::settings::vector_service::request_embeddings(
+                    &key,
+                    &emb_model,
+                    &[&raw],
+                ) {
+                    Ok(mut vecs) => vecs.pop(),
+                    Err(_) => None,
+                };
+
+                let matches = find_similar_notes_hybrid(
+                    &raw,
+                    &items,
+                    cand_vec.as_deref(),
+                    stored_vectors.as_ref(),
+                    threshold,
+                    4,
+                );
+
+                let _ = tx.send(matches);
+            });
+        } else {
+            // Local fallback when API key is missing
+            let stored_vectors =
+                crate::slices::settings::load_project_vectors(&proj.path).map(|s| s.vectors);
+
+            self.creation_dialog.debounced_matches = find_similar_notes_hybrid(
+                &raw,
+                &proj.items,
+                None,
+                stored_vectors.as_ref(),
+                threshold,
+                4,
+            );
+            self.creation_dialog.is_evaluating_vector = false;
+        }
     }
 
     /// Returns the top similar matching note for the currently typed input (if any).

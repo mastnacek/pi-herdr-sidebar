@@ -112,12 +112,14 @@ pub fn request_embeddings(
     Ok(final_vecs)
 }
 
-/// Computes vectors for all items in a project with live background progress reports.
+/// Computes vectors for items in a project with live background progress reports.
+/// `force_all`: When false, only embeds records missing from `.vectors.json`.
 pub fn vectorize_project_items_with_progress(
     api_key: &str,
     model: &str,
     project_dir: &Path,
     items: &[SpaiNoteItem],
+    force_all: bool,
     progress_tx: &Sender<AsyncProgress>,
     processed_count: &mut usize,
     total_records: usize,
@@ -134,9 +136,15 @@ pub fn vectorize_project_items_with_progress(
     let mut to_fetch_texts = Vec::new();
 
     for item in items {
-        let text = format!("{}: {} [{}]", item.kind.as_str(), item.title, item.tags.join(" "));
-        to_fetch_ids.push(item.id.clone());
-        to_fetch_texts.push(text);
+        if force_all || !vector_map.contains_key(&item.id) {
+            let text = format!("{}: {} [{}]", item.kind.as_str(), item.title, item.tags.join(" "));
+            to_fetch_ids.push(item.id.clone());
+            to_fetch_texts.push(text);
+        }
+    }
+
+    if to_fetch_ids.is_empty() {
+        return Ok(0);
     }
 
     let batch_size = 16;

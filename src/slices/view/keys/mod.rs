@@ -110,14 +110,26 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Char('x') if state.active_tab == Tab::Notes => {
             let _ = state.spai_notes.cycle_selected_status();
         }
-        KeyCode::Char('v') | KeyCode::Char('V') if state.active_tab == Tab::Settings => {
+        KeyCode::Char('v') if state.active_tab == Tab::Settings => {
+            crate::slices::settings::vectorize_missing_records(
+                &mut state.settings,
+                &mut state.spai_notes,
+            );
+        }
+        KeyCode::Char('V') if state.active_tab == Tab::Settings => {
             crate::slices::settings::vectorize_all_records(
                 &mut state.settings,
                 &mut state.spai_notes,
             );
         }
-        KeyCode::Char('f') | KeyCode::Char('F') if state.active_tab == Tab::Settings => {
-            crate::slices::settings::classify_facets_all(
+        KeyCode::Char('f') if state.active_tab == Tab::Settings => {
+            crate::slices::settings::classify_missing_facets(
+                &mut state.settings,
+                &mut state.spai_notes,
+            );
+        }
+        KeyCode::Char('F') if state.active_tab == Tab::Settings => {
+            crate::slices::settings::classify_all_facets(
                 &mut state.settings,
                 &mut state.spai_notes,
             );
@@ -146,14 +158,26 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
                         .settings
                         .open_picker(crate::slices::settings::ModelTarget::Embedding);
                 }
-                crate::slices::settings::SettingsField::VectorizeAction => {
+                crate::slices::settings::SettingsField::VectorizeMissingAction => {
+                    crate::slices::settings::vectorize_missing_records(
+                        &mut state.settings,
+                        &mut state.spai_notes,
+                    );
+                }
+                crate::slices::settings::SettingsField::VectorizeAllAction => {
                     crate::slices::settings::vectorize_all_records(
                         &mut state.settings,
                         &mut state.spai_notes,
                     );
                 }
-                crate::slices::settings::SettingsField::ClassifyAction => {
-                    crate::slices::settings::classify_facets_all(
+                crate::slices::settings::SettingsField::ClassifyMissingAction => {
+                    crate::slices::settings::classify_missing_facets(
+                        &mut state.settings,
+                        &mut state.spai_notes,
+                    );
+                }
+                crate::slices::settings::SettingsField::ClassifyAllAction => {
+                    crate::slices::settings::classify_all_facets(
                         &mut state.settings,
                         &mut state.spai_notes,
                     );

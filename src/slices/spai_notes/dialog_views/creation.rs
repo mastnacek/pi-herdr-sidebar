@@ -130,6 +130,8 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         raw,
         state.current_items(),
         &state.creation_dialog.debounced_matches,
+        state.creation_dialog.is_evaluating_vector,
+        state.creation_dialog.last_keystroke,
     );
     let hint_para = Paragraph::new(hint_lines).block(hint_block);
     frame.render_widget(hint_para, top_cols[1]);
