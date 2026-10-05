@@ -32,13 +32,12 @@ type PrefixSpec = (&'static [&'static str], SpaiType, SpaiStatus, &'static str, 
 
 const PREFIX_SPECS: &[PrefixSpec] = &[
     (&["/. ", "/· ", "/.", "/·"], SpaiType::Todo, SpaiStatus::Waiting, "Čeká", "Čeká", "/. ", Color::Rgb(189, 147, 249)),
-    (&[". ", "."], SpaiType::Todo, SpaiStatus::Todo, "Úkol", "Úkol", ". ", Color::Rgb(241, 252, 121)),
-    (&["/ ", "/"], SpaiType::Todo, SpaiStatus::Working, "Rozpracováno", "Rozpracováno", "/ ", Color::Rgb(241, 252, 121)),
-    (&["x ", "X ", "x", "X"], SpaiType::Todo, SpaiStatus::Done, "Hotovo", "Hotovo", "x ", Color::Rgb(55, 244, 153)),
-    (&["z ", "Z ", "z", "Z"], SpaiType::Todo, SpaiStatus::Cancelled, "Zrušeno", "Zrušeno", "z ", Color::Rgb(135, 145, 170)),
-    (&["? ", "?"], SpaiType::Idea, SpaiStatus::Idea, "Nápad", "Nápad", "? ", Color::Rgb(255, 121, 198)),
-    (&["!- ", "!-"], SpaiType::Note, SpaiStatus::Note, "Kritická poznámka", "Kritická", "!- ", Color::Rgb(255, 83, 69)),
-    (&["- ", "-"], SpaiType::Note, SpaiStatus::Note, "Poznámka", "Poznámka", "- ", Color::Rgb(139, 233, 253)),
+    (&[". ", "."], SpaiType::Todo, SpaiStatus::Todo, "Úkol", "Úkol", ". ", Color::Rgb(255, 215, 0)),
+    (&["/ ", "/"], SpaiType::Todo, SpaiStatus::Working, "Rozpracováno", "Rozpracováno", "/ ", Color::Rgb(0, 255, 255)),
+    (&["x ", "X ", "x", "X"], SpaiType::Todo, SpaiStatus::Done, "Hotovo", "Hotovo", "x ", Color::Rgb(144, 238, 144)),
+    (&["z ", "Z ", "z", "Z"], SpaiType::Todo, SpaiStatus::Cancelled, "Zrušeno", "Zrušeno", "z ", Color::Rgb(127, 140, 141)),
+    (&["? ", "?"], SpaiType::Idea, SpaiStatus::Idea, "Nápad", "Nápad", "? ", Color::Rgb(186, 85, 211)),
+    (&["- ", "-"], SpaiType::Note, SpaiStatus::Note, "Poznámka", "Poznámka", "- ", Color::Rgb(127, 179, 255)),
     (&["+ ", "+"], SpaiType::Note, SpaiStatus::Skutek, "Skutek dne", "Skutek", "+ ", Color::Rgb(255, 94, 219)),
     (&["= ", "="], SpaiType::Note, SpaiStatus::Mood, "Nálada", "Nálada", "= ", Color::Rgb(255, 184, 108)),
     (&["* ", "*"], SpaiType::Note, SpaiStatus::Win, "Výhra", "Výhra", "* ", Color::Rgb(163, 230, 53)),
@@ -58,17 +57,37 @@ pub fn detect_spai_input(input: &str) -> DetectedSpaiInput {
             rest = remainder.trim_start();
         }
     }
-    if let Some((first, remainder)) = rest.split_once(' ') {
-        if first == "!" || first == "!!" || first == "!!!" {
-            rest = remainder.trim_start();
+
+    let mut is_priority = false;
+    if rest.starts_with('!') {
+        is_priority = true;
+        let after_bang = &rest[1..];
+        if after_bang.starts_with('!') {
+            rest = after_bang.trim_start_matches('!').trim_start();
+        } else if after_bang.starts_with(' ') {
+            rest = after_bang.trim_start();
+        } else if !after_bang.is_empty() {
+            rest = after_bang;
         }
-    } else if rest == "!" || rest == "!!" || rest == "!!!" {
-        return DetectedSpaiInput::default();
     }
 
     for (prefixes, kind, status, label, short, glyph, color) in PREFIX_SPECS {
         for p in *prefixes {
             if (p.ends_with(' ') && rest.starts_with(p)) || rest == *p {
+                if is_priority {
+                    return DetectedSpaiInput {
+                        kind: *kind,
+                        status: *status,
+                        prefix_label: match *status {
+                            SpaiStatus::Note => "Kritická poznámka / událost",
+                            SpaiStatus::Todo => "Kritický / prioritní úkol",
+                            _ => label,
+                        },
+                        short_label: short,
+                        prefix_glyph: glyph,
+                        badge_color: Color::Rgb(255, 83, 69),
+                    };
+                }
                 return DetectedSpaiInput {
                     kind: *kind,
                     status: *status,
@@ -79,6 +98,17 @@ pub fn detect_spai_input(input: &str) -> DetectedSpaiInput {
                 };
             }
         }
+    }
+
+    if is_priority {
+        return DetectedSpaiInput {
+            kind: SpaiType::Todo,
+            status: SpaiStatus::Todo,
+            prefix_label: "Kritický / prioritní úkol",
+            short_label: "Úkol",
+            prefix_glyph: "!. ",
+            badge_color: Color::Rgb(255, 83, 69),
+        };
     }
 
     DetectedSpaiInput::default()
@@ -92,6 +122,27 @@ pub fn highlight_spai_input_spans(input: &str) -> Vec<Span<'static>> {
     }
 
     let mut rest = input;
+
+    if rest.starts_with('!') {
+        let after_bang = &rest[1..];
+        if after_bang.starts_with(' ') {
+            spans.push(Span::styled(
+                "! ".to_string(),
+                Style::default()
+                    .fg(Color::Rgb(255, 83, 69))
+                    .add_modifier(Modifier::BOLD),
+            ));
+            rest = after_bang.trim_start();
+        } else {
+            spans.push(Span::styled(
+                "!".to_string(),
+                Style::default()
+                    .fg(Color::Rgb(255, 83, 69))
+                    .add_modifier(Modifier::BOLD),
+            ));
+            rest = after_bang;
+        }
+    }
 
     for (prefixes, _, _, _, _, _, color) in PREFIX_SPECS {
         for p in *prefixes {
@@ -235,25 +286,5 @@ pub fn is_time_format(word: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod tests;
 
-    #[test]
-    fn detects_all_spai_prefixes() {
-        assert_eq!(detect_spai_input(". task").short_label, "Úkol");
-        assert_eq!(detect_spai_input("/ working").short_label, "Rozpracováno");
-        assert_eq!(detect_spai_input("/. waiting").short_label, "Čeká");
-        assert_eq!(detect_spai_input("x done").short_label, "Hotovo");
-        assert_eq!(detect_spai_input("z cancelled").short_label, "Zrušeno");
-        assert_eq!(detect_spai_input("? idea").short_label, "Nápad");
-        assert_eq!(detect_spai_input("- note").short_label, "Poznámka");
-        assert_eq!(detect_spai_input("!- critical").short_label, "Kritická");
-    }
-
-    #[test]
-    fn highlights_syntax_tokens() {
-        let spans = highlight_spai_input_spans(". @proj !high :tag: text");
-        assert!(!spans.is_empty());
-        assert_eq!(spans[0].content, ". ");
-    }
-}

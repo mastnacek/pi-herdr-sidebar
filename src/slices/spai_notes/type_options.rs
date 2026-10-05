@@ -19,10 +19,10 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: ". ",
         display_sym: ".",
         name: "Úkol (pending)",
-        desc: "Nový úkol čekající na zpracování",
+        desc: "Nový úkol čekající na zpracování (!. pro kritický)",
         examples: &[
             ". @projekt !high úkol k vyřešení",
-            ". připravit podklady pro schůzku :dok:",
+            "!. @projekt urgentní úkol k okamžitému řešení",
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Todo,
@@ -32,10 +32,10 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: "/ ",
         display_sym: "/",
         name: "Rozpracováno (in progress)",
-        desc: "Úkol, na kterém se aktuálně pracuje",
+        desc: "Úkol, na kterém se aktuálně pracuje (!/ pro prioritní)",
         examples: &[
             "/ @projekt práce na implementaci",
-            "/ ladění testů a refaktoring",
+            "!/ @projekt kritická oprava produkčního bugu",
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Working,
@@ -48,7 +48,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         desc: "Úkol čekající na externí vstup nebo někoho/něco",
         examples: &[
             "/. @projekt čekám na review PR",
-            "/. čekám na schválení rozpočtu",
+            "!/. @projekt blokováno na schválení přístupů",
         ],
         kind: SpaiType::Todo,
         status: SpaiStatus::Waiting,
@@ -84,10 +84,10 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: "? ",
         display_sym: "?",
         name: "Nápad (idea)",
-        desc: "Myšlenka, nápad k pozdějšímu zpracování",
+        desc: "Myšlenka, nápad k pozdějšímu zpracování (!? pro prioritní)",
         examples: &[
             "? @projekt nový nápad na funkci",
-            "? prozkoumat novou knihovnu pro TUI",
+            "!? @projekt strategická inovace produktu",
         ],
         kind: SpaiType::Idea,
         status: SpaiStatus::Idea,
@@ -97,10 +97,10 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: "- ",
         display_sym: "-",
         name: "Poznámka (note)",
-        desc: "Běžná textová poznámka nebo zápisek",
+        desc: "Běžná textová poznámka (!- pro kritickou událost)",
         examples: &[
             "- @projekt zápis ze standupu",
-            "- odkaz na specifikaci API",
+            "!- @projekt výpadek databáze v produkci",
         ],
         kind: SpaiType::Note,
         status: SpaiStatus::Note,
@@ -110,10 +110,10 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: "+ ",
         display_sym: "+",
         name: "Skutek dne (skutek)",
-        desc: "Hlavní dnešní počin nebo klíčový skutek",
+        desc: "Hlavní dnešní počin nebo klíčový skutek (!+ pro zásadní)",
         examples: &[
             "+ @projekt dokončen kompletní refaktoring API",
-            "+ schválena nová architektura systému",
+            "!+ @projekt schválena a nasazena nová architektura",
         ],
         kind: SpaiType::Note,
         status: SpaiStatus::Skutek,
@@ -126,7 +126,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         desc: "Hodnocení nálady a energie na stupnici 1–5",
         examples: &[
             "= @projekt 4 skvělý den plný soustředění",
-            "= 2 vyčerpání po náročném incidentu",
+            "!= 1 akutní vyhoření a přetížení",
         ],
         kind: SpaiType::Note,
         status: SpaiStatus::Mood,
@@ -136,10 +136,10 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: "* ",
         display_sym: "*",
         name: "Výhra (win)",
-        desc: "Co se dnes povedlo, úspěch nebo milník",
+        desc: "Co se dnes povedlo, úspěch nebo milník (!* pro velkou výhru)",
         examples: &[
             "* @projekt úspěšně nasazena v1.0",
-            "* vyřešen dlouhodobý memory leak",
+            "!* @projekt získán nový klíčový enterprise klient",
         ],
         kind: SpaiType::Note,
         status: SpaiStatus::Win,
@@ -149,27 +149,14 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         symbol: "% ",
         display_sym: "%",
         name: "Průser (fuckup)",
-        desc: "Co se nepovedlo a co nás to naučilo",
+        desc: "Co se nepovedlo a co nás to naučilo (!% pro kritický incident)",
         examples: &[
             "% @projekt výpadek prod DB po špatné migraci",
-            "% zapomenutý rollback plán pro deploy",
+            "!% @projekt kritický bezpečnostní incident v API",
         ],
         kind: SpaiType::Note,
         status: SpaiStatus::Fuckup,
         color: Color::Rgb(214, 69, 69), // Crimson
-    },
-    SpaiTypeOption {
-        symbol: "!- ",
-        display_sym: "!-",
-        name: "Kritická událost",
-        desc: "Důležitá událost nebo varování k zapamatování",
-        examples: &[
-            "!- @projekt výpadek API v produkci",
-            "!- kritická chyba v platební bráně",
-        ],
-        kind: SpaiType::Note,
-        status: SpaiStatus::Note,
-        color: Color::Rgb(255, 83, 69), // Red
     },
 ];
 
@@ -184,9 +171,15 @@ pub fn find_type_option_index(input: &str) -> Option<usize> {
             rest = remainder.trim_start();
         }
     }
-    if let Some((first, remainder)) = rest.split_once(' ') {
-        if first == "!" || first == "!!" || first == "!!!" {
-            rest = remainder.trim_start();
+    // Strip leading priority modifiers (!, !!, !, !., !-, etc.)
+    if rest.starts_with('!') {
+        let after_bang = &rest[1..];
+        if after_bang.starts_with('!') {
+            rest = after_bang.trim_start_matches('!').trim_start();
+        } else if after_bang.starts_with(' ') {
+            rest = after_bang.trim_start();
+        } else if !after_bang.is_empty() {
+            rest = after_bang;
         }
     }
 
@@ -222,7 +215,21 @@ mod tests {
         assert_eq!(find_type_option_index("= test"), Some(8));
         assert_eq!(find_type_option_index("* test"), Some(9));
         assert_eq!(find_type_option_index("% test"), Some(10));
-        assert_eq!(find_type_option_index("!- test"), Some(11));
         assert_eq!(find_type_option_index("plain text"), None);
+    }
+
+    #[test]
+    fn matches_with_priority_bang_prefix() {
+        assert_eq!(find_type_option_index("!. test"), Some(0));
+        assert_eq!(find_type_option_index("!/ test"), Some(1));
+        assert_eq!(find_type_option_index("!/. test"), Some(2));
+        assert_eq!(find_type_option_index("!? test"), Some(5));
+        assert_eq!(find_type_option_index("!- test"), Some(6));
+        assert_eq!(find_type_option_index("!+ test"), Some(7));
+        assert_eq!(find_type_option_index("!= test"), Some(8));
+        assert_eq!(find_type_option_index("!* test"), Some(9));
+        assert_eq!(find_type_option_index("!% test"), Some(10));
+        assert_eq!(find_type_option_index("! . test"), Some(0));
+        assert_eq!(find_type_option_index("! - test"), Some(6));
     }
 }
