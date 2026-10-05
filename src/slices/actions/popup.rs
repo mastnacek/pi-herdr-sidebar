@@ -57,3 +57,13 @@ pub fn run_usage_popup() -> Result<(), String> {
     let entrypoint = if cfg!(windows) { "usage-win" } else { "usage" };
     open_entrypoint(entrypoint, "usage overview")
 }
+
+/// Opens the Settings & Vectorization face as a modal over the active workspace.
+pub fn run_settings_popup() -> Result<(), String> {
+    let entrypoint = if cfg!(windows) {
+        "settings-popup-win"
+    } else {
+        "settings-popup"
+    };
+    open_entrypoint(entrypoint, "settings modal")
+}

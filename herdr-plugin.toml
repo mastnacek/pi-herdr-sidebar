@@ -80,6 +80,25 @@ height = "88%"
 command = ["target/release/pi_sidebar.exe", "usage"]
 platforms = ["windows"]
 
+# Dedicated modal for SPAI Settings & Vectorization.
+[[panes]]
+id = "settings-popup"
+title = "Pi Herdr SPAI Settings"
+placement = "popup"
+width = "80%"
+height = 24
+command = ["target/release/pi_sidebar", "popup", "--tab", "settings"]
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "settings-popup-win"
+title = "Pi Herdr SPAI Settings"
+placement = "popup"
+width = "80%"
+height = 24
+command = ["target/release/pi_sidebar.exe", "popup", "--tab", "settings"]
+platforms = ["windows"]
+
 [[actions]]
 id = "toggle"
 title = "Toggle Pi Herdr Sidebar"
@@ -134,6 +153,20 @@ id = "usage-win"
 title = "Open Pi Herdr Plugin Usage (window)"
 contexts = ["workspace"]
 command = ["target/release/pi_sidebar.exe", "usage-popup-action"]
+platforms = ["windows"]
+
+[[actions]]
+id = "settings"
+title = "Open Pi Herdr Settings (modal)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar", "settings-popup-action"]
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "settings-win"
+title = "Open Pi Herdr Settings (modal)"
+contexts = ["workspace"]
+command = ["target/release/pi_sidebar.exe", "settings-popup-action"]
 platforms = ["windows"]
 
 [[actions]]

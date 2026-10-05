@@ -68,6 +68,12 @@ fn main() -> io::Result<()> {
                 std::process::exit(1);
             }
         }
+        "settings-popup-action" => {
+            if let Err(e) = slices::actions::run_settings_popup() {
+                eprintln!("Error opening settings modal: {}", e);
+                std::process::exit(1);
+            }
+        }
         "switch-tab" => {
             if let Err(e) = slices::actions::run_switch_tab() {
                 eprintln!("Error switching tab: {}", e);
