@@ -10,6 +10,7 @@ pub mod similarity;
 pub mod state;
 pub mod state_creation;
 pub mod state_edit;
+pub mod state_item_actions;
 pub mod state_similar_actions;
 pub mod storage_format;
 pub mod text_cursor;

@@ -8,6 +8,7 @@ use std::time::Instant;
 pub struct NoteCreationDialog {
     pub active: bool,
     pub title_input: String,
+    pub cursor: usize,
     pub selected_kind: SpaiType,
     pub type_selection: usize,
     pub autocomplete_active: bool,
@@ -27,6 +28,7 @@ impl Default for NoteCreationDialog {
         Self {
             active: false,
             title_input: String::new(),
+            cursor: 0,
             selected_kind: SpaiType::Todo,
             type_selection: 0,
             autocomplete_active: false,
@@ -48,6 +50,7 @@ impl std::fmt::Debug for NoteCreationDialog {
         f.debug_struct("NoteCreationDialog")
             .field("active", &self.active)
             .field("title_input", &self.title_input)
+            .field("cursor", &self.cursor)
             .field("selected_kind", &self.selected_kind)
             .field("debounced_matches", &self.debounced_matches)
             .field("is_evaluating_vector", &self.is_evaluating_vector)
@@ -60,6 +63,7 @@ impl Clone for NoteCreationDialog {
         Self {
             active: self.active,
             title_input: self.title_input.clone(),
+            cursor: self.cursor,
             selected_kind: self.selected_kind,
             type_selection: self.type_selection,
             autocomplete_active: self.autocomplete_active,

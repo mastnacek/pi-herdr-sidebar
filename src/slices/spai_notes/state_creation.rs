@@ -1,31 +1,43 @@
-//! Creation dialog + quick-note behaviour for the SPAI Notes tab (`n` shortcut).
-use super::note::{SpaiFacets, SpaiNoteItem, SpaiStatus, SpaiType};
+//! Creation dialog behaviour for the SPAI Notes tab (`n` shortcut).
+use super::note::SpaiType;
 use super::state::SpaiNotesState;
-use super::storage_format::{format_spai_markdown, slugify, update_body_status_prefix};
-use super::time_utils::current_timestamp_and_date;
 use super::type_options::SPAI_TYPE_OPTIONS;
 
 impl SpaiNotesState {
     pub fn open_creation_dialog(&mut self) {
         self.creation_dialog.active = true;
         self.creation_dialog.title_input.clear();
+        self.creation_dialog.cursor = 0;
         self.creation_dialog.selected_kind = SpaiType::Todo;
         self.creation_dialog.type_selection = 0;
         self.creation_dialog.autocomplete_active = false;
         self.creation_dialog.autocomplete_selected = 0;
         self.creation_dialog.suggestions.clear();
+        self.creation_dialog.last_keystroke = None;
+        self.creation_dialog.debounced_matches.clear();
+        self.creation_dialog.is_evaluating_vector = false;
+        self.creation_dialog.vector_evaluated = false;
     }
 
     pub fn close_creation_dialog(&mut self) {
         self.creation_dialog.active = false;
         self.creation_dialog.title_input.clear();
+        self.creation_dialog.cursor = 0;
         self.creation_dialog.type_selection = 0;
         self.creation_dialog.autocomplete_active = false;
         self.creation_dialog.suggestions.clear();
+        self.creation_dialog.last_keystroke = None;
+        self.creation_dialog.debounced_matches.clear();
+        self.creation_dialog.is_evaluating_vector = false;
+        self.creation_dialog.vector_evaluated = false;
     }
 
     pub fn on_dialog_char_typed(&mut self, c: char) {
-        self.creation_dialog.title_input.push(c);
+        let mut chars: Vec<char> = self.creation_dialog.title_input.chars().collect();
+        let idx = self.creation_dialog.cursor.min(chars.len());
+        chars.insert(idx, c);
+        self.creation_dialog.title_input = chars.into_iter().collect();
+        self.creation_dialog.cursor = idx + 1;
         self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
         self.creation_dialog.vector_evaluated = false;
         self.creation_dialog.is_evaluating_vector = false;
@@ -34,12 +46,50 @@ impl SpaiNotesState {
     }
 
     pub fn on_dialog_backspace(&mut self) {
-        self.creation_dialog.title_input.pop();
+        let mut chars: Vec<char> = self.creation_dialog.title_input.chars().collect();
+        if self.creation_dialog.cursor > 0 && !chars.is_empty() {
+            let idx = self.creation_dialog.cursor - 1;
+            if idx < chars.len() {
+                chars.remove(idx);
+                self.creation_dialog.title_input = chars.into_iter().collect();
+                self.creation_dialog.cursor = idx;
+            }
+        }
         self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
         self.creation_dialog.vector_evaluated = false;
         self.creation_dialog.is_evaluating_vector = false;
         self.sync_type_selection_from_input();
         self.update_autocomplete();
+    }
+
+    pub fn on_dialog_delete(&mut self) {
+        let mut chars: Vec<char> = self.creation_dialog.title_input.chars().collect();
+        if self.creation_dialog.cursor < chars.len() {
+            chars.remove(self.creation_dialog.cursor);
+            self.creation_dialog.title_input = chars.into_iter().collect();
+        }
+        self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
+        self.creation_dialog.vector_evaluated = false;
+        self.creation_dialog.is_evaluating_vector = false;
+        self.sync_type_selection_from_input();
+        self.update_autocomplete();
+    }
+
+    pub fn on_dialog_cursor_left(&mut self) {
+        self.creation_dialog.cursor = self.creation_dialog.cursor.saturating_sub(1);
+    }
+
+    pub fn on_dialog_cursor_right(&mut self) {
+        let count = self.creation_dialog.title_input.chars().count();
+        self.creation_dialog.cursor = (self.creation_dialog.cursor + 1).min(count);
+    }
+
+    pub fn on_dialog_cursor_home(&mut self) {
+        self.creation_dialog.cursor = 0;
+    }
+
+    pub fn on_dialog_cursor_end(&mut self) {
+        self.creation_dialog.cursor = self.creation_dialog.title_input.chars().count();
     }
 
     pub fn next_type(&mut self) {
@@ -68,7 +118,7 @@ impl SpaiNotesState {
             for p in &[
                 "/. ", "/· ", "/.", "/·", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ",
                 "!- ", "!+ ", "!= ", "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", ".", "/ ",
-                "/", "x ", "X ", "x", "X", "z ", "Z ", "z", "Z", "? ", "?", "- ", "-", "+ ", "+",
+                "/", "x ", "X ", "x", "X", "z ", "Z", "z ", "Z", "? ", "?", "- ", "-", "+ ", "+",
                 "= ", "=", "* ", "*", "% ", "%", "~ ", "~", "$ ", "$", "♥ ", "♥", "h ", "h",
                 "# ", "#",
             ] {
@@ -79,6 +129,7 @@ impl SpaiNotesState {
             }
             let rest = rest.trim_start();
             self.creation_dialog.title_input = format!("{}{}", opt.symbol, rest);
+            self.creation_dialog.cursor = self.creation_dialog.title_input.chars().count();
             self.update_autocomplete();
         }
     }
@@ -131,16 +182,13 @@ impl SpaiNotesState {
             let idx = self.creation_dialog.autocomplete_selected;
             if let Some(s) = self.creation_dialog.suggestions.get(idx).cloned() {
                 super::autocomplete::apply_at_completion(&mut self.creation_dialog.title_input, &s);
+                self.creation_dialog.cursor = self.creation_dialog.title_input.chars().count();
                 self.creation_dialog.autocomplete_active = false;
                 self.creation_dialog.suggestions.clear();
                 return true;
             }
         }
         false
-    }
-
-    pub fn cycle_creation_kind(&mut self) {
-        self.next_type();
     }
 
     pub fn submit_creation_dialog(&mut self) -> Result<String, String> {
@@ -154,9 +202,11 @@ impl SpaiNotesState {
 
         let mut clean_title = raw_input.as_str();
         for p in &[
-            "/. ", "/· ", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ", "!- ", "!+ ",
-            "!= ", "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", "/ ", "x ", "X ", "z ", "Z ",
-            "? ", "- ", "+ ", "= ", "* ", "% ", "~ ", "$ ", "♥ ", "h ", "# ",
+            "/. ", "/· ", "/.", "/·", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ",
+            "!- ", "!+ ", "!= ", "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", ".", "/ ",
+            "/", "x ", "X ", "x", "X", "z ", "Z", "z ", "Z", "? ", "?", "- ", "-", "+ ", "+",
+            "= ", "=", "* ", "*", "% ", "%", "~ ", "~", "$ ", "$", "♥ ", "♥", "h ", "h",
+            "# ", "#",
         ] {
             if clean_title.starts_with(p) {
                 clean_title = &clean_title[p.len()..];
@@ -187,100 +237,7 @@ impl SpaiNotesState {
         }
         res
     }
-
-    pub fn cycle_selected_status(&mut self) -> Result<(), String> {
-        let proj = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
-        proj.ensure_items();
-
-        let item = proj
-            .items
-            .get_mut(self.selected_item_idx)
-            .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
-
-        let new_status = item.status.next_cycle();
-        item.status = new_status;
-        item.symbol = new_status.symbol().to_string();
-        item.body = update_body_status_prefix(&item.body, new_status);
-
-        let updated_content = format_spai_markdown(item);
-        std::fs::write(&item.file_path, updated_content).map_err(|e| e.to_string())?;
-        self.status_message = Some(format!(
-            "Stav změněn: {} {}",
-            item.status.glyph(),
-            item.status.as_str()
-        ));
-
-        Ok(())
-    }
-
-    pub fn create_quick_note(
-        &mut self,
-        title: &str,
-        kind: SpaiType,
-        body: &str,
-    ) -> Result<String, String> {
-        let status = match kind {
-            SpaiType::Todo => SpaiStatus::Todo,
-            SpaiType::Idea => SpaiStatus::Idea,
-            SpaiType::Note => SpaiStatus::Note,
-        };
-        self.create_quick_note_with_status(title, kind, status, body)
-    }
-
-    pub fn create_quick_note_with_status(
-        &mut self,
-        title: &str,
-        kind: SpaiType,
-        status: SpaiStatus,
-        body: &str,
-    ) -> Result<String, String> {
-        let proj = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
-        proj.ensure_items();
-
-        let next_num = proj.items.len() + 1;
-        let id = format!("SPAI-{:03}", next_num);
-        let slug = slugify(title);
-        let (today, timestamp) = current_timestamp_and_date();
-        let file_name = format!("{}-{}-{}.md", today, id, slug);
-        let file_path = proj.spai_dir.join(&file_name);
-
-        let item = SpaiNoteItem {
-            id: id.clone(),
-            title: title.to_string(),
-            kind,
-            status,
-            symbol: status.symbol().to_string(),
-            timestamp,
-            tags: Vec::new(),
-            facets: SpaiFacets {
-                project: Some(proj.name.clone()),
-                project_path: Some(proj.path.to_string_lossy().to_string()),
-                priority: None,
-                deadline: None,
-                ..Default::default()
-            },
-            body: body.to_string(),
-            file_path: file_path.clone(),
-            file_name,
-        };
-
-        let content = format_spai_markdown(&item);
-        std::fs::write(&file_path, content).map_err(|e| e.to_string())?;
-
-        proj.items.insert(0, item);
-        self.selected_item_idx = 0;
-        self.viewer_scroll = 0;
-
-        Ok(id)
-    }
 }
 
 #[cfg(test)]
 mod tests;
-

@@ -125,8 +125,15 @@ pub fn handle_notes_dialogs(
                     let _ = state.spai_notes.submit_creation_dialog();
                 }
             }
+            KeyCode::Left => state.spai_notes.on_dialog_cursor_left(),
+            KeyCode::Right => state.spai_notes.on_dialog_cursor_right(),
+            KeyCode::Home => state.spai_notes.on_dialog_cursor_home(),
+            KeyCode::End => state.spai_notes.on_dialog_cursor_end(),
+            KeyCode::Delete => state.spai_notes.on_dialog_delete(),
             KeyCode::Backspace => state.spai_notes.on_dialog_backspace(),
-            KeyCode::Char(c) => state.spai_notes.on_dialog_char_typed(c),
+            KeyCode::Char(c) if !ctrl && !key.modifiers.contains(KeyModifiers::ALT) => {
+                state.spai_notes.on_dialog_char_typed(c)
+            }
             _ => {}
         }
         return true;

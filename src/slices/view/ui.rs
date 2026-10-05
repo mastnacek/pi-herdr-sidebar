@@ -1,4 +1,4 @@
-use crate::slices::view::state::{SidebarState, Tab};
+use super::ui_chrome::{render_empty_state, render_footer};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
@@ -60,6 +60,21 @@ pub fn render(frame: &mut Frame, state: &SidebarState) {
         render_body(frame, chunks[1], state);
         super::shared_banner::render_shared_model_banner(frame, chunks[2], state);
         render_footer(frame, chunks[3], state);
+    }
+
+    // Modal dialogs rendered on top covering full window area (header tabs & footer)
+    if state.spai_notes.creation_dialog.active {
+        crate::slices::spai_notes::dialog_views::render_creation_dialog(
+            frame,
+            area,
+            &state.spai_notes,
+        );
+    } else if state.spai_notes.edit_dialog.active {
+        crate::slices::spai_notes::dialog_views::render_edit_dialog(
+            frame,
+            area,
+            &state.spai_notes,
+        );
     }
 }
 
@@ -217,72 +232,4 @@ fn render_body(frame: &mut Frame, area: Rect, state: &SidebarState) {
 
 // render_live_status → status.rs; zen → zen.rs; spai → spai_ui.rs; weather → weather_ui.rs
 // render_mcp_face → mcp.rs; skills faces → skills.rs; snapshot faces → status.rs
-fn render_empty_state(frame: &mut Frame, area: Rect, state: &SidebarState) {
-    let dir = crate::shared::pi_sidebar_snapshots_dir();
-    let sessions_dir = crate::shared::dirs_home()
-        .map(|h| h.join(".pi").join("agent").join("sessions"))
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "~/.pi/agent/sessions".to_string());
-    let text = vec![
-        Line::from(Span::styled(
-            "Čekám na telemetrii pi agenta…",
-            Style::default().fg(Color::Yellow).bold(),
-        )),
-        Line::raw(""),
-        Line::from("Sidebar čte telemetrii přímo z logů pi relací:"),
-        Line::from(Span::styled(sessions_dir, Style::default().fg(Color::Cyan))),
-        Line::raw(""),
-        Line::from("1. Spusť pi v herdr: 'pi'"),
-        Line::from("2. Proved' libovolný tah — telemetrie se streamuje automaticky."),
-        Line::from("3. Pro pohled Status není potřeba '/sidebar on' (snapshot"),
-        Line::from("   je potřeba jen pro pohled Skilly)."),
-        Line::raw(""),
-        Line::from(vec![
-            Span::raw("Adresář snapshotů (legacy): "),
-            Span::styled(
-                dir.display().to_string(),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]),
-        Line::raw(""),
-        Line::from(vec![
-            Span::raw("Cílový panel: "),
-            Span::styled(
-                state.target_pane_id.as_deref().unwrap_or("none"),
-                Style::default().fg(Color::Magenta),
-            ),
-        ]),
-    ];
-
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::DarkGray))
-        .title(" Telemetrie Offline ");
-
-    let paragraph = Paragraph::new(text).block(block);
-    frame.render_widget(paragraph, area);
-}
-
-fn render_footer(frame: &mut Frame, area: Rect, state: &SidebarState) {
-    let footer_text = Line::from(vec![
-        Span::styled(" [Tab/1/2/3] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Pohled  "),
-        Span::styled(" [↑/↓/j/k] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Posun  "),
-        Span::styled(" [w] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Lokalita  "),
-        Span::styled(" [c] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Kopírovat předpověď  "),
-        Span::styled(" [r] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Obnovit  "),
-        Span::styled(" [q] ", Style::default().fg(Color::Yellow).bold()),
-        Span::raw("Konec  "),
-        Span::styled(
-            format!("(Posun: {})", state.scroll),
-            Style::default().fg(Color::DarkGray),
-        ),
-    ]);
-
-    let paragraph = Paragraph::new(footer_text);
-    frame.render_widget(paragraph, area);
-}
+use crate::slices::view::state::{SidebarState, Tab};

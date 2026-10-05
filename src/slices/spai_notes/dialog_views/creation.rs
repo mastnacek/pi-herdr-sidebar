@@ -59,7 +59,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
 
     let raw = &state.creation_dialog.title_input;
 
-    // ── 1. Top row: Vstup (Full-width Multiline Smart Input Box) ────
+    // ── 1. Top row: Vstup (Full-width Multiline Smart Input Box with in-text Cursor) ──
     let input_block = Block::bordered()
         .title(Span::styled(
             " ▶ Zadání (Smart Input) ",
@@ -74,10 +74,13 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         Style::default().fg(Color::Yellow).bold(),
     )];
 
+    let chars: Vec<char> = raw.chars().collect();
+    let cur = state.creation_dialog.cursor.min(chars.len());
+
     if raw.is_empty() {
         input_spans.push(Span::styled(
-            "|",
-            Style::default().fg(Color::Yellow).bold(),
+            " ",
+            Style::default().bg(Color::Yellow).fg(Color::Black).bold(),
         ));
         input_spans.push(Span::styled(
             format!(
@@ -87,13 +90,30 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
             Style::default().fg(Color::DarkGray),
         ));
     } else {
-        let highlighted =
-            crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(raw);
-        input_spans.extend(highlighted);
+        let before: String = chars[..cur].iter().collect();
+        let at_cursor = if cur < chars.len() { chars[cur] } else { ' ' };
+        let after: String = if cur < chars.len() {
+            chars[cur + 1..].iter().collect()
+        } else {
+            String::new()
+        };
+
+        if !before.is_empty() {
+            let highlighted =
+                crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(&before);
+            input_spans.extend(highlighted);
+        }
+
         input_spans.push(Span::styled(
-            "█",
-            Style::default().fg(Color::Yellow),
+            at_cursor.to_string(),
+            Style::default().bg(Color::Yellow).fg(Color::Black).bold(),
         ));
+
+        if !after.is_empty() {
+            let highlighted =
+                crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(&after);
+            input_spans.extend(highlighted);
+        }
     }
 
     let input_para = Paragraph::new(Line::from(input_spans))

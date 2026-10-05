@@ -16,6 +16,7 @@ pub mod state_resolver;
 pub mod status;
 pub mod tab_state;
 pub mod ui;
+pub mod ui_chrome;
 pub mod weather_ui;
 pub mod zen;
 
