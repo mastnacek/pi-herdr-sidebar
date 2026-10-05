@@ -40,6 +40,7 @@ pub enum SpaiStatus {
     Win,
     Fuckup,
     Skutek,
+    Mood,
 }
 
 impl SpaiStatus {
@@ -56,6 +57,7 @@ impl SpaiStatus {
             SpaiStatus::Win => "win",
             SpaiStatus::Fuckup => "fuckup",
             SpaiStatus::Skutek => "skutek",
+            SpaiStatus::Mood => "mood",
         }
     }
 
@@ -71,6 +73,7 @@ impl SpaiStatus {
             "win" => SpaiStatus::Win,
             "fuckup" => SpaiStatus::Fuckup,
             "skutek" => SpaiStatus::Skutek,
+            "mood" => SpaiStatus::Mood,
             _ => SpaiStatus::Todo,
         }
     }
@@ -87,7 +90,8 @@ impl SpaiStatus {
             | SpaiStatus::Inbox
             | SpaiStatus::Win
             | SpaiStatus::Fuckup
-            | SpaiStatus::Skutek => SpaiStatus::Todo,
+            | SpaiStatus::Skutek
+            | SpaiStatus::Mood => SpaiStatus::Todo,
         }
     }
 
@@ -103,7 +107,8 @@ impl SpaiStatus {
             SpaiStatus::Inbox => "#",
             SpaiStatus::Win => "*",
             SpaiStatus::Fuckup => "%",
-            SpaiStatus::Skutek => ";",
+            SpaiStatus::Skutek => "+",
+            SpaiStatus::Mood => "=",
         }
     }
 
@@ -119,7 +124,8 @@ impl SpaiStatus {
             SpaiStatus::Inbox => "[#]",
             SpaiStatus::Win => "[*]",
             SpaiStatus::Fuckup => "[%]",
-            SpaiStatus::Skutek => "[;]",
+            SpaiStatus::Skutek => "[+]",
+            SpaiStatus::Mood => "[=]",
         }
     }
 }

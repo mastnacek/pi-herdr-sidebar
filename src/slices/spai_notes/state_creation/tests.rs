@@ -59,6 +59,6 @@ fn typing_prefix_syncs_type_selection() {
     state.on_dialog_char_typed('!');
     state.on_dialog_char_typed('-');
     state.on_dialog_char_typed(' ');
-    assert_eq!(state.creation_dialog.type_selection, 10); // Critical Note
+    assert_eq!(state.creation_dialog.type_selection, 11); // Critical Note
     assert_eq!(state.creation_dialog.selected_kind, SpaiType::Note);
 }

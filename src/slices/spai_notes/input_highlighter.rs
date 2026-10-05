@@ -39,9 +39,10 @@ const PREFIX_SPECS: &[PrefixSpec] = &[
     (&["? ", "?"], SpaiType::Idea, SpaiStatus::Idea, "Nápad", "Nápad", "? ", Color::Rgb(255, 121, 198)),
     (&["!- ", "!-"], SpaiType::Note, SpaiStatus::Note, "Kritická poznámka", "Kritická", "!- ", Color::Rgb(255, 83, 69)),
     (&["- ", "-"], SpaiType::Note, SpaiStatus::Note, "Poznámka", "Poznámka", "- ", Color::Rgb(139, 233, 253)),
+    (&["+ ", "+"], SpaiType::Note, SpaiStatus::Skutek, "Skutek dne", "Skutek", "+ ", Color::Rgb(255, 94, 219)),
+    (&["= ", "="], SpaiType::Note, SpaiStatus::Mood, "Nálada", "Nálada", "= ", Color::Rgb(255, 184, 108)),
     (&["* ", "*"], SpaiType::Note, SpaiStatus::Win, "Výhra", "Výhra", "* ", Color::Rgb(163, 230, 53)),
     (&["% ", "%"], SpaiType::Note, SpaiStatus::Fuckup, "Průser", "Průser", "% ", Color::Rgb(214, 69, 69)),
-    (&["; ", ";"], SpaiType::Note, SpaiStatus::Skutek, "Skutek dne", "Skutek", "; ", Color::Rgb(255, 94, 219)),
 ];
 
 /// Detects SPAI record type, status, and theme color from current input line.

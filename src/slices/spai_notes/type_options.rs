@@ -107,6 +107,32 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         color: Color::Rgb(127, 179, 255), // Slate blue
     },
     SpaiTypeOption {
+        symbol: "+ ",
+        display_sym: "+",
+        name: "Skutek dne (skutek)",
+        desc: "Hlavní dnešní počin nebo klíčový skutek",
+        examples: &[
+            "+ @projekt dokončen kompletní refaktoring API",
+            "+ schválena nová architektura systému",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Skutek,
+        color: Color::Rgb(255, 94, 219), // Magenta
+    },
+    SpaiTypeOption {
+        symbol: "= ",
+        display_sym: "=",
+        name: "Nálada / Energie (mood)",
+        desc: "Hodnocení nálady a energie na stupnici 1–5",
+        examples: &[
+            "= @projekt 4 skvělý den plný soustředění",
+            "= 2 vyčerpání po náročném incidentu",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Mood,
+        color: Color::Rgb(255, 184, 108), // Peach / Orange
+    },
+    SpaiTypeOption {
         symbol: "* ",
         display_sym: "*",
         name: "Výhra (win)",
@@ -131,19 +157,6 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         kind: SpaiType::Note,
         status: SpaiStatus::Fuckup,
         color: Color::Rgb(214, 69, 69), // Crimson
-    },
-    SpaiTypeOption {
-        symbol: "; ",
-        display_sym: ";",
-        name: "Skutek dne (skutek)",
-        desc: "Hlavní dnešní počin nebo klíčový skutek",
-        examples: &[
-            "; @projekt dokončen kompletní refaktoring API",
-            "; schválena nová architektura systému",
-        ],
-        kind: SpaiType::Note,
-        status: SpaiStatus::Skutek,
-        color: Color::Rgb(255, 94, 219), // Magenta
     },
     SpaiTypeOption {
         symbol: "!- ",
@@ -205,10 +218,11 @@ mod tests {
         assert_eq!(find_type_option_index("z test"), Some(4));
         assert_eq!(find_type_option_index("? test"), Some(5));
         assert_eq!(find_type_option_index("- test"), Some(6));
-        assert_eq!(find_type_option_index("* test"), Some(7));
-        assert_eq!(find_type_option_index("% test"), Some(8));
-        assert_eq!(find_type_option_index("; test"), Some(9));
-        assert_eq!(find_type_option_index("!- test"), Some(10));
+        assert_eq!(find_type_option_index("+ test"), Some(7));
+        assert_eq!(find_type_option_index("= test"), Some(8));
+        assert_eq!(find_type_option_index("* test"), Some(9));
+        assert_eq!(find_type_option_index("% test"), Some(10));
+        assert_eq!(find_type_option_index("!- test"), Some(11));
         assert_eq!(find_type_option_index("plain text"), None);
     }
 }

@@ -34,9 +34,10 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
         SpaiStatus::Cancelled => "z ",
         SpaiStatus::Idea => "? ",
         SpaiStatus::Note | SpaiStatus::Inbox => "- ",
+        SpaiStatus::Skutek => "+ ",
+        SpaiStatus::Mood => "= ",
         SpaiStatus::Win => "* ",
         SpaiStatus::Fuckup => "% ",
-        SpaiStatus::Skutek => "; ",
         SpaiStatus::Todo => ". ",
     };
 
@@ -52,7 +53,8 @@ pub fn update_body_status_prefix(body: &str, status: SpaiStatus) -> String {
         let indent = &line[..line.len() - trimmed.len()];
         let mut matched_len = 0;
         for p in &[
-            "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ", "* ", "% ", "; ",
+            "/. ", "/· ", "!- ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ", "+ ", "= ", "* ",
+            "% ",
         ] {
             if trimmed.starts_with(p) {
                 matched_len = p.len();
