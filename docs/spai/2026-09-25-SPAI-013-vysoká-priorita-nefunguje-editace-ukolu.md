@@ -5,12 +5,13 @@ timestamp: 2026-09-25 08:13:06
 status: todo
 source: pi-spai
 facets:
+  priority: high
   project: pi-herdr-sidebar
   project_path: D:\01_programovani\herdr\plugins\pi-herdr-sidebar
   area: Tasks
   effort: medium
-  urgency: medium
-  who: Lead
+  urgency: high
+  who: User
 spai_symbol: '.'
 ---
 

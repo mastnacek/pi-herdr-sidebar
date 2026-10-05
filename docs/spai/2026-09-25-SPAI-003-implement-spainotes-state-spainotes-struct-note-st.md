@@ -7,10 +7,10 @@ source: pi-spai
 facets:
   project: pi-herdr-sidebar
   project_path: D:\01_programovani\herdr\plugins\pi-herdr-sidebar
-  area: Tasks
+  area: Notes
   effort: medium
   urgency: medium
-  who: Lead
+  who: Developer
 spai_symbol: 'x'
 ---
 

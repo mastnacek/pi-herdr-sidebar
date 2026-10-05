@@ -5,12 +5,13 @@ timestamp: 2026-09-25 09:11:14
 status: done
 source: pi-spai
 facets:
+  priority: medium
   project: pi-herdr-sidebar
   project_path: D:\01_programovani\herdr\plugins\pi-herdr-sidebar
-  area: Tasks
-  effort: medium
+  area: Notes
+  effort: low
   urgency: medium
-  who: Lead
+  who: Agent
 spai_symbol: 'x'
 ---
 
