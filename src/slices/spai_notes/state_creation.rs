@@ -26,12 +26,14 @@ impl SpaiNotesState {
 
     pub fn on_dialog_char_typed(&mut self, c: char) {
         self.creation_dialog.title_input.push(c);
+        self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
         self.sync_type_selection_from_input();
         self.update_autocomplete();
     }
 
     pub fn on_dialog_backspace(&mut self) {
         self.creation_dialog.title_input.pop();
+        self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
         self.sync_type_selection_from_input();
         self.update_autocomplete();
     }

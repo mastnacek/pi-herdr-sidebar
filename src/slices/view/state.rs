@@ -6,7 +6,7 @@ use crate::shared::{HerdrClient, PaneSnapshot, PluginContext};
 pub use super::state_model::{SidebarState, Tab};
 use super::state_refresh::{
     refresh_mcp, refresh_openrouter, refresh_prompt_sidecar, refresh_quota, refresh_skills,
-    refresh_spai,
+    refresh_spai, refresh_weather_telemetry,
 };
 use super::state_resolver::resolve_pane_binding;
 use super::tab_state;
@@ -238,9 +238,18 @@ impl SidebarState {
         self.openrouter_credits = refresh_openrouter(pane_cwd, force);
         self.settings.tick_animation();
 
+        let dedup_thresh = self.settings.similarity_threshold as f64 / 100.0;
+        self.spai_notes.poll_debounced_dedup(dedup_thresh);
+
         self.spai_notes.refresh(pane_cwd, force);
 
-        self.refresh_weather(force);
+        if let Some(w) = refresh_weather_telemetry(
+            self.weather_location_index,
+            &mut self.weather_last_fetch,
+            force,
+        ) {
+            self.weather = Some(w);
+        }
 
         let (should_switch_mcp, new_total_calls) = if let Some(mcp) = &self.mcp {
             let active = mcp.in_flight || mcp.total_calls > self.last_mcp_calls_count;
@@ -292,26 +301,17 @@ impl SidebarState {
         }
     }
 
-    fn refresh_weather(&mut self, force: bool) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        if !force && now.saturating_sub(self.weather_last_fetch) < 60 {
-            return;
-        }
-        self.weather_last_fetch = now;
-        self.weather = Some(crate::slices::telemetry::weather_live::refresh_weather(
-            self.weather_location_index,
-            force,
-        ));
-    }
-
     pub fn cycle_weather_location(&mut self) {
         self.weather_location_index = (self.weather_location_index + 1)
             % crate::slices::telemetry::weather_live::LOCATIONS.len();
         crate::slices::telemetry::weather_live::save_selected_location(self.weather_location_index);
-        self.refresh_weather(true);
+        if let Some(w) = refresh_weather_telemetry(
+            self.weather_location_index,
+            &mut self.weather_last_fetch,
+            true,
+        ) {
+            self.weather = Some(w);
+        }
     }
 
     fn ingest_snapshot(&mut self, snap: PaneSnapshot) {

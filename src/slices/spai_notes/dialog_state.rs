@@ -1,6 +1,8 @@
 //! Dialog models for SPAI notes (creation with autocomplete and inline editing).
 use super::autocomplete::ProjectSuggestion;
 use super::note::SpaiType;
+use super::similarity::SimilarNoteMatch;
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct NoteCreationDialog {
@@ -11,6 +13,10 @@ pub struct NoteCreationDialog {
     pub autocomplete_active: bool,
     pub autocomplete_selected: usize,
     pub suggestions: Vec<ProjectSuggestion>,
+    pub last_keystroke: Option<Instant>,
+    pub debounced_query: String,
+    pub debounced_matches: Vec<SimilarNoteMatch>,
+    pub candidate_vector: Option<Vec<f64>>,
 }
 
 impl Default for NoteCreationDialog {
@@ -23,6 +29,10 @@ impl Default for NoteCreationDialog {
             autocomplete_active: false,
             autocomplete_selected: 0,
             suggestions: Vec::new(),
+            last_keystroke: None,
+            debounced_query: String::new(),
+            debounced_matches: Vec::new(),
+            candidate_vector: None,
         }
     }
 }

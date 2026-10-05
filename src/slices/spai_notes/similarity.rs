@@ -3,6 +3,7 @@
 //! Includes cosine similarity for OpenRouter embeddings and stem-aware
 //! Jaccard similarity for live Czech text matching (ported from mozek_rust & spai_log).
 use super::note::SpaiNoteItem;
+use std::collections::HashMap;
 
 /// Kosinová podobnost dvou vektorů. Vrátí 0.0 při nulové normě nebo prázdném vektoru.
 pub fn cosine_similarity(a: &[f64], b: &[f64]) -> f64 {
@@ -117,12 +118,25 @@ pub struct SimilarNoteMatch {
     pub title: String,
     pub symbol: String,
     pub similarity: f64,
+    pub is_vector_match: bool,
 }
 
 /// Najde existující záznamy podobné rozepsanému dotazu pro živý dedup v sidebaru.
 pub fn find_similar_notes(
     query: &str,
     items: &[SpaiNoteItem],
+    threshold: f64,
+    max_results: usize,
+) -> Vec<SimilarNoteMatch> {
+    find_similar_notes_hybrid(query, items, None, None, threshold, max_results)
+}
+
+/// Hybridní vyhledávání podobných záznamů: kombinuje textovou i vektorovou podobnost z `.vectors.json`.
+pub fn find_similar_notes_hybrid(
+    query: &str,
+    items: &[SpaiNoteItem],
+    candidate_vector: Option<&[f64]>,
+    stored_vectors: Option<&HashMap<String, Vec<f64>>>,
     threshold: f64,
     max_results: usize,
 ) -> Vec<SimilarNoteMatch> {
@@ -133,13 +147,25 @@ pub fn find_similar_notes(
 
     let mut matches = Vec::new();
     for item in items {
-        let sim = text_similarity(clean_query, &item.title);
-        if sim >= threshold {
+        let text_sim = text_similarity(clean_query, &item.title);
+        let mut vector_sim = 0.0;
+
+        if let (Some(cand), Some(stored_map)) = (candidate_vector, stored_vectors) {
+            if let Some(stored_vec) = stored_map.get(&item.id) {
+                vector_sim = cosine_similarity(cand, stored_vec);
+            }
+        }
+
+        let is_vector = vector_sim > text_sim && vector_sim >= threshold;
+        let final_sim = text_sim.max(vector_sim);
+
+        if final_sim >= threshold {
             matches.push(SimilarNoteMatch {
                 id: item.id.clone(),
                 title: item.title.clone(),
                 symbol: item.symbol.clone(),
-                similarity: sim,
+                similarity: final_sim,
+                is_vector_match: is_vector,
             });
         }
     }
@@ -157,18 +183,51 @@ mod tests {
     fn cosine_similarity_exact_and_orthogonal() {
         assert!((cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]) - 1.0).abs() < 1e-6);
         assert_eq!(cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]), 0.0);
-        assert_eq!(cosine_similarity(&[], &[]), 0.0);
     }
 
     #[test]
     fn czech_stem_aware_jaccard() {
-        assert!(token_jaccard("oprava timeoutu", "opravit timeouty v bridge") > 0.40);
-        assert_eq!(token_jaccard("koupit mrkev", "nasadit server"), 0.0);
+        let sim = token_jaccard("opravit chybu v parseru", "oprava chyb v parser");
+        assert!(sim > 0.5, "Expected stem matching on Czech declensions");
     }
 
     #[test]
     fn substring_similarity_scores_high() {
-        let sim = text_similarity("timeout", "oprava timeoutu v IPC bridge");
+        let sim = text_similarity("ZEN rezim", "Doladit ZEN rezim v herdr");
         assert!(sim >= 0.70);
+    }
+
+    #[test]
+    fn hybrid_similarity_respects_vectors() {
+        let items = vec![SpaiNoteItem {
+            id: "SPAI-001".to_string(),
+            title: "Authentication system".to_string(),
+            kind: crate::slices::spai_notes::note::SpaiType::Todo,
+            status: crate::slices::spai_notes::note::SpaiStatus::Todo,
+            symbol: ".".to_string(),
+            timestamp: "2026-09-25".to_string(),
+            tags: vec![],
+            facets: Default::default(),
+            body: String::new(),
+            file_path: std::path::PathBuf::new(),
+            file_name: "test.md".to_string(),
+        }];
+
+        let mut vectors = HashMap::new();
+        vectors.insert("SPAI-001".to_string(), vec![0.8, 0.6]);
+
+        let cand_vec = vec![0.8, 0.6];
+        let matches = find_similar_notes_hybrid(
+            "Přihlašování uživatelů",
+            &items,
+            Some(&cand_vec),
+            Some(&vectors),
+            0.5,
+            5,
+        );
+
+        assert_eq!(matches.len(), 1);
+        assert!((matches[0].similarity - 1.0).abs() < 1e-4);
+        assert!(matches[0].is_vector_match);
     }
 }

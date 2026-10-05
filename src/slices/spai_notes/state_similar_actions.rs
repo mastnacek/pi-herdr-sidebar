@@ -1,18 +1,66 @@
-//! Actions on duplicate / similar notes detected during Smart Note creation.
+//! Actions and debounced evaluation on duplicate / similar notes detected during Smart Note creation.
 use super::note::SpaiStatus;
-use super::similarity::find_similar_notes;
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
 
 impl SpaiNotesState {
+    /// Polls debounced deduplication check when typing pauses for >= 300ms.
+    pub fn poll_debounced_dedup(&mut self, threshold: f64) {
+        if !self.creation_dialog.active {
+            return;
+        }
+        let Some(last) = self.creation_dialog.last_keystroke else {
+            return;
+        };
+        if last.elapsed() < std::time::Duration::from_millis(300) {
+            return;
+        }
+
+        let raw = self.creation_dialog.title_input.trim();
+        if raw == self.creation_dialog.debounced_query {
+            return;
+        }
+
+        self.creation_dialog.debounced_query = raw.to_string();
+
+        if raw.len() < 3 {
+            self.creation_dialog.debounced_matches.clear();
+            return;
+        }
+
+        let Some(proj) = self.projects.get(self.selected_project_idx) else {
+            return;
+        };
+
+        let stored_vectors =
+            crate::slices::settings::load_project_vectors(&proj.path).map(|s| s.vectors);
+
+        self.creation_dialog.debounced_matches = super::similarity::find_similar_notes_hybrid(
+            raw,
+            &proj.items,
+            self.creation_dialog.candidate_vector.as_deref(),
+            stored_vectors.as_ref(),
+            threshold,
+            4,
+        );
+    }
+
     /// Returns the top similar matching note for the currently typed input (if any).
     pub fn top_similar_match(&self) -> Option<String> {
+        if !self.creation_dialog.debounced_matches.is_empty() {
+            return self
+                .creation_dialog
+                .debounced_matches
+                .first()
+                .map(|m| m.id.clone());
+        }
+
         let raw = self.creation_dialog.title_input.trim();
         if raw.len() < 3 {
             return None;
         }
         let proj = self.projects.get(self.selected_project_idx)?;
-        let matches = find_similar_notes(raw, &proj.items, 0.45, 1);
+        let matches = super::similarity::find_similar_notes(raw, &proj.items, 0.45, 1);
         matches.first().map(|m| m.id.clone())
     }
 

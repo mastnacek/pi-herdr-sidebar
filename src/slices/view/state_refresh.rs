@@ -2,6 +2,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use crate::slices::telemetry::prompt_sidecar::{sidecar_path, PromptSidecar};
+use crate::slices::telemetry::weather_live::WeatherTelemetry;
 use crate::slices::telemetry::{
     mcp_live::McpTelemetry, openrouter_live::OpenRouterCreditTelemetry, quota_live::QuotaTelemetry,
     skills::SkillSnapshotFile, spai_live::SpaiTelemetry, LiveTelemetry,
@@ -73,10 +74,6 @@ pub fn refresh_mcp(
     *mcp = None;
 }
 
-/// Read `<pane>.prompt.json` — the exact prompt provenance the TS extension
-/// captured in `before_agent_start`. Unlike the skills face this needs no
-/// session log, and a dead sidecar reads as `None` so the Status face falls
-/// back to the transcript replay.
 pub fn refresh_prompt_sidecar(
     snapshot_path: Option<&Path>,
     mtime: &mut Option<SystemTime>,
@@ -110,16 +107,15 @@ pub fn refresh_spai(
         *spai = None;
         return;
     };
-
     let Ok(meta) = std::fs::metadata(&path) else {
         *spai = None;
         return;
     };
-    let mtime = meta.modified().ok();
-    if !force && spai.is_some() && *spai_mtime == mtime {
+    let modified = meta.modified().ok();
+    if !force && spai.is_some() && *spai_mtime == modified {
         return;
     }
-    *spai_mtime = mtime;
+    *spai_mtime = modified;
     *spai = crate::slices::telemetry::spai_live::parse_spai_index(&path);
 }
 
@@ -138,11 +134,28 @@ pub fn refresh_quota(live: Option<&LiveTelemetry>) -> QuotaTelemetry {
     q
 }
 
-pub fn refresh_openrouter(cwd: Option<&Path>, force: bool) -> Option<OpenRouterCreditTelemetry> {
-    let telemetry = crate::slices::telemetry::openrouter_live::fetch_openrouter_credits(cwd, force);
-    if telemetry.accounts.is_empty() {
-        None
-    } else {
-        Some(telemetry)
+pub fn refresh_openrouter(
+    pane_cwd: Option<&Path>,
+    force: bool,
+) -> Option<OpenRouterCreditTelemetry> {
+    Some(crate::slices::telemetry::openrouter_live::fetch_openrouter_credits(pane_cwd, force))
+}
+
+pub fn refresh_weather_telemetry(
+    location_index: usize,
+    last_fetch: &mut u64,
+    force: bool,
+) -> Option<WeatherTelemetry> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if !force && now.saturating_sub(*last_fetch) < 60 {
+        return None;
     }
+    *last_fetch = now;
+    Some(crate::slices::telemetry::weather_live::refresh_weather(
+        location_index,
+        force,
+    ))
 }

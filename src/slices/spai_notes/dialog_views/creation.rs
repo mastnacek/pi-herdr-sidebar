@@ -125,7 +125,12 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(sel_opt.color));
 
-    let hint_lines = build_hint_lines(sel_opt, raw, state.current_items());
+    let hint_lines = build_hint_lines(
+        sel_opt,
+        raw,
+        state.current_items(),
+        &state.creation_dialog.debounced_matches,
+    );
     let hint_para = Paragraph::new(hint_lines).block(hint_block);
     frame.render_widget(hint_para, top_cols[1]);
 
