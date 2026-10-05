@@ -68,6 +68,19 @@ pub fn handle_notes_dialogs(
         return false;
     }
 
+    // Two-step delete confirmation swallows every key until resolved.
+    if state.spai_notes.delete_confirm_active {
+        match key.code {
+            KeyCode::Delete => {
+                if let Err(e) = state.spai_notes.confirm_delete_selected() {
+                    state.spai_notes.status_message = Some(e);
+                }
+            }
+            _ => state.spai_notes.cancel_delete(),
+        }
+        return true;
+    }
+
     if state.spai_notes.creation_dialog.active {
         let ac_active = state.spai_notes.creation_dialog.autocomplete_active;
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);

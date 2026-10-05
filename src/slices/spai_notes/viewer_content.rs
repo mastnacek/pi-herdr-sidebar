@@ -60,11 +60,6 @@ pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
         ]));
     }
 
-    lines.push(Line::from(vec![
-        Span::styled("  Soubor:   ", Style::default().fg(Color::DarkGray)),
-        Span::styled(item.file_name.clone(), Style::default().fg(Color::DarkGray)),
-    ]));
-
     // 2. 5D Facets Metadata Section
     let mut facet_spans = Vec::new();
     if let Some(area) = &item.facets.area {

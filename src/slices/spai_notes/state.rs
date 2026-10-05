@@ -26,6 +26,8 @@ pub struct SpaiNotesState {
     pub viewer_scroll: u16,
     pub edit_mode: bool,
     pub status_message: Option<String>,
+    /// Two-step delete guard: first Delete arms, second Delete removes from disk.
+    pub delete_confirm_active: bool,
     pub creation_dialog: NoteCreationDialog,
     pub edit_dialog: NoteEditDialog,
     projects_fingerprint: Fingerprint,
@@ -49,6 +51,7 @@ impl SpaiNotesState {
             viewer_scroll: 0,
             edit_mode: false,
             status_message: None,
+            delete_confirm_active: false,
             creation_dialog: NoteCreationDialog::default(),
             edit_dialog: NoteEditDialog::default(),
             projects_fingerprint: (0, 0, 0, 0),

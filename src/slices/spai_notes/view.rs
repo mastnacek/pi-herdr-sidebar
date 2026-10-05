@@ -190,19 +190,28 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     frame.render_widget(items_para, chunks[1]);
 
     // 3. Hotkeys footer + status feedback
+    let confirm_active = state.delete_confirm_active;
+    let status_color = if confirm_active {
+        Color::Red
+    } else if state.status_message.is_some() {
+        Color::Green
+    } else {
+        Color::DarkGray
+    };
+    let status_text = if confirm_active {
+        state
+            .status_message
+            .clone()
+            .unwrap_or_else(|| "Delete = potvrdit smazání, jiná klávesa = zrušit".to_string())
+    } else {
+        state
+            .status_message
+            .clone()
+            .unwrap_or_else(|| "e = integrovaná úprava · E = externí editor".to_string())
+    };
     let status_line = Line::from(vec![
         Span::styled("  ", Style::default()),
-        Span::styled(
-            state
-                .status_message
-                .clone()
-                .unwrap_or_else(|| "e = integrovaná úprava · E = externí editor".to_string()),
-            Style::default().fg(if state.status_message.is_some() {
-                Color::Green
-            } else {
-                Color::DarkGray
-            }),
-        ),
+        Span::styled(status_text, Style::default().fg(status_color)),
     ]);
     let footer = Paragraph::new(vec![
         Line::from(vec![
@@ -218,6 +227,8 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
             Span::styled(" stav ", Style::default().fg(Color::DarkGray)),
             Span::styled("[n]", Style::default().fg(Color::Yellow).bold()),
             Span::styled(" nová ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Del]", Style::default().fg(Color::Red).bold()),
+            Span::styled(" smaž", Style::default().fg(Color::DarkGray)),
         ]),
         status_line,
     ]);

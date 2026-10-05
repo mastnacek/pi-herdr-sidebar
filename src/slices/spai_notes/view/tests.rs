@@ -150,3 +150,39 @@ fn item_list_renders_short_date_instead_of_spai_id() {
         "list row should have marker, glyph, dd.mm.yy date, and title:\n{frame}"
     );
 }
+
+#[test]
+fn viewer_preview_hides_the_file_name() {
+    // The item list already identifies the note; the preview must not waste a
+    // row repeating the file name.
+    let mut state = SpaiNotesState::new(None);
+    let item = crate::slices::spai_notes::note::SpaiNoteItem {
+        id: "SPAI-042".to_string(),
+        title: "Test Note Title".to_string(),
+        kind: crate::slices::spai_notes::note::SpaiType::Todo,
+        status: crate::slices::spai_notes::note::SpaiStatus::Todo,
+        symbol: ".".to_string(),
+        timestamp: "2026-09-24 10:57:47".to_string(),
+        tags: vec![],
+        facets: crate::slices::spai_notes::note::SpaiFacets::default(),
+        body: ". Test Note Title\n".to_string(),
+        file_path: PathBuf::from("2026-09-24-SPAI-042-test.md"),
+        file_name: "2026-09-24-SPAI-042-test.md".to_string(),
+    };
+    state.projects = vec![SpaiProjectSummary::with_items(
+        "proj-01".to_string(),
+        PathBuf::from("D:/tmp/proj-01"),
+        PathBuf::from("D:/tmp/proj-01/docs/spai"),
+        vec![item],
+    )];
+
+    let frame = render(&state, 90, 22);
+    assert!(
+        frame.contains("SPAI-042"),
+        "viewer header should still show the id:\n{frame}"
+    );
+    assert!(
+        !frame.contains("2026-09-24-SPAI-042-test.md"),
+        "preview must not render the file name:\n{frame}"
+    );
+}

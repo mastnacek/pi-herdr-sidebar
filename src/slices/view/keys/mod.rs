@@ -96,6 +96,9 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Char('n') if state.active_tab == Tab::Notes => {
             state.spai_notes.open_creation_dialog();
         }
+        KeyCode::Delete if state.active_tab == Tab::Notes => {
+            state.spai_notes.begin_delete_selected();
+        }
         KeyCode::Char('e')
             if state.active_tab == Tab::Notes && key.modifiers.contains(KeyModifiers::SHIFT) =>
         {
