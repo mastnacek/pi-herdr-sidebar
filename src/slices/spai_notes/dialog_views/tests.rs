@@ -27,6 +27,29 @@ fn the_viewport_grows_with_the_box_and_follows_the_selection() {
     assert_eq!(picker_viewport(12, 11, 14), (12, 0));
 }
 
+/// Dev preview: `cargo test creation_dialog_full_tab_preview -- --ignored --nocapture`.
+/// Renders the dialog on a tall pane (taller than the old 36-row clamp) so
+/// bleed-through of the tab UI outside the modal is visible immediately.
+#[test]
+#[ignore]
+fn creation_dialog_full_tab_preview() {
+    let mut state = SpaiNotesState::new(None);
+    state.open_creation_dialog();
+
+    let mut terminal = Terminal::new(TestBackend::new(84, 44)).expect("terminal");
+    terminal
+        .draw(|frame| render_creation_dialog(frame, frame.area(), &state))
+        .expect("draw");
+    let frame = buffer_text(terminal.backend().buffer());
+    println!("{frame}");
+
+    // The dialog border must touch the outermost rows: nothing above or below.
+    let first = frame.lines().next().unwrap_or("");
+    let last = frame.lines().last().unwrap_or("");
+    assert!(first.contains('╭'), "dialog starts at row 0");
+    assert!(last.contains('╰'), "dialog ends at the last row");
+}
+
 #[test]
 fn creation_dialog_renders_type_list_and_hint_window_together() {
     let mut state = SpaiNotesState::new(None);

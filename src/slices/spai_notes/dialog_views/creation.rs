@@ -23,14 +23,10 @@ pub(crate) fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (
 }
 
 pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    // Full width of the pane / sidebar window
-    let dialog_width = area.width;
-    let dialog_height = area.height.clamp(18, 36);
-    let x = area.x;
-    let y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
-    let dialog_area = Rect::new(x, y, dialog_width, dialog_height);
-
-    theme::paint_backdrop(frame, dialog_area);
+    // Full-tab modal: the backdrop covers the entire window so the tab UI,
+    // header and footer never bleed through, and the dialog fills the frame.
+    theme::paint_backdrop(frame, area);
+    let dialog_area = area;
 
     let sel_idx = state.creation_dialog.type_selection % SPAI_TYPE_OPTIONS.len();
     let sel_opt = &SPAI_TYPE_OPTIONS[sel_idx];
