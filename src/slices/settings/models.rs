@@ -1,7 +1,5 @@
-//! Dynamic OpenRouter models catalog, pricing, caching, and search.
+//! Dynamic OpenRouter models catalog, pricing, and search.
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::process::Command;
 
 /// Parsed and normalized model metadata from OpenRouter.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -13,6 +11,7 @@ pub struct ModelInfo {
     pub prompt_price_m: f64,     // $ per 1M prompt tokens
     pub completion_price_m: f64, // $ per 1M completion tokens
     pub is_free: bool,
+    pub is_embedding: bool,
 }
 
 impl ModelInfo {
@@ -58,6 +57,14 @@ struct OpenRouterPricingRaw {
 }
 
 #[derive(Deserialize)]
+struct OpenRouterArchitectureRaw {
+    #[serde(default)]
+    modality: Option<String>,
+    #[serde(default)]
+    output_modalities: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
 struct OpenRouterModelRaw {
     id: String,
     #[serde(default)]
@@ -68,6 +75,8 @@ struct OpenRouterModelRaw {
     context_length: Option<u64>,
     #[serde(default)]
     pricing: Option<OpenRouterPricingRaw>,
+    #[serde(default)]
+    architecture: Option<OpenRouterArchitectureRaw>,
 }
 
 #[derive(Deserialize)]
@@ -113,6 +122,19 @@ pub fn parse_openrouter_json(body: &str) -> Vec<ModelInfo> {
             let description = m.description.unwrap_or_default();
             let context_length = m.context_length.unwrap_or(0);
 
+            let is_embedding = m.id.to_lowercase().contains("embed")
+                || name.to_lowercase().contains("embed")
+                || m.architecture
+                    .as_ref()
+                    .and_then(|a| a.modality.as_ref())
+                    .map(|modality| modality.contains("embedding"))
+                    .unwrap_or(false)
+                || m.architecture
+                    .as_ref()
+                    .and_then(|a| a.output_modalities.as_ref())
+                    .map(|outputs| outputs.iter().any(|o| o.contains("embedding")))
+                    .unwrap_or(false);
+
             ModelInfo {
                 id: m.id,
                 name,
@@ -121,73 +143,10 @@ pub fn parse_openrouter_json(body: &str) -> Vec<ModelInfo> {
                 prompt_price_m: prompt_m,
                 completion_price_m: completion_m,
                 is_free,
+                is_embedding,
             }
         })
         .collect()
-}
-
-// ---------------------------------------------------------------------------
-// Network Fetch & Cache
-// ---------------------------------------------------------------------------
-
-const FETCH_TIMEOUT_SECS: u32 = 8;
-
-pub fn fetch_openrouter_models() -> Option<Vec<ModelInfo>> {
-    let output = Command::new("curl")
-        .args([
-            "-s",
-            "-m",
-            &FETCH_TIMEOUT_SECS.to_string(),
-            "-A",
-            "herdr-pi-sidebar/0.1 github.com/mastnacek/pi-herdr-sidebar",
-            "https://openrouter.ai/api/v1/models",
-        ])
-        .output()
-        .ok()?;
-
-    if !output.status.success() || output.stdout.is_empty() {
-        return None;
-    }
-    let body = String::from_utf8_lossy(&output.stdout);
-    let models = parse_openrouter_json(&body);
-    if !models.is_empty() {
-        save_cached_models(&models);
-        Some(models)
-    } else {
-        None
-    }
-}
-
-fn cache_path() -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("HERDR_PLUGIN_STATE_DIR") {
-        let p = PathBuf::from(dir).join("openrouter_models.json");
-        return Some(p);
-    }
-    std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .ok()
-        .map(|h| {
-            PathBuf::from(h)
-                .join(".pi")
-                .join("agent")
-                .join("openrouter_models.json")
-        })
-}
-
-pub fn save_cached_models(models: &[ModelInfo]) {
-    let Some(path) = cache_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(json) = serde_json::to_string(models) {
-        let _ = std::fs::write(path, json);
-    }
-}
-
-pub fn load_cached_models() -> Option<Vec<ModelInfo>> {
-    let path = cache_path()?;
-    let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str::<Vec<ModelInfo>>(&content).ok()
 }
 
 /// Filter and rank models matching a search query.
@@ -202,6 +161,7 @@ pub fn filter_models<'a>(models: &'a [ModelInfo], query: &str) -> Vec<&'a ModelI
             m.id.to_lowercase().contains(&q)
                 || m.name.to_lowercase().contains(&q)
                 || (q == "free" && m.is_free)
+                || (q == "embed" && m.is_embedding)
         })
         .collect()
 }
@@ -224,11 +184,15 @@ mod tests {
                     }
                 },
                 {
-                    "id": "meta-llama/llama-3.3-70b-instruct:free",
-                    "name": "Llama 3.3 70B (free)",
-                    "context_length": 131072,
+                    "id": "qwen/qwen3-embedding-8b",
+                    "name": "Qwen: Qwen3 Embedding 8B",
+                    "context_length": 32768,
+                    "architecture": {
+                        "modality": "text->embeddings",
+                        "output_modalities": ["embeddings"]
+                    },
                     "pricing": {
-                        "prompt": "0",
+                        "prompt": "0.00000001",
                         "completion": "0"
                     }
                 }
@@ -243,10 +207,11 @@ mod tests {
         assert_eq!(models[0].completion_price_m, 15.0);
         assert_eq!(models[0].price_label(), "$3.00 / $15.00 /1M");
         assert!(!models[0].is_free);
+        assert!(!models[0].is_embedding);
 
-        assert_eq!(models[1].id, "meta-llama/llama-3.3-70b-instruct:free");
-        assert!(models[1].is_free);
-        assert_eq!(models[1].price_label(), "FREE");
+        assert_eq!(models[1].id, "qwen/qwen3-embedding-8b");
+        assert!(models[1].is_embedding);
+        assert_eq!(models[1].context_label(), "32k");
     }
 
     #[test]
@@ -260,24 +225,26 @@ mod tests {
                 prompt_price_m: 3.0,
                 completion_price_m: 15.0,
                 is_free: false,
+                is_embedding: false,
             },
             ModelInfo {
-                id: "qwen/qwen-2.5-coder-32b".to_string(),
-                name: "Qwen 2.5 Coder".to_string(),
+                id: "qwen/qwen3-embedding-8b".to_string(),
+                name: "Qwen3 Embedding 8B".to_string(),
                 description: String::new(),
-                context_length: 32_000,
-                prompt_price_m: 0.0,
+                context_length: 32_768,
+                prompt_price_m: 0.01,
                 completion_price_m: 0.0,
-                is_free: true,
+                is_free: false,
+                is_embedding: true,
             },
         ];
 
         let results = filter_models(&models, "qwen");
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].id, "qwen/qwen-2.5-coder-32b");
+        assert_eq!(results[0].id, "qwen/qwen3-embedding-8b");
 
-        let free_results = filter_models(&models, "free");
-        assert_eq!(free_results.len(), 1);
-        assert_eq!(free_results[0].id, "qwen/qwen-2.5-coder-32b");
+        let embed_results = filter_models(&models, "embed");
+        assert_eq!(embed_results.len(), 1);
+        assert_eq!(embed_results[0].id, "qwen/qwen3-embedding-8b");
     }
 }

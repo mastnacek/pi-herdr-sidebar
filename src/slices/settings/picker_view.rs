@@ -63,7 +63,7 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
         ),
         Span::styled(
             if state.picker_search.is_empty() {
-                "Všechny modely (napište např. 'claude', 'free', 'qwen', 'embed')..."
+                "Všechny modely (napište např. 'qwen', 'claude', 'embed', 'free')..."
             } else {
                 &state.picker_search
             },
@@ -84,17 +84,25 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
     // 2. Model List Table
     let list_area = chunks[1];
     let max_rows = list_area.height as usize;
-    if max_rows == 0 {
+    if max_rows <= 1 {
         return;
     }
 
-    let scroll = if state.picker_selected_idx >= max_rows {
-        state.picker_selected_idx - max_rows + 1
+    let capacity = max_rows.saturating_sub(1);
+    let scroll = if state.picker_selected_idx >= capacity {
+        state.picker_selected_idx - capacity + 1
     } else {
         0
     };
 
     let mut lines = Vec::new();
+
+    let total_filtered = filtered.len();
+    let pos_indicator = if total_filtered > 0 {
+        format!("{}/{}", state.picker_selected_idx + 1, total_filtered)
+    } else {
+        "-/-".to_string()
+    };
 
     // Table Header
     lines.push(Line::from(vec![
@@ -110,6 +118,10 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
         Span::styled(
             format!("{:<20}", "Cena / 1M tokenů"),
             Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{:>10}", pos_indicator),
+            Style::default().fg(Color::Rgb(139, 233, 253)).add_modifier(Modifier::BOLD),
         ),
     ]));
 
@@ -128,7 +140,7 @@ pub fn render_model_picker(f: &mut Frame, area: Rect, state: &SettingsState) {
             ),
         ]));
     } else {
-        for (i, m) in filtered.iter().enumerate().skip(scroll).take(max_rows.saturating_sub(1)) {
+        for (i, m) in filtered.iter().enumerate().skip(scroll).take(capacity) {
             let is_selected = i == state.picker_selected_idx;
             let prefix = if is_selected { "▶ " } else { "  " };
 

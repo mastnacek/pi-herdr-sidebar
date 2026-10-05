@@ -2,6 +2,7 @@
 pub mod actions;
 pub mod cards_view;
 pub mod models;
+pub mod models_cache;
 pub mod picker_view;
 pub mod state;
 pub mod storage;

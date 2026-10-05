@@ -1,7 +1,6 @@
 //! State and models for S.P.A.I. & OpenRouter Vectorization settings.
-use super::models::{
-    fetch_openrouter_models, filter_models, load_cached_models, save_cached_models, ModelInfo,
-};
+use super::models::{filter_models, ModelInfo};
+use super::models_cache::{fetch_openrouter_models, load_cached_models, save_cached_models};
 use super::storage::{load_config_file, save_config_file};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
