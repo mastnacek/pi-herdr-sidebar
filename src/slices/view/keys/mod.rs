@@ -1,7 +1,7 @@
 //! Keyboard dispatch for the sidebar event loop.
 pub mod dialogs;
 
-use self::dialogs::{handle_notes_dialogs, handle_settings_editing_key};
+use self::dialogs::{handle_notes_dialogs, handle_settings_dialogs};
 use super::external::open_external_editor;
 use super::state::{SidebarState, Tab};
 use crate::shared::TerminalGuard;
@@ -13,7 +13,7 @@ pub fn handle_key(key: KeyEvent, state: &mut SidebarState, guard: &mut TerminalG
         return false;
     }
 
-    if handle_notes_dialogs(&key, state, guard) || handle_settings_editing_key(&key, state) {
+    if handle_notes_dialogs(&key, state, guard) || handle_settings_dialogs(&key, state) {
         return false;
     }
 
@@ -136,6 +136,16 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
                 crate::slices::settings::SettingsField::ApiKey => {
                     state.settings.start_editing_api_key();
                 }
+                crate::slices::settings::SettingsField::ChatModel => {
+                    state
+                        .settings
+                        .open_picker(crate::slices::settings::ModelTarget::Chat);
+                }
+                crate::slices::settings::SettingsField::EmbeddingModel => {
+                    state
+                        .settings
+                        .open_picker(crate::slices::settings::ModelTarget::Embedding);
+                }
                 crate::slices::settings::SettingsField::VectorizeAction => {
                     crate::slices::settings::vectorize_all_records(
                         &mut state.settings,
@@ -187,6 +197,8 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
         KeyCode::Char('r') => {
             if state.active_tab == Tab::Shortcuts {
                 state.shortcuts.reload_keys();
+            } else if state.active_tab == Tab::Settings {
+                state.settings.refresh_models();
             } else {
                 state.trigger_manual_refresh();
             }

@@ -4,8 +4,44 @@ use crate::slices::view::external::open_external_editor;
 use crate::slices::view::state::{SidebarState, Tab};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub fn handle_settings_editing_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
-    if state.active_tab == Tab::Settings && state.settings.editing_api_key {
+pub fn handle_settings_dialogs(key: &KeyEvent, state: &mut SidebarState) -> bool {
+    if state.active_tab != Tab::Settings {
+        return false;
+    }
+
+    if state.settings.picker_active {
+        match key.code {
+            KeyCode::Esc => state.settings.close_picker(),
+            KeyCode::Enter => state.settings.submit_picker(),
+            KeyCode::Up => state.settings.picker_prev(),
+            KeyCode::Down => state.settings.picker_next(),
+            KeyCode::PageUp => {
+                for _ in 0..5 {
+                    state.settings.picker_prev();
+                }
+            }
+            KeyCode::PageDown => {
+                for _ in 0..5 {
+                    state.settings.picker_next();
+                }
+            }
+            KeyCode::Backspace => {
+                state.settings.picker_search.pop();
+                state.settings.picker_selected_idx = 0;
+            }
+            KeyCode::Char('r') if state.settings.picker_search.is_empty() => {
+                state.settings.refresh_models();
+            }
+            KeyCode::Char(c) => {
+                state.settings.picker_search.push(c);
+                state.settings.picker_selected_idx = 0;
+            }
+            _ => {}
+        }
+        return true;
+    }
+
+    if state.settings.editing_api_key {
         match key.code {
             KeyCode::Esc => state.settings.cancel_editing_api_key(),
             KeyCode::Enter => state.settings.submit_api_key(),
@@ -19,6 +55,7 @@ pub fn handle_settings_editing_key(key: &KeyEvent, state: &mut SidebarState) -> 
         }
         return true;
     }
+
     false
 }
 

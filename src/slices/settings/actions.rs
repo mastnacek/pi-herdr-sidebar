@@ -14,9 +14,7 @@ pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut Spa
     settings.vector_count = total;
     settings.status_message = Some(format!(
         "✅ Vektorizace dokončena: {}/{} záznamů indexováno modelem {}",
-        total,
-        total,
-        settings.current_embedding_model()
+        total, total, settings.embedding_model
     ));
 }
 

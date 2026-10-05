@@ -1,21 +1,8 @@
 //! State and models for S.P.A.I. & OpenRouter Vectorization settings.
-use std::path::PathBuf;
-
-pub const CHAT_MODELS: &[&str] = &[
-    "anthropic/claude-3.7-sonnet",
-    "openai/gpt-4o-mini",
-    "google/gemini-2.5-flash",
-    "deepseek/deepseek-chat",
-    "qwen/qwen-2.5-coder-32b-instruct",
-    "meta-llama/llama-3.3-70b-instruct",
-];
-
-pub const EMBEDDING_MODELS: &[&str] = &[
-    "openai/text-embedding-3-small",
-    "openai/text-embedding-3-large",
-    "baai/bge-m3",
-    "qwen/qwen2.5-7b-instruct",
-];
+use super::models::{
+    fetch_openrouter_models, filter_models, load_cached_models, save_cached_models, ModelInfo,
+};
+use super::storage::{load_config_file, save_config_file};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsField {
@@ -29,15 +16,6 @@ pub enum SettingsField {
 }
 
 impl SettingsField {
-    pub const ALL: &[SettingsField] = &[
-        SettingsField::ApiKey,
-        SettingsField::ChatModel,
-        SettingsField::EmbeddingModel,
-        SettingsField::SimilarityThreshold,
-        SettingsField::VectorizeAction,
-        SettingsField::ClassifyAction,
-    ];
-
     pub fn next(self) -> Self {
         match self {
             Self::ApiKey => Self::ChatModel,
@@ -61,11 +39,17 @@ impl SettingsField {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelTarget {
+    Chat,
+    Embedding,
+}
+
 #[derive(Debug, Clone)]
 pub struct SettingsState {
     pub api_key: String,
-    pub chat_model_idx: usize,
-    pub embedding_model_idx: usize,
+    pub chat_model: String,
+    pub embedding_model: String,
     pub similarity_threshold: u8,
     pub selected_field: SettingsField,
     pub editing_api_key: bool,
@@ -74,6 +58,11 @@ pub struct SettingsState {
     pub vector_count: usize,
     pub total_records: usize,
     pub vectorizing: bool,
+    pub models: Vec<ModelInfo>,
+    pub picker_active: bool,
+    pub picker_target: ModelTarget,
+    pub picker_search: String,
+    pub picker_selected_idx: usize,
 }
 
 impl Default for SettingsState {
@@ -85,17 +74,36 @@ impl Default for SettingsState {
 impl SettingsState {
     pub fn load() -> Self {
         let env_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-        let (stored_key, chat_idx, embed_idx, thresh) = Self::load_config_file();
+        let (stored_key, chat_model, embed_model, thresh) = load_config_file();
         let api_key = if !env_key.is_empty() {
             env_key
         } else {
             stored_key
         };
 
+        let mut models = load_cached_models().unwrap_or_default();
+        if models.is_empty() {
+            if let Some(fetched) = fetch_openrouter_models() {
+                models = fetched;
+            }
+        }
+
+        let chat = if !chat_model.is_empty() {
+            chat_model
+        } else {
+            "anthropic/claude-3.7-sonnet".to_string()
+        };
+
+        let embed = if !embed_model.is_empty() {
+            embed_model
+        } else {
+            "openai/text-embedding-3-small".to_string()
+        };
+
         Self {
             api_key,
-            chat_model_idx: chat_idx.min(CHAT_MODELS.len().saturating_sub(1)),
-            embedding_model_idx: embed_idx.min(EMBEDDING_MODELS.len().saturating_sub(1)),
+            chat_model: chat,
+            embedding_model: embed,
             similarity_threshold: thresh.clamp(30, 95),
             selected_field: SettingsField::ApiKey,
             editing_api_key: false,
@@ -104,36 +112,138 @@ impl SettingsState {
             vector_count: 0,
             total_records: 0,
             vectorizing: false,
+            models,
+            picker_active: false,
+            picker_target: ModelTarget::Chat,
+            picker_search: String::new(),
+            picker_selected_idx: 0,
         }
     }
 
-    pub fn current_chat_model(&self) -> &'static str {
-        CHAT_MODELS[self.chat_model_idx % CHAT_MODELS.len()]
+    pub fn refresh_models(&mut self) {
+        if let Some(fetched) = fetch_openrouter_models() {
+            let count = fetched.len();
+            save_cached_models(&fetched);
+            self.models = fetched;
+            self.status_message = Some(format!("Načteno {} modelů z OpenRouteru", count));
+        } else {
+            self.status_message = Some("Nepodařilo se načíst modely z OpenRouteru".to_string());
+        }
     }
 
-    pub fn current_embedding_model(&self) -> &'static str {
-        EMBEDDING_MODELS[self.embedding_model_idx % EMBEDDING_MODELS.len()]
+    pub fn current_chat_info(&self) -> Option<&ModelInfo> {
+        self.models.iter().find(|m| m.id == self.chat_model)
+    }
+
+    pub fn current_embedding_info(&self) -> Option<&ModelInfo> {
+        self.models.iter().find(|m| m.id == self.embedding_model)
+    }
+
+    pub fn open_picker(&mut self, target: ModelTarget) {
+        self.picker_active = true;
+        self.picker_target = target;
+        self.picker_search.clear();
+        self.picker_selected_idx = 0;
+    }
+
+    pub fn close_picker(&mut self) {
+        self.picker_active = false;
+        self.picker_search.clear();
+        self.picker_selected_idx = 0;
+    }
+
+    pub fn filtered_picker_models(&self) -> Vec<&ModelInfo> {
+        filter_models(&self.models, &self.picker_search)
+    }
+
+    pub fn submit_picker(&mut self) {
+        let (chosen_id, chosen_name) = {
+            let filtered = self.filtered_picker_models();
+            if let Some(chosen) = filtered.get(self.picker_selected_idx) {
+                (Some(chosen.id.clone()), Some(chosen.name.clone()))
+            } else {
+                (None, None)
+            }
+        };
+
+        if let (Some(id), Some(name)) = (chosen_id, chosen_name) {
+            match self.picker_target {
+                ModelTarget::Chat => self.chat_model = id,
+                ModelTarget::Embedding => self.embedding_model = id,
+            }
+            self.save();
+            self.status_message = Some(format!("Vybrán model: {}", name));
+        }
+        self.close_picker();
+    }
+
+    pub fn picker_next(&mut self) {
+        let count = self.filtered_picker_models().len();
+        if count > 0 {
+            self.picker_selected_idx = (self.picker_selected_idx + 1).min(count - 1);
+        }
+    }
+
+    pub fn picker_prev(&mut self) {
+        if self.picker_selected_idx > 0 {
+            self.picker_selected_idx -= 1;
+        }
     }
 
     pub fn next_chat_model(&mut self) {
-        self.chat_model_idx = (self.chat_model_idx + 1) % CHAT_MODELS.len();
-        self.save();
+        if self.models.is_empty() {
+            return;
+        }
+        if let Some(idx) = self.models.iter().position(|m| m.id == self.chat_model) {
+            let next_idx = (idx + 1) % self.models.len();
+            self.chat_model = self.models[next_idx].id.clone();
+            self.save();
+        } else {
+            self.chat_model = self.models[0].id.clone();
+            self.save();
+        }
     }
 
     pub fn prev_chat_model(&mut self) {
-        self.chat_model_idx = (self.chat_model_idx + CHAT_MODELS.len() - 1) % CHAT_MODELS.len();
-        self.save();
+        if self.models.is_empty() {
+            return;
+        }
+        if let Some(idx) = self.models.iter().position(|m| m.id == self.chat_model) {
+            let prev_idx = (idx + self.models.len() - 1) % self.models.len();
+            self.chat_model = self.models[prev_idx].id.clone();
+            self.save();
+        } else {
+            self.chat_model = self.models[0].id.clone();
+            self.save();
+        }
     }
 
     pub fn next_embedding_model(&mut self) {
-        self.embedding_model_idx = (self.embedding_model_idx + 1) % EMBEDDING_MODELS.len();
-        self.save();
+        if self.models.is_empty() {
+            return;
+        }
+        if let Some(idx) = self.models.iter().position(|m| m.id == self.embedding_model) {
+            let next_idx = (idx + 1) % self.models.len();
+            self.embedding_model = self.models[next_idx].id.clone();
+            self.save();
+        } else {
+            self.embedding_model = self.models[0].id.clone();
+            self.save();
+        }
     }
 
     pub fn prev_embedding_model(&mut self) {
-        self.embedding_model_idx =
-            (self.embedding_model_idx + EMBEDDING_MODELS.len() - 1) % EMBEDDING_MODELS.len();
-        self.save();
+        if self.models.is_empty() {
+            return;
+        }
+        if let Some(idx) = self.models.iter().position(|m| m.id == self.embedding_model) {
+            let prev_idx = (idx + self.models.len() - 1) % self.models.len();
+            self.embedding_model = self.models[prev_idx].id.clone();
+            self.save();
+        } else {
+            self.embedding_model = self.models[0].id.clone();
+            self.save();
+        }
     }
 
     pub fn increase_threshold(&mut self) {
@@ -168,46 +278,12 @@ impl SettingsState {
         self.status_message = Some("API klíč byl úspěšně uložen".to_string());
     }
 
-    fn config_path() -> Option<PathBuf> {
-        if let Ok(dir) = std::env::var("HERDR_PLUGIN_CONFIG_DIR") {
-            let p = PathBuf::from(dir).join("spai-settings.json");
-            return Some(p);
-        }
-        std::env::var("USERPROFILE")
-            .or_else(|_| std::env::var("HOME"))
-            .ok()
-            .map(|h| PathBuf::from(h).join(".pi").join("agent").join("spai-settings.json"))
-    }
-
-    fn load_config_file() -> (String, usize, usize, u8) {
-        let Some(path) = Self::config_path() else {
-            return (String::new(), 0, 0, 55);
-        };
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-                let key = val["api_key"].as_str().unwrap_or_default().to_string();
-                let chat = val["chat_model_idx"].as_u64().unwrap_or(0) as usize;
-                let embed = val["embedding_model_idx"].as_u64().unwrap_or(0) as usize;
-                let thresh = val["similarity_threshold"].as_u64().unwrap_or(55) as u8;
-                return (key, chat, embed, thresh);
-            }
-        }
-        (String::new(), 0, 0, 55)
-    }
-
     pub fn save(&self) {
-        let Some(path) = Self::config_path() else {
-            return;
-        };
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let json = serde_json::json!({
-            "api_key": self.api_key,
-            "chat_model_idx": self.chat_model_idx,
-            "embedding_model_idx": self.embedding_model_idx,
-            "similarity_threshold": self.similarity_threshold,
-        });
-        let _ = std::fs::write(path, json.to_string());
+        save_config_file(
+            &self.api_key,
+            &self.chat_model,
+            &self.embedding_model,
+            self.similarity_threshold,
+        );
     }
 }
