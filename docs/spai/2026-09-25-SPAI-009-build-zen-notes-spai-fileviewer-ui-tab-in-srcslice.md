@@ -11,7 +11,7 @@ facets:
   project_path: D:\01_programovani\herdr\plugins\pi-herdr-sidebar
   area: Notes
   effort: medium
-  urgency: medium
+  urgency: low
   who: Developer
 spai_symbol: 'x'
 ---

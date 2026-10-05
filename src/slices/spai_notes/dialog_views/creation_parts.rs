@@ -17,31 +17,33 @@ pub fn build_hint_lines(
     is_evaluating_vector: bool,
     last_keystroke: Option<Instant>,
 ) -> Vec<Line<'static>> {
-    let mut lines = vec![
-        Line::from(vec![Span::styled(
-            format!(" {}", sel_opt.desc),
-            Style::default().fg(Color::Rgb(220, 220, 220)),
-        )]),
-        Line::raw(""),
-    ];
+    let mut lines = Vec::new();
 
+    // 1. Live Deduplication / Warning Card (if duplicates detected or evaluating)
     if is_evaluating_vector {
-        lines.push(Line::from(vec![Span::styled(
-            " ▌ ⠋ Vektorizuji zápis a porovnávám přes OpenRouter...",
-            Style::default().fg(Color::Yellow).bold(),
-        )]));
+        lines.push(Line::from(vec![
+            Span::styled("  ⠋ ", Style::default().fg(Color::Yellow).bold()),
+            Span::styled(
+                "Vektorizuji zápis a porovnávám embeddingy přes OpenRouter...",
+                Style::default().fg(Color::Yellow).bold(),
+            ),
+        ]));
         lines.push(Line::raw(""));
     } else if !debounced_matches.is_empty() {
-        lines.push(Line::from(vec![Span::styled(
-            " ▌ ⚠️  Podobné existující záznamy (sémantický dedup):",
-            Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
-        )]));
+        lines.push(Line::from(vec![
+            Span::styled("  ⚠️  ", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
+            Span::styled(
+                "Nalezeny podobné existující záznamy (dedup):",
+                Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+            ),
+        ]));
+
         for m in debounced_matches {
             let pct = (m.similarity * 100.0).round() as u32;
             let tag_label = if m.is_vector_match { "[Vektor] " } else { "" };
             lines.push(Line::from(vec![
                 Span::styled(
-                    format!("   [{:>2}%] {}", pct, tag_label),
+                    format!("    [{:>2}%] {}", pct, tag_label),
                     Style::default()
                         .fg(if pct >= 70 {
                             Color::Rgb(255, 83, 69)
@@ -60,12 +62,13 @@ pub fn build_hint_lines(
                 ),
             ]));
         }
+
         lines.push(Line::from(vec![
-            Span::styled("   Akce: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("    Akce: ", Style::default().fg(Color::DarkGray)),
             Span::styled("[Ctrl+O] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
-            Span::styled("Otevřít existující  ", Style::default().fg(Color::Gray)),
+            Span::styled("Otevřít   ", Style::default().fg(Color::Gray)),
             Span::styled("[Ctrl+A] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
-            Span::styled("Připojit k němu  ", Style::default().fg(Color::Gray)),
+            Span::styled("Připojit k němu   ", Style::default().fg(Color::Gray)),
             Span::styled("[Ctrl+U] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
             Span::styled("Změnit stav", Style::default().fg(Color::Gray)),
         ]));
@@ -74,31 +77,28 @@ pub fn build_hint_lines(
         if raw_input.trim().len() >= 3 && last.elapsed().as_millis() < 2200 {
             let left_secs = (2200u64.saturating_sub(last.elapsed().as_millis() as u64) as f64) / 1000.0;
             lines.push(Line::from(vec![Span::styled(
-                format!(" ▌ ⏳ Dokončete psaní (vektorová kontrola za {:.1}s)...", left_secs),
+                format!("  ⏳ Dokončete psaní (vektorová kontrola za {:.1}s)...", left_secs),
                 Style::default().fg(Color::DarkGray).italic(),
             )]));
             lines.push(Line::raw(""));
         }
     } else {
-        // Instant local check fallback
-        let similar = find_similar_notes(raw_input, existing_items, 0.45, 3);
+        // Fast local fallback
+        let similar = find_similar_notes(raw_input, existing_items, 0.45, 2);
         if !similar.is_empty() {
-            lines.push(Line::from(vec![Span::styled(
-                " ▌ ⚠️  Podobné existující záznamy (živý textový dedup):",
-                Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
-            )]));
+            lines.push(Line::from(vec![
+                Span::styled("  ⚠️  ", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
+                Span::styled(
+                    "Podobné existující záznamy (textová shoda):",
+                    Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+                ),
+            ]));
             for m in &similar {
                 let pct = (m.similarity * 100.0).round() as u32;
                 lines.push(Line::from(vec![
                     Span::styled(
-                        format!("   [{:>2}%] ", pct),
-                        Style::default()
-                            .fg(if pct >= 70 {
-                                Color::Rgb(255, 83, 69)
-                            } else {
-                                Color::Rgb(255, 184, 108)
-                            })
-                            .bold(),
+                        format!("    [{:>2}%] ", pct),
+                        Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
                     ),
                     Span::styled(
                         format!("{} ", m.symbol),
@@ -114,38 +114,32 @@ pub fn build_hint_lines(
         }
     }
 
-    lines.push(Line::from(vec![Span::styled(
-        " ▌ Příklady zápisu:",
-        Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
-    )]));
+    // 2. Selected Type Description
+    lines.push(Line::from(vec![
+        Span::styled("  Popis: ", Style::default().fg(Color::DarkGray)),
+        Span::styled(sel_opt.desc, Style::default().fg(Color::White)),
+    ]));
+    lines.push(Line::raw(""));
 
+    // 3. Examples
+    lines.push(Line::from(vec![
+        Span::styled("  Příklady zápisu:", Style::default().fg(Color::Rgb(45, 213, 183)).bold()),
+    ]));
     for ex in sel_opt.examples {
         lines.push(Line::from(vec![
-            Span::styled("   ", Style::default()),
+            Span::styled("    ", Style::default()),
             Span::styled(*ex, Style::default().fg(Color::White)),
         ]));
     }
-
     lines.push(Line::raw(""));
-    lines.push(Line::from(vec![Span::styled(
-        " ▌ SPAI Syntax & Dekorátory:",
-        Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
-    )]));
+
+    // 4. Cheat sheet
     lines.push(Line::from(vec![
-        Span::styled("   @projekt", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("        Přiřazení k projektu (@herdr, @piprompt)", Style::default().fg(Color::DarkGray)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("   ! nebo !high", Style::default().fg(Color::LightRed).bold()),
-        Span::styled("    Priorita / Důležitost (!, !high, !low)", Style::default().fg(Color::DarkGray)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("   :tag1:tag2:", Style::default().fg(Color::Yellow).bold()),
-        Span::styled("     Kategorie a tagy (:auth:api:security:)", Style::default().fg(Color::DarkGray)),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("   @termín", Style::default().fg(Color::Magenta).bold()),
-        Span::styled("         Deadline (@dnes, @zitra, @2026-10-01)", Style::default().fg(Color::DarkGray)),
+        Span::styled("  SPAI Syntax:", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+        Span::styled("  @projekt ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(" !priorita ", Style::default().fg(Color::LightRed).bold()),
+        Span::styled(" :tagy: ", Style::default().fg(Color::Yellow).bold()),
+        Span::styled(" @termín", Style::default().fg(Color::Magenta).bold()),
     ]));
 
     lines
@@ -188,7 +182,7 @@ pub fn build_project_picker_lines(
 pub fn build_shortcuts_line() -> Line<'static> {
     Line::from(vec![
         Span::styled(" [Tab] ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Potvrdit   ", Style::default().fg(Color::White)),
+        Span::styled("Vložit prefix   ", Style::default().fg(Color::White)),
         Span::styled("[↑/↓] ", Style::default().fg(Color::DarkGray)),
         Span::styled("Typ záznamu   ", Style::default().fg(Color::White)),
         Span::styled("[Enter] ", Style::default().fg(Color::DarkGray)),

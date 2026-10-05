@@ -6,6 +6,7 @@ status: done
 source: pi-spai
 facets:
   priority: low
+  deadline: 2026-09-25T07:31:13
   project: pi-herdr-sidebar
   project_path: D:\01_programovani\herdr\plugins\pi-herdr-sidebar
   area: Tasks

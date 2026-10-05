@@ -38,9 +38,9 @@ fn creation_dialog_renders_type_list_and_hint_window_together() {
         .expect("draw");
     let frame = buffer_text(terminal.backend().buffer());
 
-    assert!(frame.contains("Typ položky"), "type list block present");
-    assert!(frame.contains("Nápověda: Úkol (pending)"), "hint window header present");
+    assert!(frame.contains("Typ záznamu"), "type list block present");
+    assert!(frame.contains("Kontext: Úkol (pending)"), "hint window header present");
     assert!(frame.contains("Příklady zápisu"), "examples subheader present");
-    assert!(frame.contains("Vstup"), "input box present");
+    assert!(frame.contains("Zadání"), "input box present");
 }
 

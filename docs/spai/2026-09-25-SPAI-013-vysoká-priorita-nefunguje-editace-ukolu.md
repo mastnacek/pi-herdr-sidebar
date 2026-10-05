@@ -11,7 +11,7 @@ facets:
   area: Tasks
   effort: medium
   urgency: high
-  who: User
+  who: Developer
 spai_symbol: '.'
 ---
 

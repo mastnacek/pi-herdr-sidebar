@@ -11,7 +11,7 @@ facets:
   area: Notes
   effort: low
   urgency: medium
-  who: Agent
+  who: Developer
 spai_symbol: 'x'
 ---
 

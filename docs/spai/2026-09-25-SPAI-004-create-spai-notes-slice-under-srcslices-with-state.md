@@ -8,7 +8,7 @@ facets:
   priority: medium
   project: pi-herdr-sidebar
   project_path: D:\01_programovani\herdr\plugins\pi-herdr-sidebar
-  area: Notes
+  area: Architecture
   effort: low
   urgency: low
   who: Developer

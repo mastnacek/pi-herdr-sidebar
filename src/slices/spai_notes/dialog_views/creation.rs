@@ -1,4 +1,4 @@
-//! SPAI Smart Input creation dialog rendering with live type list & hint window.
+//! SPAI Smart Input creation dialog rendering with top input and side-by-side context.
 use super::creation_parts::{build_hint_lines, build_project_picker_lines, build_shortcuts_line};
 use crate::shared::theme;
 use crate::slices::spai_notes::state::SpaiNotesState;
@@ -23,8 +23,8 @@ pub(crate) fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (
 }
 
 pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_width = area.width.saturating_sub(4).clamp(64, 96);
-    let dialog_height = area.height.saturating_sub(2).clamp(18, 32);
+    let dialog_width = area.width.saturating_sub(4).clamp(68, 96);
+    let dialog_height = area.height.saturating_sub(2).clamp(18, 30);
     let x = area.x + (area.width.saturating_sub(dialog_width)) / 2;
     let y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
     let dialog_area = Rect::new(x, y, dialog_width, dialog_height);
@@ -50,25 +50,67 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(10),   // type list + hint window
-            Constraint::Length(3), // input box
-            Constraint::Length(1), // shortcuts footer
+            Constraint::Length(3), // 1. Top row: Smart Input Box
+            Constraint::Min(8),    // 2. Middle row: Type list (left) + Context & Dedup (right)
+            Constraint::Length(1), // 3. Bottom row: Shortcuts footer
         ])
         .split(inner);
 
-    // ── Top row: Type list (left) and Hint window (right) ───────────
-    let top_cols = Layout::default()
+    let raw = &state.creation_dialog.title_input;
+
+    // ── 1. Top row: Vstup (Smart Input Box) ─────────────────────────
+    let input_block = Block::bordered()
+        .title(Span::styled(
+            " ▶ Zadání (Smart Input) ",
+            Style::default().fg(Color::Yellow).bold(),
+        ))
+        .border_type(BorderType::Rounded)
+        .style(Style::default().bg(theme::FIELD_BG_ACTIVE))
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let mut input_spans = vec![Span::styled(
+        "  > ",
+        Style::default().fg(Color::Yellow).bold(),
+    )];
+
+    if raw.is_empty() {
+        input_spans.push(Span::styled(
+            "|",
+            Style::default().fg(Color::Yellow).bold(),
+        ));
+        input_spans.push(Span::styled(
+            format!(
+                " [Tab: vložit {}] nebo začněte psát (@projekt, !priorita, :tagy:, @termín)...",
+                sel_opt.symbol
+            ),
+            Style::default().fg(Color::DarkGray),
+        ));
+    } else {
+        let highlighted =
+            crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(raw);
+        input_spans.extend(highlighted);
+        input_spans.push(Span::styled(
+            "█",
+            Style::default().fg(Color::Yellow),
+        ));
+    }
+
+    let input_para = Paragraph::new(Line::from(input_spans)).block(input_block);
+    frame.render_widget(input_para, rows[0]);
+
+    // ── 2. Middle row: Type list (left) and Context & Dedup (right) ─
+    let mid_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(28), // type list
-            Constraint::Min(25),    // hint details
+            Constraint::Length(24), // type list
+            Constraint::Min(25),    // context & dedup details
         ])
-        .split(rows[0]);
+        .split(rows[1]);
 
     // ── Left column: Typ položky ────────────────────────────────────
     let list_block = Block::bordered()
         .title(Span::styled(
-            " Typ položky ",
+            " Typ záznamu ",
             Style::default().fg(Color::White).bold(),
         ))
         .border_type(BorderType::Rounded)
@@ -108,18 +150,16 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         ]);
         type_lines.push(line);
     }
-    let (_visible, scroll) = picker_viewport(SPAI_TYPE_OPTIONS.len(), sel_idx, top_cols[0].height);
+    let (_visible, scroll) = picker_viewport(SPAI_TYPE_OPTIONS.len(), sel_idx, mid_cols[0].height);
     let type_para = Paragraph::new(type_lines)
         .block(list_block)
         .scroll((scroll, 0));
-    frame.render_widget(type_para, top_cols[0]);
+    frame.render_widget(type_para, mid_cols[0]);
 
-    let raw = &state.creation_dialog.title_input;
-
-    // ── Right column: Nápověda & kompletní syntaxe ───────────────────
+    // ── Right column: Nápověda & Dedup ──────────────────────────────
     let hint_block = Block::bordered()
         .title(Span::styled(
-            format!(" Nápověda: {} ", sel_opt.name),
+            format!(" Kontext: {} ", sel_opt.name),
             Style::default().fg(sel_opt.color).bold(),
         ))
         .border_type(BorderType::Rounded)
@@ -134,49 +174,9 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         state.creation_dialog.last_keystroke,
     );
     let hint_para = Paragraph::new(hint_lines).block(hint_block);
-    frame.render_widget(hint_para, top_cols[1]);
+    frame.render_widget(hint_para, mid_cols[1]);
 
-    // ── Middle row: Vstup (Smart Input Box) ─────────────────────────
-    let input_block = Block::bordered()
-        .title(Span::styled(
-            " ▶ Vstup ",
-            Style::default().fg(Color::Yellow).bold(),
-        ))
-        .border_type(BorderType::Rounded)
-        .style(Style::default().bg(theme::FIELD_BG_ACTIVE))
-        .border_style(Style::default().fg(Color::Yellow));
-
-    let mut input_spans = vec![Span::styled(
-        "  > ",
-        Style::default().fg(Color::Yellow).bold(),
-    )];
-
-    if raw.is_empty() {
-        input_spans.push(Span::styled(
-            "|",
-            Style::default().fg(Color::Yellow).bold(),
-        ));
-        input_spans.push(Span::styled(
-            format!(
-                " [Tab: vložit {}] nebo začněte psát (např. !. @projekt !high úkol)...",
-                sel_opt.symbol
-            ),
-            Style::default().fg(Color::DarkGray),
-        ));
-    } else {
-        let highlighted =
-            crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(raw);
-        input_spans.extend(highlighted);
-        input_spans.push(Span::styled(
-            "█",
-            Style::default().fg(Color::Yellow),
-        ));
-    }
-
-    let input_para = Paragraph::new(Line::from(input_spans)).block(input_block);
-    frame.render_widget(input_para, rows[1]);
-
-    // ── Bottom row: Klávesové zkratky ───────────────────────────────
+    // ── 3. Bottom row: Klávesové zkratky ────────────────────────────
     let shortcuts_line = build_shortcuts_line();
     frame.render_widget(Paragraph::new(shortcuts_line), rows[2]);
 
