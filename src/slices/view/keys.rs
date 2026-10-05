@@ -54,13 +54,25 @@ fn handle_notes_dialogs(
                     state.spai_notes.close_creation_dialog();
                 }
             }
-            KeyCode::Up if ac_active => state.spai_notes.prev_suggestion(),
-            KeyCode::Down if ac_active => state.spai_notes.next_suggestion(),
+            KeyCode::Up => {
+                if ac_active {
+                    state.spai_notes.prev_suggestion();
+                } else {
+                    state.spai_notes.prev_type();
+                }
+            }
+            KeyCode::Down => {
+                if ac_active {
+                    state.spai_notes.next_suggestion();
+                } else {
+                    state.spai_notes.next_type();
+                }
+            }
             KeyCode::Tab => {
                 if ac_active {
                     state.spai_notes.apply_selected_suggestion();
                 } else {
-                    state.spai_notes.cycle_creation_kind();
+                    state.spai_notes.apply_selected_type();
                 }
             }
             KeyCode::Enter => {

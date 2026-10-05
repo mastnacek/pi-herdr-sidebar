@@ -1,8 +1,9 @@
-//! SPAI Smart Input creation dialog rendering.
+//! SPAI Smart Input creation dialog rendering with live type list & hint window.
 use crate::shared::theme;
 use crate::slices::spai_notes::state::SpaiNotesState;
+use crate::slices::spai_notes::type_options::SPAI_TYPE_OPTIONS;
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, Clear, Paragraph},
@@ -21,106 +22,206 @@ pub(crate) fn picker_viewport(count: usize, selected: usize, box_rows: u16) -> (
 }
 
 pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_width = area.width.saturating_sub(6).clamp(52, 70);
-    let dialog_height = 7u16.min(area.height.saturating_sub(2)).max(5);
+    let dialog_width = area.width.saturating_sub(4).clamp(60, 84);
+    let dialog_height = 17u16.min(area.height.saturating_sub(2)).max(12);
     let x = area.x + (area.width.saturating_sub(dialog_width)) / 2;
     let y = area.y + (area.height.saturating_sub(dialog_height)) / 2;
     let dialog_area = Rect::new(x, y, dialog_width, dialog_height);
 
     theme::paint_backdrop(frame, dialog_area);
 
-    let raw = &state.creation_dialog.title_input;
-    let detected = crate::slices::spai_notes::input_highlighter::detect_spai_input(raw);
+    let sel_idx = state.creation_dialog.type_selection % SPAI_TYPE_OPTIONS.len();
+    let sel_opt = &SPAI_TYPE_OPTIONS[sel_idx];
 
-    let header_title = format!(" ✍ SPAI Smart Input: {} ", detected.prefix_label);
+    let header_title = format!(" ✍ SPAI Smart Input: {} ", sel_opt.name);
 
     let title_block = Block::bordered()
         .title(Span::styled(
             header_title,
-            Style::default().fg(detected.badge_color).bold(),
+            Style::default().fg(sel_opt.color).bold(),
         ))
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(detected.badge_color));
+        .border_style(Style::default().fg(sel_opt.color));
 
+    let inner = title_block.inner(dialog_area);
+    frame.render_widget(title_block, dialog_area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(7),    // type list + hint window
+            Constraint::Length(3), // input box
+            Constraint::Length(1), // shortcuts footer
+        ])
+        .split(inner);
+
+    // ── Top row: Type list (left) and Hint window (right) ───────────
+    let top_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(27), // type list
+            Constraint::Min(20),    // hint details
+        ])
+        .split(rows[0]);
+
+    // ── Left column: Typ položky ────────────────────────────────────
+    let list_block = Block::bordered()
+        .title(Span::styled(
+            " Typ položky ",
+            Style::default().fg(Color::White).bold(),
+        ))
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::DarkGray));
+
+    let mut type_lines = Vec::new();
+    for (i, opt) in SPAI_TYPE_OPTIONS.iter().enumerate() {
+        let is_sel = i == sel_idx;
+        let marker = if is_sel { "▸ " } else { "  " };
+        let line = Line::from(vec![
+            Span::styled(
+                marker,
+                Style::default().fg(if is_sel {
+                    opt.color
+                } else {
+                    Color::DarkGray
+                }),
+            ),
+            Span::styled(
+                format!("{:<3}", opt.display_sym),
+                Style::default().fg(opt.color).bold(),
+            ),
+            Span::styled(
+                format!(" {}", opt.name),
+                Style::default()
+                    .fg(if is_sel {
+                        Color::White
+                    } else {
+                        Color::DarkGray
+                    })
+                    .add_modifier(if is_sel {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
+            ),
+        ]);
+        type_lines.push(line);
+    }
+    let type_para = Paragraph::new(type_lines).block(list_block);
+    frame.render_widget(type_para, top_cols[0]);
+
+    // ── Right column: Nápověda / Hint okno ──────────────────────────
+    let hint_block = Block::bordered()
+        .title(Span::styled(
+            format!(" Nápověda: {} ", sel_opt.name),
+            Style::default().fg(sel_opt.color).bold(),
+        ))
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(sel_opt.color));
+
+    let mut hint_lines = vec![
+        Line::from(vec![Span::styled(
+            format!(" {}", sel_opt.desc),
+            Style::default().fg(Color::Rgb(220, 220, 220)),
+        )]),
+        Line::raw(""),
+        Line::from(vec![Span::styled(
+            " ▌ Příklady zápisu:",
+            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
+        )]),
+    ];
+
+    for ex in sel_opt.examples {
+        hint_lines.push(Line::from(vec![
+            Span::styled("   ", Style::default()),
+            Span::styled(*ex, Style::default().fg(Color::White)),
+        ]));
+    }
+
+    let hint_para = Paragraph::new(hint_lines).block(hint_block);
+    frame.render_widget(hint_para, top_cols[1]);
+
+    // ── Middle row: Vstup (Smart Input Box) ─────────────────────────
+    let input_block = Block::bordered()
+        .title(Span::styled(
+            " ▶ Vstup ",
+            Style::default().fg(Color::Yellow).bold(),
+        ))
+        .border_type(BorderType::Rounded)
+        .style(Style::default().bg(theme::FIELD_BG_ACTIVE))
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let raw = &state.creation_dialog.title_input;
     let mut input_spans = vec![Span::styled(
-        "  Vstup: ",
-        Style::default().fg(Color::Rgb(193, 196, 151)),
+        "  > ",
+        Style::default().fg(Color::Yellow).bold(),
     )];
 
     if raw.is_empty() {
         input_spans.push(Span::styled(
             "|",
-            Style::default().fg(Color::Rgb(241, 252, 121)).bold(),
+            Style::default().fg(Color::Yellow).bold(),
         ));
-        input_spans.push(Span::styled(" napište ", Style::default().fg(Color::DarkGray)));
-        input_spans.push(Span::styled(". ", Style::default().fg(Color::Rgb(241, 252, 121)).bold()));
-        input_spans.push(Span::styled("úkol, ", Style::default().fg(Color::DarkGray)));
-        input_spans.push(Span::styled("? ", Style::default().fg(Color::Rgb(255, 121, 198)).bold()));
-        input_spans.push(Span::styled("nápad, ", Style::default().fg(Color::DarkGray)));
-        input_spans.push(Span::styled("- ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()));
-        input_spans.push(Span::styled("poznámku, ", Style::default().fg(Color::DarkGray)));
-        input_spans.push(Span::styled("! ", Style::default().fg(Color::Rgb(255, 83, 69)).bold()));
-        input_spans.push(Span::styled("priorit", Style::default().fg(Color::DarkGray)));
+        input_spans.push(Span::styled(
+            format!(
+                " [Tab: vložit {}] nebo začněte psát název...",
+                sel_opt.symbol
+            ),
+            Style::default().fg(Color::DarkGray),
+        ));
     } else {
-        let highlighted = crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(raw);
+        let highlighted =
+            crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans(raw);
         input_spans.extend(highlighted);
         input_spans.push(Span::styled(
             "█",
-            Style::default().fg(Color::Rgb(241, 252, 121)),
+            Style::default().fg(Color::Yellow),
         ));
     }
 
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("  Detekovaný typ: ", Style::default().fg(Color::Rgb(193, 196, 151))),
-            Span::styled(
-                format!(
-                    "[{} {}]   ",
-                    detected.prefix_glyph.trim(),
-                    detected.short_label
-                ),
-                Style::default().fg(detected.badge_color).bold(),
-            ),
-            Span::styled("(Syntax: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(". ", Style::default().fg(Color::Rgb(241, 252, 121)).bold()),
-            Span::styled("/ ", Style::default().fg(Color::Rgb(241, 252, 121)).bold()),
-            Span::styled("/. ", Style::default().fg(Color::Rgb(189, 147, 249)).bold()),
-            Span::styled("x ", Style::default().fg(Color::Rgb(55, 244, 153)).bold()),
-            Span::styled("z ", Style::default().fg(Color::Rgb(135, 145, 170)).bold()),
-            Span::styled("? ", Style::default().fg(Color::Rgb(255, 121, 198)).bold()),
-            Span::styled("- ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
-            Span::styled("! ", Style::default().fg(Color::Rgb(255, 83, 69)).bold()),
-            Span::styled("@ ", Style::default().fg(Color::Rgb(45, 213, 183)).bold()),
-            Span::styled(":tag:", Style::default().fg(Color::Rgb(55, 244, 153))),
-            Span::styled(")", Style::default().fg(Color::DarkGray)),
-        ]),
-        Line::raw(""),
-        Line::from(input_spans),
-        Line::raw(""),
-        Line::from(vec![
-            Span::styled("  [Enter]", Style::default().fg(Color::Rgb(55, 244, 153)).bold()),
-            Span::styled(" Uložit   ", Style::default().fg(Color::Rgb(193, 196, 151))),
-            Span::styled("[Tab]", Style::default().fg(Color::Rgb(45, 213, 183)).bold()),
-            Span::styled(" Přepnout typ   ", Style::default().fg(Color::Rgb(193, 196, 151))),
-            Span::styled("[Esc]", Style::default().fg(Color::Rgb(241, 252, 121)).bold()),
-            Span::styled(" Zrušit", Style::default().fg(Color::Rgb(193, 196, 151))),
-        ]),
-    ];
+    let input_para = Paragraph::new(Line::from(input_spans)).block(input_block);
+    frame.render_widget(input_para, rows[1]);
 
-    let para = Paragraph::new(lines).block(title_block);
-    frame.render_widget(para, dialog_area);
+    // ── Bottom row: Klávesové zkratky ───────────────────────────────
+    let shortcuts_line = Line::from(vec![
+        Span::styled(
+            "  [↑/↓]",
+            Style::default().fg(Color::Rgb(241, 252, 121)).bold(),
+        ),
+        Span::styled(" Vybrat typ   ", Style::default().fg(Color::Rgb(193, 196, 151))),
+        Span::styled(
+            "[Tab]",
+            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
+        ),
+        Span::styled(
+            " Vložit prefix / @Projekt   ",
+            Style::default().fg(Color::Rgb(193, 196, 151)),
+        ),
+        Span::styled(
+            "[Enter]",
+            Style::default().fg(Color::Rgb(55, 244, 153)).bold(),
+        ),
+        Span::styled(" Uložit   ", Style::default().fg(Color::Rgb(193, 196, 151))),
+        Span::styled(
+            "[Esc]",
+            Style::default().fg(Color::Rgb(241, 252, 121)).bold(),
+        ),
+        Span::styled(" Zrušit", Style::default().fg(Color::Rgb(193, 196, 151))),
+    ]);
+    frame.render_widget(Paragraph::new(shortcuts_line), rows[2]);
 
+    // ── Autocomplete popup for @project ─────────────────────────────
     if state.creation_dialog.autocomplete_active && !state.creation_dialog.suggestions.is_empty() {
         let count = state.creation_dialog.suggestions.len();
-        let list_y = dialog_area.bottom();
-        let box_rows = area.bottom().saturating_sub(list_y).clamp(3, 12);
+        let list_y = rows[1].bottom();
+        let box_rows = area.bottom().saturating_sub(list_y).clamp(3, 10);
         let selected = state.creation_dialog.autocomplete_selected;
         let (visible, scroll) = picker_viewport(count, selected, box_rows);
 
         let ac_area = Rect {
-            x: dialog_area.x + 2,
+            x: rows[1].x + 2,
             y: list_y.min(area.bottom().saturating_sub(visible + 2)),
-            width: dialog_area.width.saturating_sub(4),
+            width: rows[1].width.saturating_sub(4),
             height: visible + 2,
         };
 

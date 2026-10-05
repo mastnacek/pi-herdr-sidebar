@@ -3,29 +3,84 @@ use super::note::{SpaiFacets, SpaiNoteItem, SpaiStatus, SpaiType};
 use super::state::SpaiNotesState;
 use super::storage_format::{format_spai_markdown, slugify, update_body_status_prefix};
 use super::time_utils::current_timestamp_and_date;
+use super::type_options::SPAI_TYPE_OPTIONS;
 
 impl SpaiNotesState {
     pub fn open_creation_dialog(&mut self) {
         self.creation_dialog.active = true;
         self.creation_dialog.title_input.clear();
         self.creation_dialog.selected_kind = SpaiType::Todo;
+        self.creation_dialog.type_selection = 0;
+        self.creation_dialog.autocomplete_active = false;
+        self.creation_dialog.autocomplete_selected = 0;
+        self.creation_dialog.suggestions.clear();
     }
 
     pub fn close_creation_dialog(&mut self) {
         self.creation_dialog.active = false;
         self.creation_dialog.title_input.clear();
+        self.creation_dialog.type_selection = 0;
         self.creation_dialog.autocomplete_active = false;
         self.creation_dialog.suggestions.clear();
     }
 
     pub fn on_dialog_char_typed(&mut self, c: char) {
         self.creation_dialog.title_input.push(c);
+        self.sync_type_selection_from_input();
         self.update_autocomplete();
     }
 
     pub fn on_dialog_backspace(&mut self) {
         self.creation_dialog.title_input.pop();
+        self.sync_type_selection_from_input();
         self.update_autocomplete();
+    }
+
+    pub fn next_type(&mut self) {
+        let count = SPAI_TYPE_OPTIONS.len();
+        self.creation_dialog.type_selection = (self.creation_dialog.type_selection + 1) % count;
+        self.update_selected_kind();
+    }
+
+    pub fn prev_type(&mut self) {
+        let count = SPAI_TYPE_OPTIONS.len();
+        self.creation_dialog.type_selection =
+            (self.creation_dialog.type_selection + count - 1) % count;
+        self.update_selected_kind();
+    }
+
+    fn update_selected_kind(&mut self) {
+        if let Some(opt) = SPAI_TYPE_OPTIONS.get(self.creation_dialog.type_selection) {
+            self.creation_dialog.selected_kind = opt.kind;
+        }
+    }
+
+    pub fn apply_selected_type(&mut self) {
+        if let Some(opt) = SPAI_TYPE_OPTIONS.get(self.creation_dialog.type_selection) {
+            let raw = self.creation_dialog.title_input.trim_start();
+            let mut rest = raw;
+            for p in &[
+                "/. ", "/· ", "/.", "/·", "!- ", "!-", ". ", ".", "/ ", "/", "x ", "X ", "x",
+                "X", "z ", "Z ", "z", "Z", "? ", "?", "- ", "-",
+            ] {
+                if rest.starts_with(p) {
+                    rest = &rest[p.len()..];
+                    break;
+                }
+            }
+            let rest = rest.trim_start();
+            self.creation_dialog.title_input = format!("{}{}", opt.symbol, rest);
+            self.update_autocomplete();
+        }
+    }
+
+    pub fn sync_type_selection_from_input(&mut self) {
+        if let Some(idx) =
+            super::type_options::find_type_option_index(&self.creation_dialog.title_input)
+        {
+            self.creation_dialog.type_selection = idx;
+            self.update_selected_kind();
+        }
     }
 
     pub fn update_autocomplete(&mut self) {
@@ -76,16 +131,13 @@ impl SpaiNotesState {
     }
 
     pub fn cycle_creation_kind(&mut self) {
-        self.creation_dialog.selected_kind = match self.creation_dialog.selected_kind {
-            SpaiType::Todo => SpaiType::Idea,
-            SpaiType::Idea => SpaiType::Note,
-            SpaiType::Note => SpaiType::Todo,
-        };
+        self.next_type();
     }
 
     pub fn submit_creation_dialog(&mut self) -> Result<String, String> {
         let raw_input = self.creation_dialog.title_input.trim().to_string();
         if raw_input.is_empty() {
+            self.apply_selected_type();
             return Err("Název nesmí být prázdný".to_string());
         }
 
@@ -107,11 +159,18 @@ impl SpaiNotesState {
             clean_title.to_string()
         };
 
-        let kind = detected.kind;
-        // `prefix_glyph` already carries its trailing space (e.g. ". "), so no
-        // extra separator here — otherwise bodies end up with a double space.
-        let prefix_line = format!("{}{}\n", detected.prefix_glyph, title_to_use);
-        let res = self.create_quick_note(&title_to_use, kind, &prefix_line);
+        let (kind, status, glyph) = if clean_title == raw_input.as_str() {
+            if let Some(opt) = SPAI_TYPE_OPTIONS.get(self.creation_dialog.type_selection) {
+                (opt.kind, opt.status, opt.symbol)
+            } else {
+                (detected.kind, detected.status, detected.prefix_glyph)
+            }
+        } else {
+            (detected.kind, detected.status, detected.prefix_glyph)
+        };
+
+        let prefix_line = format!("{}{}\n", glyph, title_to_use);
+        let res = self.create_quick_note_with_status(&title_to_use, kind, status, &prefix_line);
         if res.is_ok() {
             self.close_creation_dialog();
         }
@@ -152,6 +211,21 @@ impl SpaiNotesState {
         kind: SpaiType,
         body: &str,
     ) -> Result<String, String> {
+        let status = match kind {
+            SpaiType::Todo => SpaiStatus::Todo,
+            SpaiType::Idea => SpaiStatus::Idea,
+            SpaiType::Note => SpaiStatus::Note,
+        };
+        self.create_quick_note_with_status(title, kind, status, body)
+    }
+
+    pub fn create_quick_note_with_status(
+        &mut self,
+        title: &str,
+        kind: SpaiType,
+        status: SpaiStatus,
+        body: &str,
+    ) -> Result<String, String> {
         let proj = self
             .projects
             .get_mut(self.selected_project_idx)
@@ -164,12 +238,6 @@ impl SpaiNotesState {
         let (today, timestamp) = current_timestamp_and_date();
         let file_name = format!("{}-{}-{}.md", today, id, slug);
         let file_path = proj.spai_dir.join(&file_name);
-
-        let status = match kind {
-            SpaiType::Todo => SpaiStatus::Todo,
-            SpaiType::Idea => SpaiStatus::Idea,
-            SpaiType::Note => SpaiStatus::Note,
-        };
 
         let item = SpaiNoteItem {
             id: id.clone(),
@@ -200,3 +268,7 @@ impl SpaiNotesState {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+mod tests;
+

@@ -13,6 +13,7 @@ pub mod storage_format;
 pub mod text_cursor;
 pub mod text_layout;
 pub mod time_utils;
+pub mod type_options;
 pub mod view;
 pub mod viewer_content;
 
