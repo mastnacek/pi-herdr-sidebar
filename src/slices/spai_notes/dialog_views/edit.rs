@@ -1,11 +1,17 @@
-//! SPAI Note inline edit dialog rendering.
+//! SPAI Note editor rendering — full-page modal (plan §3, 2026-10-05).
+//!
+//! Two fields on the whole pane: Název (1 row) and Tělo (the rest), plus a
+//! two-line footer with the current mode (`-- NORMAL --` / `-- INSERT --`)
+//! and contextual shortcuts. Insert shows today's cursor marker; Normal
+//! dims the fields and shows no cursor.
+use super::dedup_overlay::render_dedup_overlay;
 use crate::shared::theme;
-use crate::slices::spai_notes::dialog_state::EditField;
+use crate::slices::spai_notes::dialog_state::{EditMode, EditField};
 use crate::slices::spai_notes::state::SpaiNotesState;
 use crate::slices::spai_notes::text_layout;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, Paragraph},
     Frame,
@@ -30,115 +36,123 @@ fn char_len(text: &str) -> usize {
 }
 
 pub fn render_edit_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
-    let dialog_area = theme::centered_percent(area, 76, 70);
-    theme::paint_backdrop(frame, dialog_area);
+    theme::paint_backdrop(frame, area);
+    let dialog_area = area;
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // title field
             Constraint::Min(6),    // body field
-            Constraint::Length(2), // hotkeys
+            Constraint::Length(2), // footer: mode + shortcuts
         ])
         .split(dialog_area);
 
+    let insert_mode = state.edit_dialog.mode == EditMode::Insert;
     let title_focused = state.edit_dialog.field == EditField::Title;
     let body_focused = state.edit_dialog.field == EditField::Body;
+    // Only Insert owns a visible cursor; Normal is a reading surface.
+    let title_cursor = insert_mode && title_focused;
+    let body_cursor = insert_mode && body_focused;
 
-    // ── Title field ────────────────────────────────────────────────
-    let title_cursor = state
-        .edit_dialog
-        .cursor
-        .min(char_len(&state.edit_dialog.title_input));
-    let title_text = if title_focused {
-        insert_cursor_marker(&state.edit_dialog.title_input, title_cursor)
+    render_title_field(frame, rows[0], state, title_cursor);
+    render_body_field(frame, rows[1], state, body_cursor);
+    render_footer(frame, rows[2], state);
+
+    render_dedup_overlay(frame, dialog_area, state);
+}
+
+fn render_title_field(frame: &mut Frame, area: Rect, state: &SpaiNotesState, has_cursor: bool) {
+    let focused = state.edit_dialog.field == EditField::Title;
+    let text = if has_cursor {
+        insert_cursor_marker(
+            &state.edit_dialog.title_input,
+            state
+                .edit_dialog
+                .cursor
+                .min(char_len(&state.edit_dialog.title_input)),
+        )
     } else {
         state.edit_dialog.title_input.clone()
     };
 
-    let title_inner_w = rows[0].width.saturating_sub(4).max(1) as usize;
-    let title_offset = if title_focused && title_cursor >= title_inner_w {
-        title_cursor.saturating_sub(title_inner_w.saturating_sub(1))
+    let inner_w = area.width.saturating_sub(4).max(1) as usize;
+    let cursor_pos = state
+        .edit_dialog
+        .cursor
+        .min(char_len(&state.edit_dialog.title_input));
+    let offset = if has_cursor && cursor_pos >= inner_w {
+        cursor_pos.saturating_sub(inner_w.saturating_sub(1))
     } else {
         0
     } as u16;
 
-    let mut title_line = vec![Span::styled(
-        "  > ",
-        Style::default()
-            .fg(if title_focused {
-                Color::Yellow
-            } else {
-                Color::DarkGray
-            })
-            .bold(),
-    )];
-    title_line.push(Span::styled(
-        title_text,
-        Style::default().fg(Color::White).bold(),
-    ));
-
-    let title_block = Block::bordered()
-        .title(Span::styled(
-            theme::field_title("✏️ Název", title_focused),
+    let title_line = vec![
+        Span::styled(
+            "  > ",
             Style::default()
-                .fg(if title_focused {
-                    Color::Yellow
-                } else {
-                    Color::DarkGray
-                })
+                .fg(if focused { Color::Yellow } else { Color::DarkGray })
+                .bold(),
+        ),
+        Span::styled(text, Style::default().fg(Color::White).bold()),
+    ];
+
+    let block = Block::bordered()
+        .title(Span::styled(
+            theme::field_title("✏️ Název", focused),
+            Style::default()
+                .fg(if focused { Color::Yellow } else { Color::DarkGray })
                 .bold(),
         ))
         .border_type(BorderType::Rounded)
-        .style(Style::default().bg(theme::field_bg(title_focused)))
-        .border_style(Style::default().fg(if title_focused {
+        .style(Style::default().bg(theme::field_bg(focused)))
+        .border_style(Style::default().fg(if focused {
             Color::Yellow
         } else {
             Color::DarkGray
         }));
+
     frame.render_widget(
         Paragraph::new(Line::from(title_line))
-            .block(title_block)
-            .scroll((0, title_offset)),
-        rows[0],
+            .block(block)
+            .scroll((0, offset)),
+        area,
     );
+}
 
-    // ── Body field ─────────────────────────────────────────────────
+fn render_body_field(frame: &mut Frame, area: Rect, state: &SpaiNotesState, has_cursor: bool) {
+    let focused = state.edit_dialog.field == EditField::Body;
     let body_cursor = state
         .edit_dialog
         .cursor
         .min(char_len(&state.edit_dialog.body_input));
-    let body_text = if body_focused {
+    let text = if has_cursor {
         insert_cursor_marker(&state.edit_dialog.body_input, body_cursor)
     } else {
         state.edit_dialog.body_input.clone()
     };
 
-    let body_block = Block::bordered()
+    let block = Block::bordered()
         .title(Span::styled(
-            theme::field_title("📄 Tělo poznámky", body_focused),
+            theme::field_title("📄 Tělo poznámky", focused),
             Style::default()
-                .fg(if body_focused {
-                    Color::Cyan
-                } else {
-                    Color::DarkGray
-                })
+                .fg(if focused { Color::Cyan } else { Color::DarkGray })
                 .bold(),
         ))
         .border_type(BorderType::Rounded)
-        .style(Style::default().bg(theme::field_bg(body_focused)))
-        .border_style(Style::default().fg(if body_focused {
+        .style(Style::default().bg(theme::field_bg(focused)))
+        .border_style(Style::default().fg(if focused {
             Color::Cyan
         } else {
             Color::DarkGray
         }));
 
-    let inner_w = rows[1].width.saturating_sub(2).max(1) as usize;
-    let view_h = rows[1].height.saturating_sub(2).max(1) as usize;
-    let body_rows = text_layout::wrap_rows(&body_text, inner_w);
+    let inner_w = area.width.saturating_sub(2).max(1) as usize;
+    let view_h = area.height.saturating_sub(2).max(1) as usize;
+    let body_rows = text_layout::wrap_rows(&text, inner_w);
     let max_scroll = body_rows.len().saturating_sub(view_h);
 
-    let scroll: u16 = if !body_focused {
+    let scroll: u16 = if !has_cursor {
         0
     } else if state.edit_dialog.body_follow {
         let prefix: String = state
@@ -159,44 +173,53 @@ pub fn render_edit_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesState)
         (state.edit_dialog.body_scroll as usize).min(max_scroll)
     } as u16;
 
-    let body_lines: Vec<Line> = body_rows.into_iter().map(Line::from).collect();
-    let body_para = Paragraph::new(body_lines)
-        .block(body_block)
-        .scroll((scroll, 0));
-    frame.render_widget(body_para, rows[1]);
+    let lines: Vec<Line> = body_rows.into_iter().map(Line::from).collect();
+    frame.render_widget(
+        Paragraph::new(lines).block(block).scroll((scroll, 0)),
+        area,
+    );
+}
 
-    // ── Hotkeys ────────────────────────────────────────────────────
-    let focus_label = if title_focused { "Název" } else { "Tělo" };
-    let hotkeys = Paragraph::new(vec![
+fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
+    let insert_mode = state.edit_dialog.mode == EditMode::Insert;
+    let confirm_discard = state.edit_dialog.confirm_discard && state.edit_dialog.dirty;
+    let dirty_marker = if state.edit_dialog.dirty { " ●" } else { "" };
+
+    let mode_line = if confirm_discard {
+        Line::from(Span::styled(
+            "  Neuložené změny! Esc = zahodit a zavřít · Ctrl+S = uložit",
+            Style::default().fg(Color::Red).bold(),
+        ))
+    } else {
         Line::from(vec![
-            Span::styled("  [←/→↑/↓]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" kurzor  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Home/End]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" řádek  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Del]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" smazat  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Tab]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" pole  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Ctrl+S]", Style::default().fg(Color::Green).bold()),
-            Span::styled(" uložit  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Ctrl+E]", Style::default().fg(Color::Cyan).bold()),
-            Span::styled(" ext  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Esc]", Style::default().fg(Color::Yellow)),
-            Span::styled(" zrušit", Style::default().fg(Color::DarkGray)),
-        ]),
-        Line::from(vec![
-            Span::styled("  Aktivní pole: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                focus_label,
+                if insert_mode { " -- INSERT --" } else { " -- NORMAL --" },
                 Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
+                    .fg(if insert_mode { Color::Green } else { Color::Cyan })
+                    .bold(),
             ),
+            Span::styled(dirty_marker, Style::default().fg(Color::Yellow)),
             Span::styled(
-                "   (Enter: název → tělo / nový řádek · PgUp/PgDn posun těla)",
+                if insert_mode {
+                    "  Esc = Normal"
+                } else {
+                    "  i/a/A = psát · Tab = pole · x = stav · q/Esc = zavřít"
+                },
                 Style::default().fg(Color::DarkGray),
             ),
-        ]),
+        ])
+    };
+
+    let keys_line = Line::from(vec![
+        Span::styled("[Ctrl+S]", Style::default().fg(Color::Green).bold()),
+        Span::styled(" uložit  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[Ctrl+E]", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(" ext  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[Ctrl+D]", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
+        Span::styled(" duplicity  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[PgUp/PgDn]", Style::default().fg(Color::Cyan).bold()),
+        Span::styled(" posun", Style::default().fg(Color::DarkGray)),
     ]);
-    frame.render_widget(hotkeys, rows[2]);
+
+    frame.render_widget(Paragraph::new(vec![mode_line, keys_line]), area);
 }

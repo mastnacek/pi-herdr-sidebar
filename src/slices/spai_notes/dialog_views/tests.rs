@@ -51,7 +51,9 @@ fn creation_dialog_full_tab_preview() {
 }
 
 #[test]
-fn creation_dialog_renders_type_list_and_hint_window_together() {
+fn creation_dialog_shows_overview_when_empty_and_footer_when_typing() {
+    // Empty input: the dim overview (complete type list + syntax) fills the
+    // editor surface; no side panels anywhere (plan §1).
     let mut state = SpaiNotesState::new(None);
     state.open_creation_dialog();
 
@@ -59,11 +61,54 @@ fn creation_dialog_renders_type_list_and_hint_window_together() {
     terminal
         .draw(|frame| render_creation_dialog(frame, frame.area(), &state))
         .expect("draw");
-    let frame = buffer_text(terminal.backend().buffer());
+    let empty = buffer_text(terminal.backend().buffer());
 
-    assert!(frame.contains("Typ záznamu"), "type list block present");
-    assert!(frame.contains("Kontext: Úkol (pending)"), "hint window header present");
-    assert!(frame.contains("Příklady zápisu"), "examples subheader present");
-    assert!(frame.contains("Zadání"), "input box present");
+    assert!(empty.contains("Typy"), "type overview present: {empty}");
+    assert!(empty.contains("@projekt"), "syntax line present: {empty}");
+    assert!(empty.contains("✍"), "editor header present: {empty}");
+    assert!(!empty.contains("Typ záznamu"), "side type list must be gone: {empty}");
+    assert!(!empty.contains("Kontext:"), "context panel must be gone: {empty}");
+
+    // Typed input: the footer describes only the selected type (↑↓ selection,
+    // here `?` = idea at index 5 to match the typed prefix).
+    state.creation_dialog.type_selection = 5;
+    state.creation_dialog.title_input = "? novy napad".to_string();
+    terminal
+        .draw(|frame| render_creation_dialog(frame, frame.area(), &state))
+        .expect("draw");
+    let typed = buffer_text(terminal.backend().buffer());
+
+    assert!(
+        typed.contains("Nápad (idea)"),
+        "footer follows the typed prefix: {typed}"
+    );
+    assert!(!typed.contains("Typy"), "overview hidden while typing: {typed}");
+}
+
+#[test]
+fn dedup_panel_renders_over_the_dialog_and_disappears() {
+    let mut state = SpaiNotesState::new(None);
+    state.open_creation_dialog();
+    state.creation_dialog.title_input = ". nákupní koš".to_string();
+
+    let mut terminal = Terminal::new(TestBackend::new(88, 24)).expect("terminal");
+    let mut draw = |st: &SpaiNotesState| {
+        let mut t = Terminal::new(TestBackend::new(88, 24)).expect("terminal");
+        t.draw(|frame| render_creation_dialog(frame, frame.area(), st)).expect("draw");
+        buffer_text(t.backend().buffer())
+    };
+
+    // Hidden until Ctrl+D is pressed.
+    let before = draw(&state);
+    assert!(!before.contains("duplicity") || !before.contains("Podobné"), "panel hidden: {before}");
+
+    // Visible after the (local fallback) run — no project, so "žádné duplicity".
+    state.run_dedup("", "model", 0.5, ". nákupní koš".to_string());
+    let visible = draw(&state);
+    assert!(visible.contains("Kontrola duplicit") || visible.contains("Žádné duplicity") || visible.contains("Podobné"), "panel shown: {visible}");
+
+    state.close_dedup_panel();
+    let closed = draw(&state);
+    assert!(!closed.contains("Kontrola duplicit"), "panel hidden after Esc: {closed}");
 }
 

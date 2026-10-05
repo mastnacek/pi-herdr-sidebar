@@ -1,4 +1,8 @@
 //! Creation dialog behaviour for the SPAI Notes tab (`n` shortcut).
+//!
+//! One editor surface: the type comes from the typed prefix (detected live,
+//! footer follows automatically); `@projekt` in the text selects the project.
+//! `Tab`/`↑↓` insert a type prefix only while the input is still empty.
 use super::note::SpaiType;
 use super::spai_prefixes::strip_leading_prefix;
 use super::state::SpaiNotesState;
@@ -15,10 +19,7 @@ impl SpaiNotesState {
         self.creation_dialog.autocomplete_active = false;
         self.creation_dialog.autocomplete_selected = 0;
         self.creation_dialog.suggestions.clear();
-        self.creation_dialog.last_keystroke = None;
-        self.creation_dialog.debounced_matches.clear();
-        self.creation_dialog.is_evaluating_vector = false;
-        self.creation_dialog.vector_evaluated = false;
+        self.dedup = super::dialog_state::DedupPanel::default();
     }
 
     pub fn close_creation_dialog(&mut self) {
@@ -28,20 +29,17 @@ impl SpaiNotesState {
         self.creation_dialog.type_selection = 0;
         self.creation_dialog.autocomplete_active = false;
         self.creation_dialog.suggestions.clear();
-        self.creation_dialog.last_keystroke = None;
-        self.creation_dialog.debounced_matches.clear();
-        self.creation_dialog.is_evaluating_vector = false;
-        self.creation_dialog.vector_evaluated = false;
+        self.dedup = super::dialog_state::DedupPanel::default();
     }
 
     pub fn on_dialog_char_typed(&mut self, c: char) {
-        let cursor = self.creation_dialog.cursor.min(char_len(&self.creation_dialog.title_input));
+        let cursor = self
+            .creation_dialog
+            .cursor
+            .min(char_len(&self.creation_dialog.title_input));
         let idx = byte_of(&self.creation_dialog.title_input, cursor);
         self.creation_dialog.title_input.insert(idx, c);
         self.creation_dialog.cursor = cursor + 1;
-        self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
-        self.creation_dialog.vector_evaluated = false;
-        self.creation_dialog.is_evaluating_vector = false;
         self.sync_type_selection_from_input();
         self.update_autocomplete();
     }
@@ -58,9 +56,6 @@ impl SpaiNotesState {
                 self.creation_dialog.cursor = cursor - 1;
             }
         }
-        self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
-        self.creation_dialog.vector_evaluated = false;
-        self.creation_dialog.is_evaluating_vector = false;
         self.sync_type_selection_from_input();
         self.update_autocomplete();
     }
@@ -73,9 +68,6 @@ impl SpaiNotesState {
             let end = byte_of(buf, cursor + 1);
             buf.replace_range(start..end, "");
         }
-        self.creation_dialog.last_keystroke = Some(std::time::Instant::now());
-        self.creation_dialog.vector_evaluated = false;
-        self.creation_dialog.is_evaluating_vector = false;
         self.sync_type_selection_from_input();
         self.update_autocomplete();
     }
@@ -97,13 +89,20 @@ impl SpaiNotesState {
         self.creation_dialog.cursor = self.creation_dialog.title_input.chars().count();
     }
 
+    /// Type cycling (`↑/↓`) — only meaningful while the input is empty.
     pub fn next_type(&mut self) {
+        if !self.creation_dialog.title_input.trim().is_empty() {
+            return;
+        }
         let count = SPAI_TYPE_OPTIONS.len();
         self.creation_dialog.type_selection = (self.creation_dialog.type_selection + 1) % count;
         self.update_selected_kind();
     }
 
     pub fn prev_type(&mut self) {
+        if !self.creation_dialog.title_input.trim().is_empty() {
+            return;
+        }
         let count = SPAI_TYPE_OPTIONS.len();
         self.creation_dialog.type_selection =
             (self.creation_dialog.type_selection + count - 1) % count;
@@ -116,14 +115,14 @@ impl SpaiNotesState {
         }
     }
 
+    /// Inserts the selected type prefix — only while the input is empty.
     pub fn apply_selected_type(&mut self) {
+        if !self.creation_dialog.title_input.trim().is_empty() {
+            return;
+        }
         if let Some(opt) = SPAI_TYPE_OPTIONS.get(self.creation_dialog.type_selection) {
-            let raw = self.creation_dialog.title_input.trim_start();
-            // Only a full prefix (symbol + space) is stripped, so plain words
-            // like "hello" or "xylofon" keep their first letter.
-            let rest = strip_leading_prefix(raw).unwrap_or(raw).trim_start();
-            self.creation_dialog.title_input = format!("{}{}", opt.symbol, rest);
-            self.creation_dialog.cursor = self.creation_dialog.title_input.chars().count();
+            self.creation_dialog.title_input = opt.symbol.to_string();
+            self.creation_dialog.cursor = opt.symbol.chars().count();
             self.update_autocomplete();
         }
     }
@@ -188,7 +187,6 @@ impl SpaiNotesState {
     pub fn submit_creation_dialog(&mut self) -> Result<String, String> {
         let raw_input = self.creation_dialog.title_input.trim().to_string();
         if raw_input.is_empty() {
-            self.apply_selected_type();
             return Err("Název nesmí být prázdný".to_string());
         }
 

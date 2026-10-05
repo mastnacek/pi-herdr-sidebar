@@ -4,7 +4,7 @@
 //! impl modules to keep each file small and cohesive:
 //! - [`super::state_edit`] — integrated edit dialog (`e`)
 //! - [`super::state_creation`] — creation dialog + quick note (`n`)
-use super::dialog_state::{NoteCreationDialog, NoteEditDialog};
+use super::dialog_state::{DedupPanel, NoteCreationDialog, NoteEditDialog};
 use super::discovery::{
     discover_spai_projects, file_fingerprint, projects_cache_path, SpaiProjectSummary,
 };
@@ -30,6 +30,9 @@ pub struct SpaiNotesState {
     pub delete_confirm_active: bool,
     pub creation_dialog: NoteCreationDialog,
     pub edit_dialog: NoteEditDialog,
+    /// On-demand duplicate-check panel (Ctrl+D); polls a finished background
+    /// job only — never runs on its own.
+    pub dedup: DedupPanel,
     projects_fingerprint: Fingerprint,
 }
 
@@ -54,6 +57,7 @@ impl SpaiNotesState {
             delete_confirm_active: false,
             creation_dialog: NoteCreationDialog::default(),
             edit_dialog: NoteEditDialog::default(),
+            dedup: DedupPanel::default(),
             projects_fingerprint: (0, 0, 0, 0),
         };
         state.ensure_selected_items();

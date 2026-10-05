@@ -1,94 +1,49 @@
-//! Actions and debounced evaluation on duplicate / similar notes detected during Smart Note creation.
+//! Duplicate-check actions for the Smart Input dialog and the integrated
+//! editor: `Ctrl+D` runs the check on demand, `Ctrl+O/A/U` act on its results,
+//! and every UI tick only drains an already-finished background computation.
 use super::note::SpaiStatus;
-use super::similarity::{find_similar_notes_hybrid, SimilarNoteMatch};
+use super::similarity::{find_similar_notes, find_similar_notes_hybrid};
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
 use std::sync::mpsc::channel;
-use std::time::Duration;
 
 impl SpaiNotesState {
-    /// Polls debounced deduplication check: 2.2s delay after typing pauses, then vectorizes via OpenRouter.
-    pub fn poll_debounced_dedup(&mut self, api_key: &str, model: &str, threshold: f64) {
-        if !self.creation_dialog.active {
-            return;
-        }
-
-        // 1. Check if background vector evaluation returned results
-        if let Some(rx) = &self.creation_dialog.dedup_receiver {
+    /// Drains a finished background dedup computation into the panel. Purely
+    /// passive: no timer, no keystroke tracking, no network call — the plan's
+    /// "dedup na zkratku" guarantee.
+    pub fn poll_dedup_receiver(&mut self) {
+        if let Some(rx) = &self.dedup.receiver {
             if let Ok(matches) = rx.try_recv() {
-                self.creation_dialog.debounced_matches = matches;
-                self.creation_dialog.is_evaluating_vector = false;
-                self.creation_dialog.vector_evaluated = true;
-                self.creation_dialog.dedup_receiver = None;
+                self.dedup.matches = matches;
+                self.dedup.is_evaluating = false;
+                self.dedup.receiver = None;
             }
         }
+    }
 
-        // 2. Trigger background vectorization 2.2s after user stops typing
-        let Some(last) = self.creation_dialog.last_keystroke else {
-            return;
-        };
+    /// Runs the duplicate check for `query` on demand (Ctrl+D). With an API
+    /// key it vectorizes in the background; without one it falls back to local
+    /// text similarity + stored vectors, synchronously, without an error.
+    /// The overlay panel is shown in both cases.
+    pub fn run_dedup(&mut self, api_key: &str, model: &str, threshold: f64, query: String) {
+        self.dedup.visible = true;
+        self.dedup.matches.clear();
+        self.dedup.receiver = None;
 
-        if last.elapsed() < Duration::from_millis(2200) {
-            return;
-        }
-
-        if self.creation_dialog.is_evaluating_vector || self.creation_dialog.vector_evaluated {
-            return;
-        }
-
-        let raw = self.creation_dialog.title_input.trim().to_string();
+        let raw = query.trim().to_string();
         if raw.len() < 3 {
-            self.creation_dialog.debounced_matches.clear();
-            self.creation_dialog.vector_evaluated = true;
-            return;
+            return; // nothing meaningful to compare
         }
 
         let Some(proj) = self.projects.get(self.selected_project_idx) else {
             return;
         };
 
-        self.creation_dialog.is_evaluating_vector = true;
-        self.creation_dialog.vector_evaluated = true;
-
-        if !api_key.trim().is_empty() {
-            let (tx, rx) = channel();
-            self.creation_dialog.dedup_receiver = Some(rx);
-
-            let key = api_key.to_string();
-            let emb_model = model.to_string();
-            let items = proj.items.clone();
-            let proj_path = proj.path.clone();
-
-            std::thread::spawn(move || {
-                let stored_vectors =
-                    crate::slices::settings::load_project_vectors(&proj_path).map(|s| s.vectors);
-
-                let cand_vec = match crate::slices::settings::vector_service::request_embeddings(
-                    &key,
-                    &emb_model,
-                    &[&raw],
-                ) {
-                    Ok(mut vecs) => vecs.pop(),
-                    Err(_) => None,
-                };
-
-                let matches = find_similar_notes_hybrid(
-                    &raw,
-                    &items,
-                    cand_vec.as_deref(),
-                    stored_vectors.as_ref(),
-                    threshold,
-                    4,
-                );
-
-                let _ = tx.send(matches);
-            });
-        } else {
-            // Local fallback when API key is missing
+        if api_key.trim().is_empty() {
+            // Local fallback: text similarity + stored vectors, no network.
             let stored_vectors =
                 crate::slices::settings::load_project_vectors(&proj.path).map(|s| s.vectors);
-
-            self.creation_dialog.debounced_matches = find_similar_notes_hybrid(
+            self.dedup.matches = find_similar_notes_hybrid(
                 &raw,
                 &proj.items,
                 None,
@@ -96,18 +51,53 @@ impl SpaiNotesState {
                 threshold,
                 4,
             );
-            self.creation_dialog.is_evaluating_vector = false;
+            self.dedup.is_evaluating = false;
+            return;
         }
+
+        self.dedup.is_evaluating = true;
+        let (tx, rx) = channel();
+        self.dedup.receiver = Some(rx);
+
+        let key = api_key.to_string();
+        let emb_model = model.to_string();
+        let items = proj.items.clone();
+        let proj_path = proj.path.clone();
+
+        std::thread::spawn(move || {
+            let stored_vectors =
+                crate::slices::settings::load_project_vectors(&proj_path).map(|s| s.vectors);
+
+            let cand_vec = match crate::slices::settings::vector_service::request_embeddings(
+                &key, &emb_model, &[&raw],
+            ) {
+                Ok(mut vecs) => vecs.pop(),
+                Err(_) => None,
+            };
+
+            let matches = find_similar_notes_hybrid(
+                &raw,
+                &items,
+                cand_vec.as_deref(),
+                stored_vectors.as_ref(),
+                threshold,
+                4,
+            );
+
+            let _ = tx.send(matches);
+        });
     }
 
-    /// Returns the top similar matching note for the currently typed input (if any).
+    /// Hides the dedup overlay (Esc over the panel).
+    pub fn close_dedup_panel(&mut self) {
+        self.dedup.visible = false;
+    }
+
+    /// Returns the top dedup match, falling back to a fast local text check
+    /// against the currently typed creation input.
     pub fn top_similar_match(&self) -> Option<String> {
-        if !self.creation_dialog.debounced_matches.is_empty() {
-            return self
-                .creation_dialog
-                .debounced_matches
-                .first()
-                .map(|m| m.id.clone());
+        if !self.dedup.matches.is_empty() {
+            return self.dedup.matches.first().map(|m| m.id.clone());
         }
 
         let raw = self.creation_dialog.title_input.trim();
@@ -115,7 +105,7 @@ impl SpaiNotesState {
             return None;
         }
         let proj = self.projects.get(self.selected_project_idx)?;
-        let matches = super::similarity::find_similar_notes(raw, &proj.items, 0.45, 1);
+        let matches = find_similar_notes(raw, &proj.items, 0.45, 1);
         matches.first().map(|m| m.id.clone())
     }
 

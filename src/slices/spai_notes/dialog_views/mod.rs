@@ -1,7 +1,7 @@
-//! Dialog rendering for SPAI notes (creation and inline editing).
-
+//! Dialog rendering for SPAI notes (creation, editor, dedup overlay).
 mod creation;
 pub mod creation_parts;
+mod dedup_overlay;
 mod edit;
 
 #[cfg(test)]

@@ -1,55 +1,10 @@
-//! Integrated edit dialog behaviour for the SPAI Notes tab (`e` shortcut).
-//!
-//! Editing model: the dialog holds both fields and a single cursor expressed as
-//! a **char** index into the focused field, so diacritics and emoji edit
-//! correctly. Pure position arithmetic lives in [`super::text_cursor`], the
-//! body's row wrapping in [`super::text_layout`].
-use super::dialog_state::EditField;
-use super::note_io::write_atomic;
-use super::state::SpaiNotesState;
-use super::storage_format::format_spai_markdown;
-use super::text_cursor::{byte_of, char_len, line_bounds, move_line};
+//! Insert mode of the integrated editor: today's text-entry behaviour, plus
+//! dirty tracking. The cursor is a char index into the focused field.
+use super::super::dialog_state::EditField;
+use super::super::state::SpaiNotesState;
+use super::super::text_cursor::{byte_of, char_len, line_bounds, move_line};
 
 impl SpaiNotesState {
-    /// Opens the integrated editor pre-filled from the selected note.
-    pub fn open_edit_dialog(&mut self) {
-        let (title, body) = if let Some(item) = self.selected_item() {
-            (item.title.clone(), item.body.clone())
-        } else {
-            return;
-        };
-        self.edit_dialog.active = true;
-        self.edit_dialog.title_input = title;
-        self.edit_dialog.body_input = body;
-        self.edit_dialog.field = EditField::Title;
-        self.edit_dialog.cursor = char_len(&self.edit_dialog.title_input);
-        self.edit_dialog.body_scroll = 0;
-        self.edit_dialog.body_follow = true;
-    }
-
-    pub fn close_edit_dialog(&mut self) {
-        self.edit_dialog.active = false;
-        self.edit_dialog.title_input.clear();
-        self.edit_dialog.body_input.clear();
-        self.edit_dialog.field = EditField::Title;
-        self.edit_dialog.cursor = 0;
-        self.edit_dialog.body_scroll = 0;
-        self.edit_dialog.body_follow = true;
-    }
-
-    /// Switches Title ↔ Body and parks the cursor at the end of the new field.
-    pub fn toggle_edit_field(&mut self) {
-        self.edit_dialog.field = match self.edit_dialog.field {
-            EditField::Title => EditField::Body,
-            EditField::Body => EditField::Title,
-        };
-        self.edit_dialog.cursor = match self.edit_dialog.field {
-            EditField::Title => char_len(&self.edit_dialog.title_input),
-            EditField::Body => char_len(&self.edit_dialog.body_input),
-        };
-        self.edit_dialog.body_follow = true;
-    }
-
     fn focused_text_mut(&mut self) -> &mut String {
         match self.edit_dialog.field {
             EditField::Title => &mut self.edit_dialog.title_input,
@@ -62,6 +17,8 @@ impl SpaiNotesState {
         let buf = self.focused_text_mut();
         buf.insert(byte_of(buf, cursor), c);
         self.edit_dialog.cursor = cursor + 1;
+        self.edit_dialog.dirty = true;
+        self.edit_dialog.confirm_discard = false;
         self.edit_dialog.body_follow = true;
     }
 
@@ -75,6 +32,8 @@ impl SpaiNotesState {
         let end = byte_of(buf, cursor);
         buf.replace_range(start..end, "");
         self.edit_dialog.cursor = cursor - 1;
+        self.edit_dialog.dirty = true;
+        self.edit_dialog.confirm_discard = false;
         self.edit_dialog.body_follow = true;
     }
 
@@ -88,6 +47,8 @@ impl SpaiNotesState {
         let start = byte_of(buf, cursor);
         let end = byte_of(buf, cursor + 1);
         buf.replace_range(start..end, "");
+        self.edit_dialog.dirty = true;
+        self.edit_dialog.confirm_discard = false;
         self.edit_dialog.body_follow = true;
     }
 
@@ -154,46 +115,4 @@ impl SpaiNotesState {
             self.edit_dialog.body_scroll.saturating_sub(amount)
         };
     }
-
-    /// Writes title + body back to the note markdown file.
-    pub fn submit_edit_dialog(&mut self) -> Result<(), String> {
-        let new_title = self.edit_dialog.title_input.trim().to_string();
-        if new_title.is_empty() {
-            return Err("Název nesmí být prázdný".to_string());
-        }
-        let new_body = self.edit_dialog.body_input.clone();
-
-        let proj = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
-
-        let item = proj
-            .items
-            .get(self.selected_item_idx)
-            .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
-
-        // Write first (crash-safe, atomically), then update the in-memory
-        // state, so a failed write never leaves the UI describing a disk
-        // state that does not exist.
-        let mut updated = item.clone();
-        updated.title = new_title;
-        updated.body = new_body;
-        let updated_content = format_spai_markdown(&updated);
-        write_atomic(&updated.file_path, &updated_content)?;
-
-        let item = proj
-            .items
-            .get_mut(self.selected_item_idx)
-            .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
-        item.title = updated.title;
-        item.body = updated.body;
-        self.status_message = Some("Poznámka uložena".to_string());
-        self.close_edit_dialog();
-
-        Ok(())
-    }
 }
-
-#[cfg(test)]
-mod tests;

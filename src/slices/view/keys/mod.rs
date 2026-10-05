@@ -1,5 +1,7 @@
 //! Keyboard dispatch for the sidebar event loop.
+pub mod creation;
 pub mod dialogs;
+pub mod edit;
 
 use self::dialogs::{handle_notes_dialogs, handle_settings_dialogs};
 use super::external::open_external_editor;

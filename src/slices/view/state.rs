@@ -238,12 +238,8 @@ impl SidebarState {
         self.openrouter_credits = refresh_openrouter(pane_cwd, force);
         self.settings.tick_animation();
 
-        let dedup_thresh = self.settings.similarity_threshold as f64 / 100.0;
-        self.spai_notes.poll_debounced_dedup(
-            &self.settings.api_key,
-            &self.settings.embedding_model,
-            dedup_thresh,
-        );
+        // Dedup runs only on Ctrl+D; every tick just drains a finished job.
+        self.spai_notes.poll_dedup_receiver();
 
         self.spai_notes.refresh(pane_cwd, force);
 

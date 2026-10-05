@@ -1,9 +1,9 @@
-//! Dialog models for SPAI notes (creation with autocomplete and inline editing).
+//! Dialog models for SPAI notes (creation with autocomplete, inline editor
+//! with Normal/Insert modes, and the on-demand dedup panel).
 use super::autocomplete::ProjectSuggestion;
 use super::note::SpaiType;
 use super::similarity::SimilarNoteMatch;
 use std::sync::mpsc::Receiver;
-use std::time::Instant;
 
 pub struct NoteCreationDialog {
     pub active: bool,
@@ -14,13 +14,6 @@ pub struct NoteCreationDialog {
     pub autocomplete_active: bool,
     pub autocomplete_selected: usize,
     pub suggestions: Vec<ProjectSuggestion>,
-    pub last_keystroke: Option<Instant>,
-    pub debounced_query: String,
-    pub debounced_matches: Vec<SimilarNoteMatch>,
-    pub candidate_vector: Option<Vec<f64>>,
-    pub is_evaluating_vector: bool,
-    pub vector_evaluated: bool,
-    pub dedup_receiver: Option<Receiver<Vec<SimilarNoteMatch>>>,
 }
 
 impl Default for NoteCreationDialog {
@@ -34,13 +27,6 @@ impl Default for NoteCreationDialog {
             autocomplete_active: false,
             autocomplete_selected: 0,
             suggestions: Vec::new(),
-            last_keystroke: None,
-            debounced_query: String::new(),
-            debounced_matches: Vec::new(),
-            candidate_vector: None,
-            is_evaluating_vector: false,
-            vector_evaluated: false,
-            dedup_receiver: None,
         }
     }
 }
@@ -52,8 +38,6 @@ impl std::fmt::Debug for NoteCreationDialog {
             .field("title_input", &self.title_input)
             .field("cursor", &self.cursor)
             .field("selected_kind", &self.selected_kind)
-            .field("debounced_matches", &self.debounced_matches)
-            .field("is_evaluating_vector", &self.is_evaluating_vector)
             .finish()
     }
 }
@@ -69,13 +53,6 @@ impl Clone for NoteCreationDialog {
             autocomplete_active: self.autocomplete_active,
             autocomplete_selected: self.autocomplete_selected,
             suggestions: self.suggestions.clone(),
-            last_keystroke: self.last_keystroke,
-            debounced_query: self.debounced_query.clone(),
-            debounced_matches: self.debounced_matches.clone(),
-            candidate_vector: self.candidate_vector.clone(),
-            is_evaluating_vector: self.is_evaluating_vector,
-            vector_evaluated: self.vector_evaluated,
-            dedup_receiver: None,
         }
     }
 }
@@ -87,12 +64,27 @@ pub enum EditField {
     Body,
 }
 
+/// Vim-like editor modes. The integrated editor opens in **Normal** (read),
+/// `i`/`a`/`A` switch to Insert, `Esc` returns to Normal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EditMode {
+    #[default]
+    Normal,
+    Insert,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct NoteEditDialog {
     pub active: bool,
     pub title_input: String,
     pub body_input: String,
     pub field: EditField,
+    pub mode: EditMode,
+    /// `true` once any text was changed since the dialog opened (or last save).
+    pub dirty: bool,
+    /// Discard confirmation for closing with unsaved changes: first Esc arms,
+    /// second Esc discards, any other key disarms.
+    pub confirm_discard: bool,
     /// Cursor position as a char index inside the focused field.
     pub cursor: usize,
     /// Manual body viewport offset, used while `body_follow` is `false`.
@@ -101,4 +93,36 @@ pub struct NoteEditDialog {
     /// Flipped off by manual scrolling (PgUp/PgDn) and back on by any edit or
     /// cursor movement.
     pub body_follow: bool,
+}
+
+/// On-demand duplicate check (`Ctrl+D`), shared by the creation dialog and the
+/// integrated editor. Nothing runs by itself: the panel only polls a finished
+/// background computation; no timer, no network without an explicit shortcut.
+#[derive(Default)]
+pub struct DedupPanel {
+    pub visible: bool,
+    pub is_evaluating: bool,
+    pub matches: Vec<SimilarNoteMatch>,
+    pub receiver: Option<Receiver<Vec<SimilarNoteMatch>>>,
+}
+
+impl Clone for DedupPanel {
+    fn clone(&self) -> Self {
+        Self {
+            visible: self.visible,
+            is_evaluating: self.is_evaluating,
+            matches: self.matches.clone(),
+            receiver: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for DedupPanel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DedupPanel")
+            .field("visible", &self.visible)
+            .field("is_evaluating", &self.is_evaluating)
+            .field("matches", &self.matches.len())
+            .finish()
+    }
 }

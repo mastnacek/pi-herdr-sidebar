@@ -25,23 +25,24 @@ fn type_selection_cycles_forward_and_backward() {
 }
 
 #[test]
-fn apply_selected_type_inserts_and_replaces_prefix() {
+fn apply_selected_type_inserts_prefix_only_into_empty_input() {
     let mut state = SpaiNotesState::new(None);
     state.open_creation_dialog();
 
-    // Select idea (?) which is index 5
+    // Select idea (?) which is index 5, then Tab inserts the prefix.
     state.creation_dialog.type_selection = 5;
     state.apply_selected_type();
     assert_eq!(state.creation_dialog.title_input, "? ");
 
-    // Type rest of text
+    // Plan §1: Tab/↑↓ only apply while the input is empty — once text exists,
+    // the type is detected from the typed prefix and apply is a no-op.
     state.creation_dialog.title_input.push_str("novy napad");
-    assert_eq!(state.creation_dialog.title_input, "? novy napad");
-
-    // Switch to note (-) which is index 6 and apply
     state.creation_dialog.type_selection = 6;
     state.apply_selected_type();
-    assert_eq!(state.creation_dialog.title_input, "- novy napad");
+    assert_eq!(
+        state.creation_dialog.title_input, "? novy napad",
+        "non-empty input must not be rewritten by apply_selected_type"
+    );
 }
 
 #[test]
@@ -113,14 +114,31 @@ fn submit_still_strips_real_prefixes() {
 }
 
 #[test]
-fn apply_selected_type_keeps_plain_words_intact() {
+fn apply_selected_type_never_touches_plain_words() {
     let mut state = SpaiNotesState::new(None);
     state.open_creation_dialog();
-    // Direct assignment: "xylofon" is not a prefix, selection stays Todo.
+    // Direct assignment: "xylofon" is not a prefix; apply on a non-empty
+    // input is a no-op (plan §1), so no letter may be trimmed.
     state.creation_dialog.title_input = "xylofon".to_string();
     state.creation_dialog.cursor = 7;
     state.creation_dialog.type_selection = 0;
     state.apply_selected_type();
-    assert_eq!(state.creation_dialog.title_input, ". xylofon", "first letter preserved");
+    assert_eq!(state.creation_dialog.title_input, "xylofon", "input untouched");
+}
+
+#[test]
+fn arrow_type_cycling_is_gated_on_empty_input() {
+    let mut state = SpaiNotesState::new(None);
+    state.open_creation_dialog();
+    state.creation_dialog.title_input = ". hello".to_string();
+
+    let before = state.creation_dialog.type_selection;
+    state.next_type();
+    state.prev_type();
+    assert_eq!(state.creation_dialog.type_selection, before, "↑↓ ignored while typing");
+
+    state.creation_dialog.title_input.clear();
+    state.next_type();
+    assert_eq!(state.creation_dialog.type_selection, (before + 1) % SPAI_TYPE_OPTIONS.len());
 }
 
