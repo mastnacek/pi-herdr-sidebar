@@ -125,6 +125,7 @@ fn item_list_renders_short_date_instead_of_spai_id() {
             project_path: None,
             priority: None,
             deadline: None,
+            ..Default::default()
         },
         body: ". Test Note Title\n".to_string(),
         file_path: PathBuf::from("2026-09-24-SPAI-042-test.md"),

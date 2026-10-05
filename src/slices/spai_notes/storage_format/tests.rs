@@ -1,4 +1,5 @@
 use super::*;
+use crate::slices::spai_notes::note::SpaiType;
 use std::path::PathBuf;
 
 fn note(path: &str) -> PathBuf {

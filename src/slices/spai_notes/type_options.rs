@@ -158,6 +158,58 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         status: SpaiStatus::Fuckup,
         color: Color::Rgb(214, 69, 69), // Crimson
     },
+    SpaiTypeOption {
+        symbol: "~ ",
+        display_sym: "~",
+        name: "Spánek (sleep)",
+        desc: "Záznam spánku: počet hodin a/nebo kvalita 1–5",
+        examples: &[
+            "~ @osobni 7.5h 5 výborně odpočatý",
+            "~ 6h 3 průměrný spánek",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Sleep,
+        color: Color::Rgb(78, 205, 196), // Teal
+    },
+    SpaiTypeOption {
+        symbol: "$ ",
+        display_sym: "$",
+        name: "Nákupní seznam (shopping)",
+        desc: "Položka nákupního seznamu k pořízení",
+        examples: &[
+            "$ @domov mléko @Lidl",
+            "$ @kancelar nový HDMI kabel",
+        ],
+        kind: SpaiType::Todo,
+        status: SpaiStatus::Shopping,
+        color: Color::Rgb(255, 230, 109), // Yellow
+    },
+    SpaiTypeOption {
+        symbol: "♥ ",
+        display_sym: "♥",
+        name: "Zdraví (health)",
+        desc: "Zdravotní symptom se stupnicí 1 (akutní) až 5 (v pořádku)",
+        examples: &[
+            "♥ @zdravi hlava 2 bolí od rána",
+            "h zada 4 znatelně lepší po cvičení",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Health,
+        color: Color::Rgb(255, 107, 107), // Red
+    },
+    SpaiTypeOption {
+        symbol: "# ",
+        display_sym: "#",
+        name: "Metrika (tally)",
+        desc: "Číselná metrika nebo počítadlo návyků a hodnot",
+        examples: &[
+            "# @produktivita káva 3",
+            "# @kondice kroky 8500",
+        ],
+        kind: SpaiType::Note,
+        status: SpaiStatus::Tally,
+        color: Color::Rgb(0, 255, 255), // Cyan
+    },
 ];
 
 pub fn find_type_option_index(input: &str) -> Option<usize> {
@@ -183,6 +235,11 @@ pub fn find_type_option_index(input: &str) -> Option<usize> {
         }
     }
 
+    // Health shorthand 'h' / 'h '
+    if rest == "h" || rest.starts_with("h ") {
+        return Some(13);
+    }
+
     for (idx, opt) in SPAI_TYPE_OPTIONS.iter().enumerate() {
         if rest.starts_with(opt.symbol)
             || rest == opt.display_sym
@@ -201,13 +258,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn matches_known_spai_type_options() {
+    fn matches_all_spai_type_options() {
         assert_eq!(find_type_option_index(". test"), Some(0));
         assert_eq!(find_type_option_index("/ test"), Some(1));
         assert_eq!(find_type_option_index("/. test"), Some(2));
-        assert_eq!(find_type_option_index("/· test"), Some(2));
         assert_eq!(find_type_option_index("x test"), Some(3));
-        assert_eq!(find_type_option_index("X test"), Some(3));
         assert_eq!(find_type_option_index("z test"), Some(4));
         assert_eq!(find_type_option_index("? test"), Some(5));
         assert_eq!(find_type_option_index("- test"), Some(6));
@@ -215,6 +270,11 @@ mod tests {
         assert_eq!(find_type_option_index("= test"), Some(8));
         assert_eq!(find_type_option_index("* test"), Some(9));
         assert_eq!(find_type_option_index("% test"), Some(10));
+        assert_eq!(find_type_option_index("~ test"), Some(11));
+        assert_eq!(find_type_option_index("$ test"), Some(12));
+        assert_eq!(find_type_option_index("♥ test"), Some(13));
+        assert_eq!(find_type_option_index("h test"), Some(13));
+        assert_eq!(find_type_option_index("# test"), Some(14));
         assert_eq!(find_type_option_index("plain text"), None);
     }
 
@@ -229,7 +289,9 @@ mod tests {
         assert_eq!(find_type_option_index("!= test"), Some(8));
         assert_eq!(find_type_option_index("!* test"), Some(9));
         assert_eq!(find_type_option_index("!% test"), Some(10));
-        assert_eq!(find_type_option_index("! . test"), Some(0));
-        assert_eq!(find_type_option_index("! - test"), Some(6));
+        assert_eq!(find_type_option_index("!~ test"), Some(11));
+        assert_eq!(find_type_option_index("!$ test"), Some(12));
+        assert_eq!(find_type_option_index("!♥ test"), Some(13));
+        assert_eq!(find_type_option_index("!# test"), Some(14));
     }
 }

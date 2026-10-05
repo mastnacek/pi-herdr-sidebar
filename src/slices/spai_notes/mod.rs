@@ -6,6 +6,7 @@ pub mod discovery;
 pub mod external_editor;
 pub mod input_highlighter;
 pub mod note;
+pub mod similarity;
 pub mod state;
 pub mod state_creation;
 pub mod state_edit;

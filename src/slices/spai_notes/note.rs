@@ -41,6 +41,10 @@ pub enum SpaiStatus {
     Fuckup,
     Skutek,
     Mood,
+    Sleep,
+    Shopping,
+    Health,
+    Tally,
 }
 
 impl SpaiStatus {
@@ -58,6 +62,10 @@ impl SpaiStatus {
             SpaiStatus::Fuckup => "fuckup",
             SpaiStatus::Skutek => "skutek",
             SpaiStatus::Mood => "mood",
+            SpaiStatus::Sleep => "sleep",
+            SpaiStatus::Shopping => "shopping",
+            SpaiStatus::Health => "health",
+            SpaiStatus::Tally => "tally",
         }
     }
 
@@ -74,6 +82,10 @@ impl SpaiStatus {
             "fuckup" => SpaiStatus::Fuckup,
             "skutek" => SpaiStatus::Skutek,
             "mood" => SpaiStatus::Mood,
+            "sleep" => SpaiStatus::Sleep,
+            "shopping" => SpaiStatus::Shopping,
+            "health" => SpaiStatus::Health,
+            "tally" => SpaiStatus::Tally,
             _ => SpaiStatus::Todo,
         }
     }
@@ -91,7 +103,11 @@ impl SpaiStatus {
             | SpaiStatus::Win
             | SpaiStatus::Fuckup
             | SpaiStatus::Skutek
-            | SpaiStatus::Mood => SpaiStatus::Todo,
+            | SpaiStatus::Mood
+            | SpaiStatus::Sleep
+            | SpaiStatus::Shopping
+            | SpaiStatus::Health
+            | SpaiStatus::Tally => SpaiStatus::Todo,
         }
     }
 
@@ -109,6 +125,10 @@ impl SpaiStatus {
             SpaiStatus::Fuckup => "%",
             SpaiStatus::Skutek => "+",
             SpaiStatus::Mood => "=",
+            SpaiStatus::Sleep => "~",
+            SpaiStatus::Shopping => "$",
+            SpaiStatus::Health => "♥",
+            SpaiStatus::Tally => "#",
         }
     }
 
@@ -126,12 +146,24 @@ impl SpaiStatus {
             SpaiStatus::Fuckup => "[%]",
             SpaiStatus::Skutek => "[+]",
             SpaiStatus::Mood => "[=]",
+            SpaiStatus::Sleep => "[~]",
+            SpaiStatus::Shopping => "[$]",
+            SpaiStatus::Health => "[♥]",
+            SpaiStatus::Tally => "[#]",
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SpaiFacets {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub area: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub urgency: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub who: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

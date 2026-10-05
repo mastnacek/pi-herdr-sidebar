@@ -114,6 +114,8 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         .scroll((scroll, 0));
     frame.render_widget(type_para, top_cols[0]);
 
+    let raw = &state.creation_dialog.title_input;
+
     // ── Right column: Nápověda & kompletní syntaxe ───────────────────
     let hint_block = Block::bordered()
         .title(Span::styled(
@@ -123,7 +125,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(sel_opt.color));
 
-    let hint_lines = build_hint_lines(sel_opt);
+    let hint_lines = build_hint_lines(sel_opt, raw, state.current_items());
     let hint_para = Paragraph::new(hint_lines).block(hint_block);
     frame.render_widget(hint_para, top_cols[1]);
 
@@ -137,7 +139,6 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
         .style(Style::default().bg(theme::FIELD_BG_ACTIVE))
         .border_style(Style::default().fg(Color::Yellow));
 
-    let raw = &state.creation_dialog.title_input;
     let mut input_spans = vec![Span::styled(
         "  > ",
         Style::default().fg(Color::Yellow).bold(),

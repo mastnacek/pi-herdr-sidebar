@@ -1,23 +1,63 @@
 //! Sub-components and lines builders for SPAI Smart Input creation dialog.
 use crate::slices::spai_notes::autocomplete::ProjectSuggestion;
+use crate::slices::spai_notes::note::SpaiNoteItem;
+use crate::slices::spai_notes::similarity::find_similar_notes;
 use crate::slices::spai_notes::type_options::SpaiTypeOption;
 use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
 };
 
-pub fn build_hint_lines(sel_opt: &SpaiTypeOption) -> Vec<Line<'static>> {
+pub fn build_hint_lines(
+    sel_opt: &SpaiTypeOption,
+    raw_input: &str,
+    existing_items: &[SpaiNoteItem],
+) -> Vec<Line<'static>> {
     let mut lines = vec![
         Line::from(vec![Span::styled(
             format!(" {}", sel_opt.desc),
             Style::default().fg(Color::Rgb(220, 220, 220)),
         )]),
         Line::raw(""),
-        Line::from(vec![Span::styled(
-            " ▌ Příklady zápisu:",
-            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
-        )]),
     ];
+
+    // Live Semantic Deduplication / Similarity check
+    let similar = find_similar_notes(raw_input, existing_items, 0.45, 3);
+    if !similar.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            " ▌ ⚠️  Podobné existující záznamy (dedup):",
+            Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+        )]));
+        for m in similar {
+            let pct = (m.similarity * 100.0).round() as u32;
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("   [{:>2}%] ", pct),
+                    Style::default()
+                        .fg(if pct >= 70 {
+                            Color::Rgb(255, 83, 69)
+                        } else {
+                            Color::Rgb(255, 184, 108)
+                        })
+                        .bold(),
+                ),
+                Span::styled(
+                    format!("{} ", m.symbol),
+                    Style::default().fg(Color::Yellow).bold(),
+                ),
+                Span::styled(
+                    format!("{}: {}", m.id, m.title),
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+        }
+        lines.push(Line::raw(""));
+    }
+
+    lines.push(Line::from(vec![Span::styled(
+        " ▌ Příklady zápisu:",
+        Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
+    )]));
 
     for ex in sel_opt.examples {
         lines.push(Line::from(vec![
