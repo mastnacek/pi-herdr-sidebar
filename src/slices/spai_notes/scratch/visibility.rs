@@ -26,12 +26,17 @@ impl ScratchState {
     }
 
     /// Is the record containing `line_idx` hidden by the active filters?
+    /// Record-level hiding: the GROUP (marked head + continuations) matches
+    /// as a whole, so its verdict applies to every line of it. This is what
+    /// keeps continuation lines glued to a matched record instead of being
+    /// hidden one by one (which visually collapsed records into one row).
     pub fn record_hidden(&self, line_idx: usize) -> bool {
         let default_q = FilterQuery::default();
         let q = self.filter.as_ref().unwrap_or(&default_q);
+        let (start, _) = super::line_model::record_span(&self.lines, line_idx);
         !super::filter::matches(
             &self.lines,
-            line_idx,
+            start,
             q,
             self.status_filter,
             self.semantic_allowed.as_ref(),

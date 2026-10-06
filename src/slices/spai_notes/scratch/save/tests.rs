@@ -405,3 +405,35 @@ fn semantic_allow_set_survives_buffer_edits_no_shift() {
     );
     fs::remove_dir_all(&a).ok();
 }
+
+#[test]
+fn semantic_keep_continuation_lines_with_their_record() {
+    let a = temp_project("semcont");
+    let mut state = state_on(&a);
+    state.create_quick_note_with_status(
+        "dlouhy",
+        super::super::super::note::SpaiType::Todo,
+        super::super::super::note::SpaiStatus::Todo,
+        ". dlouhy zaznam
+pokračovací řádek
+",
+    )
+    .unwrap();
+    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
+    // Semantic result allows only the "dlouhy" record.
+    let file = state.projects[state.selected_project_idx].items[0].file_path.clone();
+    let mut allowed = std::collections::HashSet::new();
+    allowed.insert(file);
+    state.scratch.semantic_allowed = Some(allowed);
+    state.scratch.cursor_line = 0;
+
+    // Buffer layout after scope load: [". SPAI-001 dlouhy", "pokračovací…", ""].
+    // The continuation line must NOT be judged as its own record — only the
+    // group verdict counts.
+    assert!(!state.scratch.record_hidden(0), "head visible");
+    assert!(
+        !state.scratch.record_hidden(1),
+        "continuation stays with its record"
+    );
+    fs::remove_dir_all(&a).ok();
+}

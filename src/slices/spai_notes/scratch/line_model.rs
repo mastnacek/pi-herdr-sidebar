@@ -102,6 +102,11 @@ pub fn record_starts(lines: &[ScratchLine]) -> Vec<usize> {
     starts
 }
 
+/// Does the record containing `idx` match? Record-level check: the group
+/// (start..end) matches as a whole — a continuation line inherits its
+/// record's verdict instead of being judged as its own "record".
+use super::filter::{FilterQuery, StatusFilter};
+
 /// The record group containing `idx`: from its start to the next record start.
 pub fn record_span(lines: &[ScratchLine], idx: usize) -> (usize, usize) {
     let starts = record_starts(lines);
