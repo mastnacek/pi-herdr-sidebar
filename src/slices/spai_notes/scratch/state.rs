@@ -124,6 +124,8 @@ pub struct ScratchState {
     pub mention: Option<MentionPopup>,
     /// Fullscreen `?` help overlay visible.
     pub help_visible: bool,
+    /// Pending record delete (Ctrl+Del twice): the line index being deleted.
+    pub confirm_delete: Option<usize>,
     /// Plugin state dir (draft storage); filled on open from the context.
     pub state_dir: Option<PathBuf>,
 }
@@ -145,6 +147,7 @@ impl ScratchState {
         self.status_filter = StatusFilter::All;
         self.mention = None;
         self.help_visible = false;
+        self.confirm_delete = None;
     }
 
     pub fn close(&mut self) {
@@ -155,6 +158,7 @@ impl ScratchState {
         self.confirm_close = false;
         self.mention = None;
         self.help_visible = false;
+        self.confirm_delete = None;
     }
 
     pub fn reset_for_scope(&mut self) {

@@ -31,17 +31,28 @@ pub enum LineOrigin {
         project: String,
         saved_text: String,
     },
-    /// A record loaded from a project (Project/All scope). These are summaries
-    /// (`. SPAI-014 Title`), not the full record text — real editing goes
-    /// through the Notes editor (Enter/o), so Ctrl+S skips them.
+    /// A record loaded from a project (Project/All scope): the summary line
+    /// (`. SPAI-014 Title`) plus any typed continuations. Fully editable;
+    /// a changed record updates its file on Ctrl+S (`loaded_text` is the
+    /// text the line had when loaded — the change detector).
     FromFile {
         path: PathBuf,
         id: String,
         project: String,
+        loaded_text: String,
     },
 }
 
 impl LineOrigin {
+    /// Reference to the file-backed origins (Saved/FromFile), for label
+    /// rendering and file actions.
+    pub fn file_origin(&self) -> Option<&LineOrigin> {
+        match self {
+            LineOrigin::New => None,
+            o @ LineOrigin::Saved { .. } | o @ LineOrigin::FromFile { .. } => Some(o),
+        }
+    }
+
     pub fn file_path(&self) -> Option<&PathBuf> {
         match self {
             LineOrigin::New => None,

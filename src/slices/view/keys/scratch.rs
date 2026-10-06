@@ -6,7 +6,8 @@
 //! every key while open.
 //!
 //! - `Ctrl+S` save · `Ctrl+D` dedup · `Ctrl+O` open record · `Ctrl+X` status
-//! - `Ctrl+Z` undo batch · `Ctrl+T` scope · `Ctrl+F` filter · `Ctrl+R` semantic
+//! - `Ctrl+Z` undo batch · `Ctrl+Del` delete record · `Ctrl+T` scope
+//! - `Ctrl+F` filter · `Ctrl+R` semantic
 //! - `Ctrl+Y` status filter · `Ctrl+L` clear filters · `F1` help
 //! - `Esc` close (twice when unsaved; the draft is kept regardless)
 use super::super::state::SidebarState;
@@ -158,6 +159,13 @@ fn handle_buffer_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
             }
             true
         }
+        KeyCode::Delete if ctrl => {
+            // Two-step confirm: first press arms, second on the same line
+            // deletes the file + lines.
+            let idx = scratch.cursor_line;
+            state.spai_notes.scratch_delete_request(idx);
+            true
+        }
         KeyCode::Char('t') if ctrl => {
             let next = scratch.scope.next();
             state.spai_notes.switch_scratch_scope(next);
@@ -209,10 +217,12 @@ fn handle_buffer_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
         }
         KeyCode::Up => {
             scratch.cursor_up();
+            scratch.confirm_delete = None;
             true
         }
         KeyCode::Down => {
             scratch.cursor_down();
+            scratch.confirm_delete = None;
             true
         }
         KeyCode::Left => {

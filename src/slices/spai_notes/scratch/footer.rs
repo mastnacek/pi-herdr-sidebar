@@ -117,6 +117,8 @@ fn hint_line(state: &SpaiNotesState) -> Line<'static> {
         Span::styled("otevřít  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Ctrl+T] ", Style::default().fg(Color::Cyan).bold()),
         Span::styled("scope  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[Ctrl+Del] ", Style::default().fg(Color::Red).bold()),
+        Span::styled("smazat  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Ctrl+F] ", Style::default().fg(Color::Yellow).bold()),
         Span::styled("filtr  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[F1] ", Style::default().fg(Color::Cyan).bold()),

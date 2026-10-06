@@ -42,7 +42,7 @@ impl SpaiNotesState {
         for (idx, line) in self.scratch.lines.iter().enumerate() {
             let (project, path, id) = match &line.origin {
                 LineOrigin::Saved { path, id, project, .. }
-                | LineOrigin::FromFile { path, id, project } => {
+                | LineOrigin::FromFile { path, id, project, .. } => {
                     (project.clone(), path.clone(), id.clone())
                 }
                 LineOrigin::New => continue, // unsaved lines have no vector

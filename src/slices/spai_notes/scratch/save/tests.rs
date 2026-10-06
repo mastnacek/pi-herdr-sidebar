@@ -192,6 +192,42 @@ fn after_save_new_entries_can_be_added_immediately() {
 }
 
 #[test]
+fn loaded_records_edit_and_save_updates_their_file() {
+    let a = temp_project("loaded");
+    let mut state = state_on(&a);
+    state
+        .create_quick_note_with_status(
+            "puvodni",
+            super::super::super::note::SpaiType::Todo,
+            super::super::super::note::SpaiStatus::Todo,
+            ". puvodni
+",
+        )
+        .unwrap();
+    // Load it via the Project scope (FromFile summary lines).
+    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
+    let file = state.projects[state.selected_project_idx].items[0].file_path.clone();
+
+    // Edit the loaded line: change title, keep the id token.
+    state.scratch.cursor_line = 0;
+    let head = state.scratch.lines[0].text.clone(); // ". SPAI-001 puvodni"
+    let edited = head.replace("puvodni", "prejmenovano");
+    state.scratch.lines[0].text = edited.clone();
+    // Typing must work on the loaded record (bidirectional) — append at EOL.
+    state.scratch.cursor_char = state.scratch.current_line_len();
+    assert!(state.scratch.insert_char('!'));
+
+    // Ctrl+S: no new file, the existing one is updated (id stays SPAI-001).
+    let created = state.scratch_save_all();
+    assert_eq!(created, 0, "updates create no new files");
+    let content = fs::read_to_string(&file).unwrap();
+    assert!(content.contains("# SPAI-001: prejmenovano!"), "title updated: {content}");
+    // Unchanged second save is a no-op.
+    assert_eq!(state.scratch_save_all(), 0);
+    fs::remove_dir_all(&a).ok();
+}
+
+#[test]
 fn undo_batch_deletes_the_files_and_restores_lines() {
     let a = temp_project("undo");
     let mut state = state_on(&a);

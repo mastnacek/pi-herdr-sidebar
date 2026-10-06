@@ -44,6 +44,7 @@ fn status_filter_uses_the_mark() {
             path: Default::default(),
             id: "SPAI-001".into(),
             project: "herdr".into(),
+            loaded_text: "x done task".into(),
         }),
     ];
 

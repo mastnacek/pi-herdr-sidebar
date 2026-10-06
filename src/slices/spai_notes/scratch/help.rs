@@ -50,6 +50,7 @@ fn help_lines() -> Vec<Line<'static>> {
         row("Ctrl+O", "otevřít záznam pod kurzorem v editoru Notes"),
         row("Ctrl+X", "cyklovat stav záznamu (rovnou na disku)"),
         row("Ctrl+Z", "vrátit poslední Ctrl+S dávku (smaže soubory)"),
+        row("Ctrl+Del", "smazat záznam (soubor + řádky; 2× potvrzení)"),
         row("Ctrl+D", "duplicity pod aktuálním řádkem (jen na vyžádání)"),
         blank(),
         head("SCOPE A FILTRY"),

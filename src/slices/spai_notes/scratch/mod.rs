@@ -7,7 +7,8 @@
 //! - [`buffer`] — Edit-mode text operations on the buffer
 //! - [`visibility`] — filter helpers, record navigation
 //! - [`draft`] — unsaved-lines autosave in `HERDR_PLUGIN_STATE_DIR`
-//! - [`save`] — Ctrl+S pipeline + `u` (undo batch)
+//! - [`save`] — Ctrl+S pipeline + undo batch
+//! - [`delete`] — Ctrl+Del record delete (file + lines, two-step confirm)
 //! - [`dedup`] / [`dedup_popup`] — Ctrl+D engine glue and popup rendering
 //! - [`mention`] / [`mention_popup`] — `@` project autocomplete + rendering
 //! - [`filter`] — token parser, fuzzy scoring, AND-composition
@@ -21,6 +22,7 @@
 pub mod buffer;
 pub mod dedup;
 pub mod dedup_popup;
+pub mod delete;
 pub mod draft;
 pub mod filter;
 pub mod footer;

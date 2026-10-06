@@ -5,12 +5,14 @@
 //! stays in the scratchpad with an error (nothing is lost). One failing line
 //! never blocks the others. `u` in Read mode deletes the last batch.
 //!
-//! Editing is bidirectional: a Saved record whose text has changed since the
-//! save is **updated in its file** (same id, same path) instead of creating
-//! a duplicate. FromFile records (Project/All scope) are summaries — they are
-//! edited through the Notes editor (Enter/o), so Ctrl+S skips them.
+//! Editing is bidirectional: a record whose text has changed since it was
+//! written is **updated in its file** (same id, same path) instead of creating
+//! a duplicate — for Saved records and for FromFile records loaded with
+//! Ctrl+T alike. FromFile lines carry the id (`SPAI-014`), which is stripped
+//! before the rewrite so the title is never polluted.
 use super::line_model::{LineOrigin, ScratchLine};
 use super::super::note_writer;
+use super::super::spai_prefixes::strip_leading_prefix;
 use super::super::state::SpaiNotesState;
 use std::path::PathBuf;
 
@@ -21,7 +23,7 @@ impl SpaiNotesState {
     pub fn scratch_save_all(&mut self) -> usize {
         // Collect record spans first (indices shift as groups collapse).
         let mut creates: Vec<(usize, usize, String)> = Vec::new();
-        let mut updates: Vec<(usize, usize, PathBuf, String)> = Vec::new(); // + original text
+        let mut updates: Vec<(usize, usize, PathBuf)> = Vec::new();
         for &start in super::line_model::record_starts(&self.scratch.lines).iter().rev() {
             let head = &self.scratch.lines[start];
             if !super::line_model::is_marked(&head.text) {
@@ -47,10 +49,15 @@ impl SpaiNotesState {
                         .collect::<Vec<_>>()
                         .join("\n");
                     if text != original {
-                        updates.push((s, e, path.clone(), original));
+                        updates.push((s, e, path.clone()));
                     }
                 }
-                LineOrigin::FromFile { .. } => {} // summaries: edit via the editor
+                LineOrigin::FromFile { path, loaded_text, .. } => {
+                    // Continuations typed under the summary count as changes.
+                    if text != *loaded_text {
+                        updates.push((s, e, path.clone()));
+                    }
+                }
             }
         }
 
@@ -122,19 +129,51 @@ impl SpaiNotesState {
 
         // Apply the updates (reverse order; spans do not change).
         let mut updated = 0usize;
-        for (start, end, path, _original) in updates.iter().rev() {
+        for (start, _end, path) in updates.iter().rev() {
             let (s, e) = super::line_model::record_span(&self.scratch.lines, *start);
             let text = self.scratch.lines[s..e]
                 .iter()
                 .map(|l| l.text.clone())
                 .collect::<Vec<_>>()
                 .join("\n");
-            match note_writer::update_record(path, &text) {
-                Ok(()) => updated += 1,
-                Err(er) => {
-                    let _ = end;
-                    errors.push(format!("Řádek {}: {}", s + 1, er));
+            // FromFile summary lines carry the id (`. SPAI-014 Název`) — strip
+            // it so the id never lands in the title; keep the original mark
+            // prefix and any continuation lines.
+            let file_text = strip_leading_id(&text);
+            match note_writer::update_record(path, &file_text) {
+                Ok(()) => {
+                    updated += 1;
+                    // Refresh the change-detection baseline line by line.
+                    let new_lines: Vec<String> =
+                        file_text.lines().map(String::from).collect();
+                    let head_origin = self.scratch.lines[s].origin.clone();
+                    for (i, line) in self.scratch.lines[s..e].iter_mut().enumerate() {
+                        let own = line.text.clone();
+                        match &head_origin {
+                            LineOrigin::Saved { path: p, id: id2, project: pr, .. } => {
+                                line.origin = LineOrigin::Saved {
+                                    path: p.clone(),
+                                    id: id2.clone(),
+                                    project: pr.clone(),
+                                    saved_text: own,
+                                };
+                            }
+                            LineOrigin::FromFile { path: p, id: id2, project: pr, .. } => {
+                                line.origin = LineOrigin::FromFile {
+                                    path: p.clone(),
+                                    id: id2.clone(),
+                                    project: pr.clone(),
+                                    loaded_text: new_lines
+                                        .get(i)
+                                        .cloned()
+                                        .unwrap_or(own.clone()),
+                                };
+                            }
+                            LineOrigin::New => {}
+                        }
+                    }
                 }
+                Err(er) => errors.push(format!("Řádek {}: {}", s + 1, er)),
             }
         }
 
@@ -229,6 +268,47 @@ impl SpaiNotesState {
         let cwd = self.current_project_path.clone();
         self.refresh(cwd.as_deref(), true);
         Ok(undone)
+    }
+}
+
+/// Strips the `SPAI-xxx ` token that follows the mark prefix on FromFile
+/// summary lines (`. SPAI-014 Název` → `. Název`), keeping the original mark
+/// prefix and every continuation line.
+fn strip_leading_id(text: &str) -> String {
+    let (first, rest) = match text.split_once('\n') {
+        Some((f, r)) => (f, Some(r)),
+        None => (text, None),
+    };
+    let clean = strip_leading_prefix(first).unwrap_or(first);
+    let prefix_len = first.len() - clean.len(); // the mark prefix itself
+    let without_id = match clean.split_once(' ') {
+        Some((id, title)) if id.starts_with("SPAI-") => title.trim().to_string(),
+        _ => clean.trim().to_string(),
+    };
+    let mut out = String::new();
+    out.push_str(&first[..prefix_len]);
+    out.push_str(&without_id);
+    if let Some(r) = rest {
+        out.push('\n');
+        out.push_str(r);
+    }
+    out
+}
+
+#[cfg(test)]
+mod id_tests {
+    use super::*;
+
+    #[test]
+    fn strips_the_id_but_not_the_mark_prefix() {
+        assert_eq!(strip_leading_id(". SPAI-014 Opravit build"), ". Opravit build");
+        assert_eq!(strip_leading_id("x SPAI-003 hotová věc"), "x hotová věc");
+        assert_eq!(
+            strip_leading_id("? SPAI-007 nápad\npokračování"),
+            "? nápad\npokračování"
+        );
+        // No id (a Saved record edited into a plain title) stays untouched.
+        assert_eq!(strip_leading_id(". bez id"), ". bez id");
     }
 }
 

@@ -91,9 +91,10 @@ fn render_lines(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     frame.render_widget(para, area);
 }
 
-/// One buffer line: highlighted text; Saved lines get the `✓ →` label and
-/// dim+italic styling (plan §6). Done (`x`) records stay struck through via
-/// the highlighter styling of their mark.
+/// One buffer line: every line renders in normal highlighting (records stay
+/// fully workable after saving/loading); a record with a file gets a dim
+/// `✓ → project id` label on its head only. Done (`x`) records keep their
+/// struck-through styling via the highlighter's mark handling.
 fn render_line(
     line: &super::line_model::ScratchLine,
     is_cursor: bool,
@@ -109,26 +110,22 @@ fn render_line(
         line.text.clone()
     };
 
-    match &line.origin {
-        LineOrigin::New => {
-            spans.push(Span::styled("  ", Style::default()));
-            spans.extend(highlight_spai_input_spans(&text));
-        }
-        origin => {
-            let style = Style::default()
-                .fg(Color::DarkGray)
-                .add_modifier(Modifier::DIM | Modifier::ITALIC);
-            spans.push(Span::styled(text, style));
-            // The ✓ label belongs to the record head (the marked line);
-            // continuation lines of the same file stay label-free.
-            if super::line_model::is_marked(&line.text) {
-                let label = format!(
-                    "  ✓ → {} {}",
-                    origin.project().unwrap_or(""),
-                    origin.record_id().unwrap_or("")
-                );
-                spans.push(Span::styled(label, style));
-            }
+    spans.push(Span::styled("  ", Style::default()));
+    spans.extend(highlight_spai_input_spans(&text));
+
+    // The ✓ label belongs to the record head (the marked line); continuation
+    // lines of the same file stay label-free.
+    if let Some(origin) = line.origin.file_origin() {
+        if super::line_model::is_marked(&line.text) {
+            let label = format!(
+                "  ✓ → {} {}",
+                origin.project().unwrap_or(""),
+                origin.record_id().unwrap_or("")
+            );
+            spans.push(Span::styled(
+                label,
+                Style::default().fg(Color::DarkGray),
+            ));
         }
     }
 
@@ -306,6 +303,7 @@ mod previews {
                     path: PathBuf::from("D:/tmp/herdr/docs/spai/x.md"),
                     id: "SPAI-014".to_string(),
                     project: "herdr".to_string(),
+                    loaded_text: ". Fix build @herdr".to_string(),
                 },
             },
             crate::slices::spai_notes::scratch::line_model::ScratchLine {
@@ -314,6 +312,7 @@ mod previews {
                     path: PathBuf::from("D:/tmp/herdr/docs/spai/y.md"),
                     id: "SPAI-015".to_string(),
                     project: "herdr".to_string(),
+                    loaded_text: "? Jiný nápad".to_string(),
                 },
             },
             crate::slices::spai_notes::scratch::line_model::ScratchLine::empty(),
