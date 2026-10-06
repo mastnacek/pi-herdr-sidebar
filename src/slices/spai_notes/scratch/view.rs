@@ -16,20 +16,13 @@ pub fn render_scratch(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     theme::paint_backdrop(frame, area);
     let scratch = &state.scratch;
 
-    let read_mode = scratch.mode == super::state::ScratchMode::Read;
     let title = format!(
-        " 📝 Scratchpad — {} · {}{} ",
-        if read_mode { "READ" } else { "EDIT" },
+        " 📝 Scratchpad — {}{} ",
         scratch.scope.label(),
         if scratch.dirty { " ●" } else { "" },
     );
-    // Distinct mode colours: Edit = yellow (writing, like the `. ` marks),
-    // Read = cyan (browsing).
-    let mode_color = if read_mode {
-        Color::Cyan
-    } else {
-        Color::Rgb(255, 215, 0)
-    };
+    // Yellow frame: the writing colour, matching the `. ` mark highlighting.
+    let frame_color = Color::Rgb(255, 215, 0);
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -37,9 +30,9 @@ pub fn render_scratch(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         .split(area);
 
     let block = Block::bordered()
-        .title(Span::styled(title, Style::default().fg(mode_color).bold()))
+        .title(Span::styled(title, Style::default().fg(frame_color).bold()))
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(mode_color));
+        .border_style(Style::default().fg(frame_color));
     let inner = block.inner(rows[0]);
     frame.render_widget(block, rows[0]);
 
@@ -89,7 +82,7 @@ fn render_lines(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::from(Span::styled(
-            "  Ctrl+S uloží soubory · Ctrl+D duplicity · Esc = Read režim",
+            "  Ctrl+S uloží soubory · Ctrl+D duplicity · F1 nápověda",
             Style::default().fg(Color::DarkGray),
         )));
     }
@@ -306,7 +299,6 @@ mod previews {
     fn scratch_preview_read_filtered() {
         let mut state = state_with_projects();
         state.open_scratch(None);
-        state.scratch.mode = crate::slices::spai_notes::scratch::state::ScratchMode::Read;
         state.scratch.lines = vec![
             crate::slices::spai_notes::scratch::line_model::ScratchLine {
                 text: ". Fix build @herdr".to_string(),

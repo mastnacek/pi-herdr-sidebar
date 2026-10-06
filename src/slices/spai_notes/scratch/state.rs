@@ -15,13 +15,6 @@ use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ScratchMode {
-    #[default]
-    Edit,
-    Read,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ScratchScope {
     /// Only new lines (plus a restored draft).
     #[default]
@@ -104,7 +97,6 @@ impl std::fmt::Debug for ScratchDedup {
 #[derive(Debug, Default, Clone)]
 pub struct ScratchState {
     pub open: bool,
-    pub mode: ScratchMode,
     pub scope: ScratchScope,
     pub lines: Vec<ScratchLine>,
     /// Cursor as (line index, char index within that line).
@@ -139,7 +131,6 @@ pub struct ScratchState {
 impl ScratchState {
     pub fn open(&mut self, state_dir: Option<PathBuf>) {
         self.open = true;
-        self.mode = ScratchMode::Edit;
         self.state_dir = state_dir;
         self.dirty = false;
         self.confirm_close = false;

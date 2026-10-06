@@ -14,7 +14,7 @@ use ratatui::{
 };
 
 pub fn render_mention_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNotesState) {
-    if state.scratch.mention.is_none() || state.scratch.mode != super::state::ScratchMode::Edit {
+    if state.scratch.mention.is_none() {
         return;
     }
     let matches = mention_matches(&state.scratch, &state.projects);

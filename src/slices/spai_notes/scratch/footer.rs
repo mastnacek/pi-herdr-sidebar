@@ -1,7 +1,7 @@
 //! Scratchpad footer (plan §1, §2): mode, keys, current-line type hint,
 //! live `→ target project` routing preview, save summary, Ctrl+S warning.
 //! In Read mode: filters (`/` `~` `f`) and scope (Tab/Shift+Tab).
-use super::state::{ScratchInput, ScratchMode, ScratchScope};
+use super::state::{ScratchInput, ScratchScope};
 use super::super::state::SpaiNotesState;
 use ratatui::{
     layout::Rect,
@@ -44,31 +44,16 @@ pub fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                 ),
             ]));
         }
-        None => {
-            if scratch.mode == ScratchMode::Edit {
-                lines.push(edit_hint_line(state));
-            } else {
-                lines.push(read_hint_line(state));
-            }
-        }
+        None => lines.push(hint_line(state)),
     }
 
     // Second row: mode + summary/warning.
     let mut second = Vec::new();
     second.push(Span::styled(
-        format!(" -- {} -- ", if scratch.mode == ScratchMode::Edit { "EDIT" } else { "READ" }),
-        Style::default()
-            .fg(if scratch.mode == ScratchMode::Edit {
-                Color::Green
-            } else {
-                Color::Cyan
-            })
-            .bold(),
-    ));
-    second.push(Span::styled(
         format!(" {} ", scratch.scope.label()),
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(Color::Rgb(255, 215, 0)).bold(),
     ));
+
     if let Some(f) = &scratch.filter {
         let mut tokens = String::new();
         if let Some(t) = &f.text {
@@ -115,60 +100,28 @@ pub fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-/// Edit mode hint: type of the current line only + live routing preview.
-fn edit_hint_line(state: &SpaiNotesState) -> Line<'static> {
+/// The single hint line (one mode — typing always works).
+fn hint_line(state: &SpaiNotesState) -> Line<'static> {
     let (type_hint, target) = state.scratch_footer_hint();
     Line::from(vec![
         Span::styled(
             format!(" {} ", type_hint),
             Style::default().fg(Color::White).bold(),
         ),
-        Span::styled(
-            format!("{}  ", target),
-            Style::default().fg(Color::Cyan),
-        ),
+        Span::styled(format!("{}  ", target), Style::default().fg(Color::Cyan)),
         Span::styled("[Ctrl+S] ", Style::default().fg(Color::Green).bold()),
         Span::styled("uložit  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Ctrl+D] ", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
         Span::styled("duplicity  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[@] ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("projekt  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Esc] ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("read  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[?] ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("[Ctrl+O] ", Style::default().fg(Color::Green).bold()),
+        Span::styled("otevřít  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[Ctrl+T] ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("scope  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[Ctrl+F] ", Style::default().fg(Color::Yellow).bold()),
+        Span::styled("filtr  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[F1] ", Style::default().fg(Color::Cyan).bold()),
         Span::styled("nápověda", Style::default().fg(Color::DarkGray)),
     ])
-}
-
-fn read_hint_line(state: &SpaiNotesState) -> Line<'static> {
-    let mut spans = vec![
-        Span::styled("[↑/↓/j/k] ", Style::default().fg(Color::Yellow).bold()),
-        Span::styled("záznam  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Tab] ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("scope  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Enter/o] ", Style::default().fg(Color::Green).bold()),
-        Span::styled("otevřít  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[x/s] ", Style::default().fg(Color::Green).bold()),
-        Span::styled("stav  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[/] ", Style::default().fg(Color::Yellow).bold()),
-        Span::styled("filtr  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[~] ", Style::default().fg(Color::Magenta).bold()),
-        Span::styled("sémantika  ", Style::default().fg(Color::DarkGray)),
-    ];
-    if !state.scratch.last_batch.is_empty() {
-        spans.push(Span::styled("[u] ", Style::default().fg(Color::Red).bold()));
-        spans.push(Span::styled(
-            format!("vrátit dávku ({})  ", state.scratch.last_batch.len()),
-            Style::default().fg(Color::DarkGray),
-        ));
-    }
-    spans.push(Span::styled("[i] ", Style::default().fg(Color::Cyan).bold()));
-    spans.push(Span::styled("edit  ", Style::default().fg(Color::DarkGray)));
-    spans.push(Span::styled("[q] ", Style::default().fg(Color::Cyan).bold()));
-    spans.push(Span::styled("zavřít  ", Style::default().fg(Color::DarkGray)));
-    spans.push(Span::styled("[?] ", Style::default().fg(Color::Cyan).bold()));
-    spans.push(Span::styled("nápověda", Style::default().fg(Color::DarkGray)));
-    Line::from(spans)
 }
 
 /// Scope list helper for the footer (New → Project → All).

@@ -1,11 +1,17 @@
-//! Scratchpad key dispatch (docs/scratchpad_mode_plan.md §1–§5, §7).
+//! Scratchpad key dispatch — **one mode, one keymap**.
 //!
-//! Opened by the global `Ctrl+N`; consumes every key while open. Mode
-//! branches: Edit (typing), Read (navigation/filters), the two footer input
-//! modes (`/` fuzzy, `~` semantic — in [`super::scratch_input`]) and the
-//! dedup popup.
-use super::super::state::{SidebarState, Tab};
-use crate::slices::spai_notes::scratch::state::{ScratchInput, ScratchMode, ScratchScope};
+//! The Scratchpad is a single-surface editor: everything is typeable
+//! (bidirectional saving) and every extra action lives behind a Ctrl combo,
+//! so plain letters always type. Opened by the global `Ctrl+N`; consumes
+//! every key while open.
+//!
+//! - `Ctrl+S` save · `Ctrl+D` dedup · `Ctrl+O` open record · `Ctrl+X` status
+//! - `Ctrl+Z` undo batch · `Ctrl+T` scope · `Ctrl+F` filter · `Ctrl+R` semantic
+//! - `Ctrl+Y` status filter · `Ctrl+L` clear filters · `F1` help
+//! - `Esc` close (twice when unsaved; the draft is kept regardless)
+use super::super::state::SidebarState;
+use crate::slices::spai_notes::scratch::filter::StatusFilter;
+use crate::slices::spai_notes::scratch::state::{ScratchInput, ScratchScope};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Opens the Scratchpad (Ctrl+N), closing any dialog that owns the keys.
@@ -22,9 +28,8 @@ pub fn handle_scratch_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
     if !state.spai_notes.scratch.open {
         return false;
     }
-    let _ = Tab::Notes; // kept imported for the dialog handlers upstream
 
-    // The `?` help overlay owns the keyboard while visible: any key closes.
+    // The F1 help overlay owns the keyboard while visible: any key closes.
     if state.spai_notes.scratch.help_visible {
         state.spai_notes.scratch.help_visible = false;
         return true;
@@ -48,10 +53,42 @@ pub fn handle_scratch_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
         return true;
     }
 
-    match state.spai_notes.scratch.mode {
-        ScratchMode::Edit => handle_edit_key(key, state),
-        ScratchMode::Read => handle_read_key(key, state),
+    // The @ mention popup sits above the buffer while a token is open.
+    if state.spai_notes.scratch.mention.is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                state.spai_notes.scratch.close_mention_popup();
+                return true;
+            }
+            KeyCode::Up => {
+                state
+                    .spai_notes
+                    .scratch
+                    .mention_move_selection(&state.spai_notes.projects, -1);
+                return true;
+            }
+            KeyCode::Down => {
+                state
+                    .spai_notes
+                    .scratch
+                    .mention_move_selection(&state.spai_notes.projects, 1);
+                return true;
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                if !state
+                    .spai_notes
+                    .scratch
+                    .accept_mention(&state.spai_notes.projects)
+                {
+                    state.spai_notes.scratch.close_mention_popup();
+                }
+                return true;
+            }
+            _ => {} // typing falls through and re-filters the popup
+        }
     }
+
+    handle_buffer_keys(key, state)
 }
 
 pub fn threshold(state: &SidebarState) -> f64 {
@@ -70,43 +107,20 @@ fn run_dedup(state: &mut SidebarState) {
     );
 }
 
-// ── Edit mode ─────────────────────────────────────────────────────
+// ── The single keymap ─────────────────────────────────────────────
 
-fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
+fn handle_buffer_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let scratch = &mut state.spai_notes.scratch;
 
-    // `@` autocomplete sits above the buffer while a mention token is open.
-    if scratch.mention.is_some() {
-        match key.code {
-            KeyCode::Esc => {
-                scratch.close_mention_popup();
-                return true;
-            }
-            KeyCode::Up => {
-                scratch.mention_move_selection(&state.spai_notes.projects, -1);
-                return true;
-            }
-            KeyCode::Down => {
-                scratch.mention_move_selection(&state.spai_notes.projects, 1);
-                return true;
-            }
-            KeyCode::Enter | KeyCode::Tab => {
-                if !scratch.accept_mention(&state.spai_notes.projects) {
-                    scratch.close_mention_popup();
-                }
-                return true;
-            }
-            _ => {} // typing falls through and re-filters the popup below
-        }
-    }
-
     match key.code {
         KeyCode::Esc => {
-            // Edit → Read (the draft is autosaved on close/scope switches).
-            scratch.mode = ScratchMode::Read;
-            scratch.confirm_close = false;
-            scratch.close_mention_popup();
+            // Close (twice when unsaved — the draft is kept regardless).
+            if scratch.dirty && !scratch.confirm_close {
+                scratch.confirm_close = true;
+            } else {
+                state.spai_notes.close_scratch();
+            }
             true
         }
         KeyCode::Char('s') if ctrl => {
@@ -115,6 +129,67 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
         }
         KeyCode::Char('d') | KeyCode::Char('D') if ctrl => {
             run_dedup(state);
+            true
+        }
+        KeyCode::F(1) => {
+            scratch.help_visible = true;
+            true
+        }
+        KeyCode::Char('o') if ctrl => {
+            let idx = scratch.cursor_line;
+            if let Err(e) = state.spai_notes.open_scratch_record(idx) {
+                state.spai_notes.status_message = Some(e);
+            }
+            true
+        }
+        KeyCode::Char('x') if ctrl => {
+            let idx = scratch.cursor_line;
+            if let Err(e) = state.spai_notes.cycle_scratch_record_status(idx) {
+                state.spai_notes.status_message = Some(e);
+            }
+            true
+        }
+        KeyCode::Char('z') if ctrl => {
+            match state.spai_notes.scratch_undo_batch() {
+                Ok(n) => {
+                    state.spai_notes.status_message = Some(format!("Vráceno {} souborů", n));
+                }
+                Err(e) => state.spai_notes.status_message = Some(e),
+            }
+            true
+        }
+        KeyCode::Char('t') if ctrl => {
+            let next = scratch.scope.next();
+            state.spai_notes.switch_scratch_scope(next);
+            true
+        }
+        KeyCode::Char('T') if ctrl && key.modifiers.contains(KeyModifiers::SHIFT) => {
+            let prev = match scratch.scope {
+                ScratchScope::New => ScratchScope::All,
+                ScratchScope::Project => ScratchScope::New,
+                ScratchScope::All => ScratchScope::Project,
+            };
+            state.spai_notes.switch_scratch_scope(prev);
+            true
+        }
+        KeyCode::Char('f') if ctrl => {
+            scratch.input_mode = Some(ScratchInput::FuzzyFilter);
+            scratch.input_buffer.clear();
+            true
+        }
+        KeyCode::Char('r') if ctrl => {
+            scratch.input_mode = Some(ScratchInput::SemanticFilter);
+            scratch.input_buffer.clear();
+            true
+        }
+        KeyCode::Char('y') if ctrl => {
+            scratch.cycle_status_filter();
+            true
+        }
+        KeyCode::Char('l') if ctrl => {
+            scratch.filter = None;
+            scratch.semantic_allowed = None;
+            scratch.status_filter = StatusFilter::All;
             true
         }
         KeyCode::Enter => {
@@ -174,122 +249,9 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
             scratch.update_mention_popup();
             true
         }
-        KeyCode::Char('?') => {
-            scratch.help_visible = true;
-            true
-        }
         KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             scratch.insert_char(c);
             scratch.update_mention_popup();
-            true
-        }
-        _ => true, // the Scratchpad owns the keyboard while open
-    }
-}
-
-// ── Read mode ─────────────────────────────────────────────────────
-
-fn handle_read_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-    let s = &mut state.spai_notes.scratch;
-
-    match key.code {
-        KeyCode::Esc | KeyCode::Char('q') if !ctrl => {
-            if s.dirty && !s.confirm_close {
-                s.confirm_close = true;
-            } else {
-                state.spai_notes.close_scratch();
-            }
-            true
-        }
-        KeyCode::Char('i') if !ctrl => {
-            s.mode = ScratchMode::Edit;
-            s.confirm_close = false;
-            true
-        }
-        KeyCode::Up | KeyCode::Char('k') if !ctrl => {
-            s.move_cursor_by_record(-1);
-            true
-        }
-        KeyCode::Down | KeyCode::Char('j') if !ctrl => {
-            s.move_cursor_by_record(1);
-            true
-        }
-        KeyCode::Char('g') if !ctrl => {
-            s.jump_to_edge(true);
-            true
-        }
-        KeyCode::Char('G') if !ctrl => {
-            s.jump_to_edge(false);
-            true
-        }
-        KeyCode::Tab => {
-            let next = s.scope.next();
-            state.spai_notes.switch_scratch_scope(next);
-            true
-        }
-        KeyCode::BackTab => {
-            let prev = match s.scope {
-                ScratchScope::New => ScratchScope::All,
-                ScratchScope::Project => ScratchScope::New,
-                ScratchScope::All => ScratchScope::Project,
-            };
-            state.spai_notes.switch_scratch_scope(prev);
-            true
-        }
-        KeyCode::Enter | KeyCode::Char('o') if !ctrl => {
-            let idx = s.cursor_line;
-            if let Err(e) = state.spai_notes.open_scratch_record(idx) {
-                state.spai_notes.status_message = Some(e);
-            }
-            true
-        }
-        KeyCode::Char('x') | KeyCode::Char('s') if !ctrl => {
-            let idx = s.cursor_line;
-            if let Err(e) = state.spai_notes.cycle_scratch_record_status(idx) {
-                state.spai_notes.status_message = Some(e);
-            }
-            true
-        }
-        KeyCode::Char('u') if !ctrl => {
-            match state.spai_notes.scratch_undo_batch() {
-                Ok(n) => {
-                    state.spai_notes.status_message = Some(format!("Vráceno {} souborů", n));
-                }
-                Err(e) => state.spai_notes.status_message = Some(e),
-            }
-            true
-        }
-        KeyCode::Char('?') => {
-            s.help_visible = true;
-            true
-        }
-        KeyCode::Char('/') if !ctrl => {
-            s.input_mode = Some(ScratchInput::FuzzyFilter);
-            s.input_buffer.clear();
-            true
-        }
-        KeyCode::Char('~') if !ctrl => {
-            s.input_mode = Some(ScratchInput::SemanticFilter);
-            s.input_buffer.clear();
-            true
-        }
-        KeyCode::Char('f') if !ctrl => {
-            s.cycle_status_filter();
-            true
-        }
-        KeyCode::Char('F') if !ctrl => {
-            s.filter = None;
-            s.semantic_allowed = None;
-            s.status_filter = crate::slices::spai_notes::scratch::filter::StatusFilter::All;
-            true
-        }
-        KeyCode::Char('s') if ctrl => {
-            save_scratch(state);
-            true
-        }
-        KeyCode::Char('d') | KeyCode::Char('D') if ctrl => {
-            run_dedup(state);
             true
         }
         _ => true, // the Scratchpad owns the keyboard while open
