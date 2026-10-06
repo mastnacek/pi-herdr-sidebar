@@ -130,6 +130,8 @@ pub struct ScratchState {
     pub dedup: ScratchDedup,
     /// `@` autocomplete popup while a mention token is open, or `None`.
     pub mention: Option<MentionPopup>,
+    /// Fullscreen `?` help overlay visible.
+    pub help_visible: bool,
     /// Plugin state dir (draft storage); filled on open from the context.
     pub state_dir: Option<PathBuf>,
 }
@@ -151,6 +153,7 @@ impl ScratchState {
         self.semantic_allowed = None;
         self.status_filter = StatusFilter::All;
         self.mention = None;
+        self.help_visible = false;
     }
 
     pub fn close(&mut self) {
@@ -160,6 +163,7 @@ impl ScratchState {
         self.input_buffer.clear();
         self.confirm_close = false;
         self.mention = None;
+        self.help_visible = false;
     }
 
     pub fn reset_for_scope(&mut self) {

@@ -43,6 +43,9 @@ pub fn render_scratch(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     super::dedup_popup::render_dedup_popup(frame, inner, state);
     // `@` project autocomplete while a mention token is open.
     super::mention_popup::render_mention_popup(frame, inner, state);
+
+    // Fullscreen `?` help overlay sits above everything else.
+    super::help::render_help_overlay(frame, area, state);
 }
 
 /// Visible window of lines that keeps the cursor on screen.

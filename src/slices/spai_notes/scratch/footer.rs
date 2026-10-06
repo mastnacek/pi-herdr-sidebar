@@ -134,7 +134,9 @@ fn edit_hint_line(state: &SpaiNotesState) -> Line<'static> {
         Span::styled("[@] ", Style::default().fg(Color::Cyan).bold()),
         Span::styled("projekt  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Esc] ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("read", Style::default().fg(Color::DarkGray)),
+        Span::styled("read  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[?] ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("nápověda", Style::default().fg(Color::DarkGray)),
     ])
 }
 
@@ -163,7 +165,9 @@ fn read_hint_line(state: &SpaiNotesState) -> Line<'static> {
     spans.push(Span::styled("[i] ", Style::default().fg(Color::Cyan).bold()));
     spans.push(Span::styled("edit  ", Style::default().fg(Color::DarkGray)));
     spans.push(Span::styled("[q] ", Style::default().fg(Color::Cyan).bold()));
-    spans.push(Span::styled("zavřít", Style::default().fg(Color::DarkGray)));
+    spans.push(Span::styled("zavřít  ", Style::default().fg(Color::DarkGray)));
+    spans.push(Span::styled("[?] ", Style::default().fg(Color::Cyan).bold()));
+    spans.push(Span::styled("nápověda", Style::default().fg(Color::DarkGray)));
     Line::from(spans)
 }
 

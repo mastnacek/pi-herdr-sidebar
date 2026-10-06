@@ -13,7 +13,7 @@
 //! - [`filter`] — token parser, fuzzy scoring, AND-composition
 //! - [`semantic`] — `~` filter: one embedding + cosine over stored vectors
 //! - [`scope`] — New / Project / All loading, record opening, status cycling
-//! - [`view`] / [`footer`] — rendering (virtualised buffer + footer)
+//! - [`view`] / [`footer`] / [`help`] — rendering (buffer, footer, `?` overlay)
 //!
 //! Keys are wired in the view slice (`view/keys/scratch.rs`), the same way
 //! the other dialogs are; the slice owns the logic and stays import-free
@@ -24,6 +24,7 @@ pub mod dedup_popup;
 pub mod draft;
 pub mod filter;
 pub mod footer;
+pub mod help;
 pub mod line_model;
 pub mod mention;
 pub mod mention_popup;

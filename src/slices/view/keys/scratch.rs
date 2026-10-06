@@ -24,6 +24,12 @@ pub fn handle_scratch_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
     }
     let _ = Tab::Notes; // kept imported for the dialog handlers upstream
 
+    // The `?` help overlay owns the keyboard while visible: any key closes.
+    if state.spai_notes.scratch.help_visible {
+        state.spai_notes.scratch.help_visible = false;
+        return true;
+    }
+
     // Footer input modes own every key while active.
     match state.spai_notes.scratch.input_mode {
         Some(ScratchInput::FuzzyFilter) => {
@@ -176,6 +182,10 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
             scratch.update_mention_popup();
             true
         }
+        KeyCode::Char('?') => {
+            scratch.help_visible = true;
+            true
+        }
         KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             if !scratch.insert_char(c) {
                 state.spai_notes.status_message = Some(
@@ -260,6 +270,10 @@ fn handle_read_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
                 }
                 Err(e) => state.spai_notes.status_message = Some(e),
             }
+            true
+        }
+        KeyCode::Char('?') => {
+            s.help_visible = true;
             true
         }
         KeyCode::Char('/') if !ctrl => {
