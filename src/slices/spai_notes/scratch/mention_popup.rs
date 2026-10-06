@@ -1,6 +1,8 @@
-//! `@` project autocomplete popup: anchored under the cursor line, rendered
-//! while a mention token is open (Edit mode). Interactions come from the key
-//! layer (↑/↓/Enter/Tab/Esc).
+//! `@` project autocomplete popup for the Scratchpad, rendered **the same
+//! way as the smart input's picker** (`n` in the Notes tab): teal rounded
+//! box titled `📁 Projekt [n/m] [↑/↓, Tab/Enter]`, `▶ @insert (name)` rows,
+//! scrolling viewport. Anchored under the cursor line instead of the dialog
+//! top, because the scratchpad line is the context.
 use super::super::state::SpaiNotesState;
 use super::mention::mention_matches;
 use ratatui::{
@@ -16,22 +18,37 @@ pub fn render_mention_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNo
         return;
     }
     let matches = mention_matches(&state.scratch, &state.projects);
-    let selected = state.scratch.mention.as_ref().map(|m| m.selected).unwrap_or(0);
+    if matches.is_empty() {
+        return; // the smart input shows nothing until something matches
+    }
+    let count = matches.len();
+    let selected = state
+        .scratch
+        .mention
+        .as_ref()
+        .map(|m| m.selected.min(count - 1))
+        .unwrap_or(0);
 
-    let width = buffer_area.width.saturating_sub(2).min(52);
-    let rows = matches.len() as u16 + 1; // + the key-hint row
-    let height = rows + 2;
+    // Viewport math shared with the smart input's picker (box of 4–8 rows).
+    let box_rows = (buffer_area.height.saturating_sub(6)).clamp(4, 8);
+    let count16 = count as u16;
+    let visible = box_rows.saturating_sub(2).clamp(1, count16.max(1));
+    let sel16 = (selected as u16).min(count16.saturating_sub(1));
+    let scroll = (sel16 + 1).saturating_sub(visible);
+
+    let width = buffer_area.width.saturating_sub(2).min(56);
+    let height = visible + 2;
     if width == 0 || buffer_area.height < height {
         return;
     }
 
     // Anchor below the cursor line (same rule as the dedup popup).
-    let (scroll, _) = super::view::visible_window(
+    let (win_scroll, _) = super::view::visible_window(
         state.scratch.lines.len(),
         state.scratch.cursor_line,
         buffer_area.height as usize,
     );
-    let rel = state.scratch.cursor_line.saturating_sub(scroll);
+    let rel = state.scratch.cursor_line.saturating_sub(win_scroll);
     let mut y = buffer_area.y + 1 + rel as u16 + 1;
     if y + height > buffer_area.y + buffer_area.height {
         y = buffer_area.y + 1 + rel as u16 + 1 - height; // above the line
@@ -41,53 +58,48 @@ pub fn render_mention_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNo
     let area = Rect::new(buffer_area.x + 1, y, width, height);
 
     let block = Block::bordered()
-        .title(Span::styled(
-            " @ projekty ",
-            Style::default().fg(Color::Cyan).bold(),
+        .title(format!(
+            " 📁 Projekt [{}/{}] [↑/↓, Tab/Enter] ",
+            selected + 1,
+            count
         ))
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(Color::Rgb(45, 213, 183)));
     let inner = block.inner(area);
     frame.render_widget(Clear, area);
     frame.render_widget(block, area);
 
     let mut lines: Vec<Line> = Vec::new();
-    if matches.is_empty() {
-        lines.push(Line::from(Span::styled(
-            " žádný projekt neodpovídá",
-            Style::default().fg(Color::DarkGray),
-        )));
-    } else {
-        for (i, p) in matches.iter().enumerate() {
-            let sel = i == selected;
-            let style = if sel {
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(20, 50, 60))
-                    .bold()
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-            let path = p.path.to_string_lossy();
-            lines.push(Line::from(vec![
-                Span::styled(format!(" @{} ", p.name), style),
-                Span::styled(path.to_string(), Style::default().fg(Color::DarkGray)),
-            ]));
-        }
+    for (i, s) in matches.iter().enumerate() {
+        let is_sel = i == selected;
+        lines.push(Line::from(vec![
+            Span::styled(
+                if is_sel { "▶ " } else { "  " },
+                if is_sel {
+                    Style::default().fg(Color::Yellow).bold()
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                },
+            ),
+            Span::styled(
+                s.insert_text.clone(),
+                if is_sel {
+                    Style::default().fg(Color::Yellow).bold()
+                } else {
+                    Style::default().fg(Color::Cyan)
+                },
+            ),
+            Span::styled(
+                format!(" ({})", s.name),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
     }
-    lines.push(Line::from(vec![
-        Span::styled(" [↑/↓] ", Style::default().fg(Color::Yellow).bold()),
-        Span::styled("vybrat  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Enter] ", Style::default().fg(Color::Green).bold()),
-        Span::styled("doplnit  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Esc] ", Style::default().fg(Color::Cyan).bold()),
-        Span::styled("skrýt", Style::default().fg(Color::DarkGray)),
-    ]));
 
     frame.render_widget(
         Paragraph::new(lines)
             .style(Style::default().add_modifier(Modifier::empty()))
-            .wrap(ratatui::widgets::Wrap { trim: false }),
+            .scroll((scroll, 0)),
         inner,
     );
 }

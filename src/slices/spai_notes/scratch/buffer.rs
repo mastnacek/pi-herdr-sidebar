@@ -126,22 +126,6 @@ impl ScratchState {
         self.dirty = true;
     }
 
-    /// Replaces the `@token` before the cursor with `@name` and moves past it.
-    /// Returns `false` when the cursor is not inside a mention.
-    pub fn complete_mention(&mut self, name: &str) -> bool {
-        let Some((at, _filter)) = self.mention_context() else {
-            return false;
-        };
-        let line = &mut self.lines[self.cursor_line];
-        let start = byte_of_char(&line.text, at);
-        let end = byte_of_char(&line.text, self.cursor_char);
-        let completed = format!("@{} ", name);
-        line.text.replace_range(start..end, &completed);
-        self.cursor_char = at + completed.chars().count();
-        self.dirty = true;
-        true
-    }
-
     pub fn cursor_up(&mut self) {
         if self.cursor_line > 0 {
             self.cursor_line -= 1;

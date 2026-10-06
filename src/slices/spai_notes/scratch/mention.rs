@@ -1,46 +1,25 @@
-//! `@` project autocomplete for the Scratchpad.
-//!
-//! The popup opens the moment a mention token (`@` + anything up to the next
-//! whitespace) is open under the caret; matches come from the live project
-//! list so routing (`note_writer::route_mention`) and completion cannot
-//! disagree. Matching is case-insensitive on the project name and its path.
-use super::state::{MentionPopup, ScratchState};
+//! `@` project autocomplete for the Scratchpad — **the same engine as the
+//! smart input** (`n` in the Notes tab): [`crate::slices::spai_notes::
+//! autocomplete`] supplies matching, `insert_text` (`@name`, `@"name with
+//! spaces"`) and the wrap-around navigation, so the two surfaces cannot
+//! disagree. The popup opens the moment a mention token (`@` + anything up
+//! to the next whitespace) is open under the caret.
+use super::state::{byte_of_char, MentionPopup, ScratchState};
+use crate::slices::spai_notes::autocomplete::{get_project_suggestions, ProjectSuggestion};
 use crate::slices::spai_notes::discovery::SpaiProjectSummary;
-use crate::slices::spai_notes::similarity::normalize_czech;
 
-/// Maximum rows in the popup; the filter narrows further.
-const MAX_MATCHES: usize = 8;
-
-/// Projects matching the filter currently being typed in `state`'s mention
-/// context, best first (starts-with beats contains).
-pub fn mention_matches<'a>(
-    state: &'a ScratchState,
-    projects: &'a [SpaiProjectSummary],
-) -> Vec<&'a SpaiProjectSummary> {
+/// Suggestions for the `@token` currently being typed in `state`, from the
+/// same filter the smart input uses (case-insensitive contains on name or
+/// path, quoted `insert_text` for names with spaces).
+pub fn mention_matches(
+    state: &ScratchState,
+    projects: &[SpaiProjectSummary],
+) -> Vec<ProjectSuggestion> {
     let filter = state
         .mention_context()
-        .map(|(_, f)| normalize_czech(&f))
+        .map(|(_, f)| f)
         .unwrap_or_default();
-    if filter.is_empty() {
-        return projects.iter().take(MAX_MATCHES).collect();
-    }
-    let mut starts: Vec<&SpaiProjectSummary> = Vec::new();
-    let mut contains: Vec<&SpaiProjectSummary> = Vec::new();
-    for p in projects {
-        let name = normalize_czech(&p.name);
-        let path = normalize_czech(&p.path.to_string_lossy());
-        if name.starts_with(&filter) {
-            starts.push(p);
-        } else if name.contains(&filter) || path.contains(&filter) {
-            contains.push(p);
-        }
-        if starts.len() >= MAX_MATCHES {
-            break;
-        }
-    }
-    starts.truncate(MAX_MATCHES);
-    starts.extend(contains.into_iter().take(MAX_MATCHES - starts.len()));
-    starts
+    get_project_suggestions(projects, &filter)
 }
 
 impl ScratchState {
@@ -49,7 +28,9 @@ impl ScratchState {
     ///
     /// The scan stops at the first whitespace before the cursor, so
     /// `mail@example.com` mid-line does not open the popup unless the caret
-    /// sits inside that token (Esc dismisses it if it does).
+    /// sits inside that token (Esc dismisses it if it does). Equivalent to
+    /// `autocomplete::extract_at_query` for the caret-at-end case, but
+    /// cursor-aware for the middle of a scratchpad line.
     pub fn mention_context(&self) -> Option<(usize, String)> {
         let line = self.current_line()?;
         if !line.origin.is_editable() {
@@ -91,35 +72,45 @@ impl ScratchState {
         };
     }
 
-    /// Moves the popup selection; clamped against the live match count.
-    pub fn mention_move_selection(
-        &mut self,
-        projects: &[SpaiProjectSummary],
-        delta: i32,
-    ) {
-        let len = mention_matches(self, projects).len().max(1);
+    /// Moves the popup selection with the smart input's wrap-around
+    /// (`next_suggestion`/`prev_suggestion` semantics).
+    pub fn mention_move_selection(&mut self, projects: &[SpaiProjectSummary], delta: i32) {
+        let len = mention_matches(self, projects).len();
+        if len == 0 {
+            return;
+        }
         let Some(popup) = &mut self.mention else {
             return;
         };
-        let selected = popup.selected as i32 + delta;
-        popup.selected = selected.clamp(0, len as i32 - 1) as usize;
+        let len_i = len as i32;
+        let wrapped = ((popup.selected as i32 + delta) % len_i + len_i) % len_i;
+        popup.selected = wrapped as usize;
     }
 
-    /// Accepts the selected match, replacing `@filter` with `@name`.
-    /// Returns `false` when the popup is closed or nothing matches.
+    /// Accepts the selected suggestion exactly like the smart input's
+    /// `apply_selected_suggestion`: the `@filter` token is replaced with
+    /// `insert_text` (`@name`, `@"name with spaces"`) plus a trailing space,
+    /// the caret lands after it, and the popup closes.
     pub fn accept_mention(&mut self, projects: &[SpaiProjectSummary]) -> bool {
-        let selected = match &self.mention {
-            Some(p) => p.selected,
-            None => return false,
+        let Some(popup) = &self.mention else {
+            return false;
         };
+        let selected = popup.selected;
         let matches = mention_matches(self, projects);
-        let Some(m) = matches.get(selected) else {
+        let Some(s) = matches.get(selected) else {
             return false;
         };
-        let name = m.name.clone();
-        if !self.complete_mention(&name) {
+        let Some((at, _filter)) = self.mention_context() else {
             return false;
-        }
+        };
+
+        let completed = format!("{} ", s.insert_text);
+        let line = &mut self.lines[self.cursor_line];
+        let start = byte_of_char(&line.text, at);
+        let end = byte_of_char(&line.text, self.cursor_char);
+        line.text.replace_range(start..end, &completed);
+        self.cursor_char = at + completed.chars().count();
+        self.dirty = true;
         self.mention = None;
         true
     }
@@ -147,6 +138,11 @@ mod tests {
                 "pi-spai".to_string(),
                 PathBuf::from("D:/work/pi-spai"),
                 PathBuf::from("D:/work/pi-spai/docs/spai"),
+            ),
+            SpaiProjectSummary::new(
+                "mojek projekty".to_string(),
+                PathBuf::from("D:/work/mojek"),
+                PathBuf::from("D:/work/mojek/docs/spai"),
             ),
         ]
     }
@@ -186,26 +182,27 @@ mod tests {
     }
 
     #[test]
-    fn matches_rank_starts_with_before_contains() {
+    fn matches_come_from_the_smart_input_engine() {
         let ps = projects();
         let s = state_with(". fix @p", 8);
-        let names: Vec<&str> = mention_matches(&s, &ps)
+        let texts: Vec<String> = mention_matches(&s, &ps)
             .iter()
-            .map(|p| p.name.as_str())
+            .map(|s| s.insert_text.clone())
             .collect();
-        assert_eq!(names, vec!["pi-spai"], "only the start-of-name hit");
+        // "projekty" also contains 'p' — the smart input matches both.
+        assert_eq!(texts, vec!["@pi-spai", "@\"mojek projekty\""]);
 
-        // A path-only filter matches through the path.
-        let s = state_with(". fix @work", 10);
-        let names: Vec<&str> = mention_matches(&s, &ps)
+        // Names with spaces insert the quoted form (smart-input rule).
+        let s = state_with(". fix @mojek", 12);
+        let texts: Vec<String> = mention_matches(&s, &ps)
             .iter()
-            .map(|p| p.name.as_str())
+            .map(|s| s.insert_text.clone())
             .collect();
-        assert_eq!(names.len(), 2, "both paths contain 'work'");
+        assert_eq!(texts.first().map(String::as_str), Some("@\"mojek projekty\""));
     }
 
     #[test]
-    fn accept_replaces_token_and_closes_the_popup() {
+    fn accept_replaces_token_like_apply_at_completion() {
         let ps = projects();
         let mut s = state_with(". fix @her", 10);
         s.update_mention_popup();
@@ -217,15 +214,25 @@ mod tests {
     }
 
     #[test]
-    fn selection_survives_refilter_and_is_clamped() {
+    fn accept_a_quoted_name_inserts_the_quoted_form() {
         let ps = projects();
-        let mut s = state_with(". fix @", 7);
+        let mut s = state_with(". fix @mojek", 12);
         s.update_mention_popup();
-        s.mention_move_selection(&ps, 1);
-        assert_eq!(s.mention.as_ref().unwrap().selected, 1);
-        // Only 2 projects: moving further down clamps to 1.
-        s.mention_move_selection(&ps, 5);
-        assert_eq!(s.mention.as_ref().unwrap().selected, 1);
+        assert!(s.accept_mention(&ps));
+        assert_eq!(s.lines[0].text, ". fix @\"mojek projekty\" ");
+    }
+
+    #[test]
+    fn selection_wraps_around_like_the_smart_input() {
+        let ps = projects();
+        let mut s = state_with(". fix @work", 11);
+        s.update_mention_popup(); // filter 'work' matches all three via path
+        assert_eq!(s.mention.as_ref().unwrap().selected, 0);
+
+        s.mention_move_selection(&ps, -1); // wraps to the last
+        assert_eq!(s.mention.as_ref().unwrap().selected, 2);
+        s.mention_move_selection(&ps, 1); // wraps back to the first
+        assert_eq!(s.mention.as_ref().unwrap().selected, 0);
     }
 
     #[test]
