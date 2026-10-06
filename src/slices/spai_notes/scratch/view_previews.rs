@@ -110,6 +110,156 @@ mod previews {
     }
 
 
+
+    /// Diagnostic 3: real-app shape — many records, long titles, semantic
+    /// allows 2 of them, cursor walked down to the second match, scroll>0.
+    #[test]
+    fn diag_semantic_scrolled_many_records() {
+        use crate::slices::spai_notes::scratch::line_model::LineOrigin;
+        let mut state = SpaiNotesState::new(None);
+        state.open_scratch(None);
+        let mut lines = Vec::new();
+        for i in 0..30 {
+            let matched = i == 10 || i == 11;
+            let origin = if matched {
+                LineOrigin::FromFile {
+                    path: std::path::PathBuf::from(format!("/tmp/m{}.md", i)),
+                    id: format!("SPAI-{:03}", i),
+                    project: "p".into(),
+                    loaded_text: format!(". record {} with a very long title that will clip", i),
+                }
+            } else {
+                LineOrigin::FromFile {
+                    path: std::path::PathBuf::from(format!("/tmp/n{}.md", i)),
+                    id: format!("SPAI-{:03}", i),
+                    project: "p".into(),
+                    loaded_text: format!(". record {}", i),
+                }
+            };
+            lines.push(crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: if matched {
+                    format!(". record {} with a very long title that will clip", i)
+                } else {
+                    format!(". record {}", i)
+                },
+                origin,
+            });
+        }
+        state.scratch.lines = lines;
+        let mut allowed = std::collections::HashSet::new();
+        allowed.insert(std::path::PathBuf::from("/tmp/m10.md"));
+        allowed.insert(std::path::PathBuf::from("/tmp/m11.md"));
+        state.scratch.semantic_allowed = Some(allowed);
+        state.scratch.cursor_line = 11;
+        state.scratch.cursor_char = 0;
+
+        let mut t = Terminal::new(TestBackend::new(60, 12)).unwrap();
+        t.draw(|f| render_scratch(f, f.area(), &state)).unwrap();
+        let buf = t.backend().buffer();
+        for y in 1..5 {
+            let bg5 = buf[(5, y)].bg;
+            let modi = buf[(3, y)].modifier;
+            let sym: String = (1..40).map(|x| buf[(x, y)].symbol()).collect();
+            println!("row {y}: bg5={bg5:?} mod3={modi:?} txt='{sym}'");
+        }
+    }
+
+    /// Diagnostic 2: cursor on the SECOND of two visible records.
+    #[test]
+    fn diag_semantic_cursor_on_second() {
+        let mut state = SpaiNotesState::new(None);
+        state.open_scratch(None);
+        state.scratch.lines = vec![
+            crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: ". first record".into(),
+                origin: crate::slices::spai_notes::scratch::line_model::LineOrigin::FromFile {
+                    path: "/tmp/a.md".into(),
+                    id: "SPAI-001".into(),
+                    project: "p".into(),
+                    loaded_text: ". first record".into(),
+                },
+            },
+            crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: "x second record".into(),
+                origin: crate::slices::spai_notes::scratch::line_model::LineOrigin::FromFile {
+                    path: "/tmp/b.md".into(),
+                    id: "SPAI-002".into(),
+                    project: "p".into(),
+                    loaded_text: "x second record".into(),
+                },
+            },
+        ];
+        let mut allowed = std::collections::HashSet::new();
+        allowed.insert(std::path::PathBuf::from("/tmp/a.md"));
+        allowed.insert(std::path::PathBuf::from("/tmp/b.md"));
+        state.scratch.semantic_allowed = Some(allowed);
+        state.scratch.cursor_line = 1;
+        state.scratch.cursor_char = 0;
+
+        let mut t = Terminal::new(TestBackend::new(60, 10)).unwrap();
+        t.draw(|f| render_scratch(f, f.area(), &state)).unwrap();
+        let buf = t.backend().buffer();
+        for y in 1..4 {
+            let bg5 = buf[(5, y)].bg;
+            let modi = buf[(3, y)].modifier;
+            println!("row {y}: bg5={bg5:?} mod3={modi:?} sym='{}'", buf[(3, y)].symbol());
+        }
+        // Second row is the cursor row: amber bg + reversed cell; first row
+        // must NOT be amber.
+        assert_eq!(buf[(5, 2)].bg, super::super::line_render::HIGHLIGHT_BG);
+        assert_ne!(buf[(5, 1)].bg, super::super::line_render::HIGHLIGHT_BG);
+    }
+
+    /// Diagnostic: bg color of every row with an active semantic allow-set.
+    #[test]
+    fn diag_semantic_rows_backgrounds() {
+        let mut state = SpaiNotesState::new(None);
+        state.open_scratch(None);
+        state.scratch.lines = vec![
+            crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: ". first record".into(),
+                origin: crate::slices::spai_notes::scratch::line_model::LineOrigin::FromFile {
+                    path: "/tmp/a.md".into(),
+                    id: "SPAI-001".into(),
+                    project: "p".into(),
+                    loaded_text: ". first record".into(),
+                },
+            },
+            crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: "x second record".into(),
+                origin: crate::slices::spai_notes::scratch::line_model::LineOrigin::FromFile {
+                    path: "/tmp/b.md".into(),
+                    id: "SPAI-002".into(),
+                    project: "p".into(),
+                    loaded_text: "x second record".into(),
+                },
+            },
+            crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: ". third record".into(),
+                origin: crate::slices::spai_notes::scratch::line_model::LineOrigin::FromFile {
+                    path: "/tmp/c.md".into(),
+                    id: "SPAI-003".into(),
+                    project: "p".into(),
+                    loaded_text: ". third record".into(),
+                },
+            },
+        ];
+        let mut allowed = std::collections::HashSet::new();
+        allowed.insert(std::path::PathBuf::from("/tmp/a.md"));
+        allowed.insert(std::path::PathBuf::from("/tmp/b.md"));
+        state.scratch.semantic_allowed = Some(allowed);
+        state.scratch.cursor_line = 0;
+
+        let mut t = Terminal::new(TestBackend::new(60, 10)).unwrap();
+        t.draw(|f| render_scratch(f, f.area(), &state)).unwrap();
+        let buf = t.backend().buffer();
+        for y in 1..4 {
+            let bg5 = buf[(5, y)].bg;
+            let modi = buf[(3, y)].modifier;
+            println!("row {y}: bg5={bg5:?} mod3={modi:?} sym='{}'", buf[(3, y)].symbol());
+        }
+    }
+
     /// `cargo test scratch_preview_semantic_progress -- --ignored --nocapture`
     #[test]
     #[ignore]

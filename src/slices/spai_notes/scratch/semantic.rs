@@ -38,6 +38,14 @@ impl SpaiNotesState {
             return;
         }
 
+        // How many loaded records are file-backed at all (for the report).
+        let loaded_file_backed = self
+            .scratch
+            .lines
+            .iter()
+            .filter(|l| l.origin.file_path().is_some())
+            .count();
+
         // Snapshot the candidates (path/id/project + stored vector) so the
         // thread does not borrow self.
         let mut candidates: Vec<(PathBuf, String, Vec<f64>)> = Vec::new();
@@ -123,9 +131,16 @@ impl SpaiNotesState {
             }
 
             let hits = candidates.iter().filter(|(p, _, _)| allowed.contains(p)).count();
+            // Make the coverage visible: records without a stored vector can
+            // never appear in the results (no cosine input) — say so, or the
+            // short list looks like a rendering bug.
+            let total_file_backed = candidates.len();
             let _ = tx.send(SemanticMessage::Done {
                 allowed,
-                label: format!("Sémantický filtr: {} shod", hits),
+                label: format!(
+                    "Sémantický filtr: {} shod (s vektory {}/{})",
+                    hits, total_file_backed, loaded_file_backed
+                ),
             });
         });
     }
