@@ -43,4 +43,5 @@ pub mod visibility;
 /// without any timer-driven start (plan §3: "no automatic request").
 pub fn poll_background(state: &mut super::state::SpaiNotesState) {
     state.scratch.poll_dedup();
+    state.scratch.poll_semantic();
 }

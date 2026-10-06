@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 /// re-read of every note on every refresh tick.
 type Fingerprint = (u64, u64, u64, u64);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SpaiNotesState {
     pub projects: Vec<SpaiProjectSummary>,
     pub selected_project_idx: usize,

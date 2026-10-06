@@ -60,20 +60,14 @@ pub fn handle_semantic_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
             if text.is_empty() {
                 return true;
             }
-            match state.spai_notes.scratch_semantic_filter(
+            // Starts the background job; the footer shows the progress bar
+            // (same visual as Settings vectorization) until it finishes.
+            state.spai_notes.scratch_semantic_filter(
                 &text,
                 &state.settings.api_key,
                 &state.settings.embedding_model,
                 th,
-            ) {
-                Ok(hits) => {
-                    state.spai_notes.scratch.last_summary =
-                        Some(format!("Sémantický filtr: {} shod", hits));
-                }
-                Err(e) => {
-                    state.spai_notes.scratch.last_summary = Some(format!("⚠ {}", e));
-                }
-            }
+            );
             true
         }
         KeyCode::Esc => {

@@ -1,77 +1,132 @@
-//! `~` semantic filter (plan §4, phase 4): on **Enter** — one query embedding
-//! + cosine over the stored vectors of the loaded records. Never automatic.
+//! Semantic filter (`Ctrl+R`): on **Enter** — one query embedding + cosine
+//! over the stored vectors of the loaded records, run in a background thread
+//! with live progress (the same spinner + `█/░` bar the Settings tab shows
+//! during vectorization). Never automatic.
+//!
+//! The result is the *allow-set keyed by file path* — stable across buffer
+//! edits (indices shift the moment a line is added or removed, which made the
+//! filtered list visibly shift).
 use super::super::similarity::cosine_similarity;
 use super::super::state::SpaiNotesState;
 use super::line_model::LineOrigin;
-use std::collections::HashMap;
+use super::state::{SemanticJob, SemanticMessage};
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::mpsc;
 
 impl SpaiNotesState {
-    /// Computes the allowed set for `~query`: for every loaded record with a
-    /// file-backed vector, cosine vs. the query embedding, kept when
-    /// `sim >= threshold`. Sets `scratch.semantic_allowed` (AND-composed with
-    /// other filter tokens). Returns the hit count.
+    /// Starts the semantic search for `query` in a background thread:
+    /// 1) embedding request (network), 2) cosine over loaded record vectors.
+    /// Progress arrives through `scratch.poll_semantic()` (tick-driven).
     pub fn scratch_semantic_filter(
         &mut self,
         query: &str,
         api_key: &str,
         model: &str,
         threshold: f64,
-    ) -> Result<usize, String> {
+    ) {
         if query.trim().len() < 3 {
-            return Err("Dotaz je příliš krátký (min. 3 znaky)".to_string());
+            self.scratch.last_summary =
+                Some("⚠ Dotaz je příliš krátký (min. 3 znaky)".to_string());
+            return;
+        }
+        if api_key.trim().is_empty() {
+            self.scratch.last_summary = Some(
+                "⚠ Chybí API klíč — nastavte jej v Nastavení (bez klíče jen místní hledání)"
+                    .to_string(),
+            );
+            return;
         }
 
-        let vecs = crate::slices::settings::vector_service::request_embeddings(
-            api_key, model, &[query],
-        )
-        .map_err(|e| e)?;
-        let Some(qvec) = vecs.first() else {
-            return Err("Embedding se nepodařilo spočítat".to_string());
-        };
-        let qvec = qvec.clone();
-
-        // Vector stores per project, keyed by file name or id.
-        let mut stores: HashMap<String, HashMap<String, Vec<f64>>> = HashMap::new();
+        // Snapshot the candidates (path/id/project + stored vector) so the
+        // thread does not borrow self.
+        let mut candidates: Vec<(PathBuf, String, Vec<f64>)> = Vec::new();
         for proj in &self.projects {
-            if let Some(store) = crate::slices::settings::load_project_vectors(&proj.path) {
-                stores.insert(proj.name.clone(), store.vectors);
-            }
-        }
-
-        let mut allowed: Vec<usize> = Vec::new();
-        for (idx, line) in self.scratch.lines.iter().enumerate() {
-            let (project, path, id) = match &line.origin {
-                LineOrigin::Saved { path, id, project, .. }
-                | LineOrigin::FromFile { path, id, project, .. } => {
-                    (project.clone(), path.clone(), id.clone())
+            let Some(store) = crate::slices::settings::load_project_vectors(&proj.path) else {
+                continue;
+            };
+            for line in &self.scratch.lines {
+                let (path, id, project) = match &line.origin {
+                    LineOrigin::Saved { path, id, project, .. }
+                    | LineOrigin::FromFile { path, id, project, .. } => {
+                        (path.clone(), id.clone(), project.clone())
+                    }
+                    LineOrigin::New => continue,
+                };
+                if project != proj.name {
+                    continue;
                 }
-                LineOrigin::New => continue, // unsaved lines have no vector
-            };
-
-            let file_name = path
-                .file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or("")
-                .to_string();
-
-            let Some(store) = stores.get(&project) else {
-                continue;
-            };
-            let Some(v) = store.get(&file_name).or_else(|| store.get(&id)) else {
-                continue;
-            };
-            if cosine_similarity(&qvec, v) >= threshold {
-                allowed.push(idx);
+                let file_name = path
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                if let Some(v) = store.vectors.get(&file_name).or_else(|| store.vectors.get(&id)) {
+                    candidates.push((path, id, v.clone()));
+                }
             }
         }
+        // One candidate per file.
+        candidates.dedup_by(|a, b| a.0 == b.0);
 
-        let hits = allowed.len();
-        self.scratch.semantic_allowed = Some(allowed);
-        Ok(hits)
-    }
+        let (tx, rx) = mpsc::channel::<SemanticMessage>();
+        let total = candidates.len();
+        self.scratch.semantic_job = Some(SemanticJob {
+            receiver: rx,
+            progress: super::state::SemanticProgress::Running {
+                step: 0,
+                total,
+                label: "Sémantické hledání…".to_string(),
+            },
+            spinner_tick: 0,
+        });
 
-    /// Clears the semantic filter (`f`/`F` clear path, or a fresh filter run).
-    pub fn scratch_clear_semantic(&mut self) {
-        self.scratch.semantic_allowed = None;
+        let query = query.to_string();
+        let api_key = api_key.to_string();
+        let model = model.to_string();
+        std::thread::spawn(move || {
+            let _ = tx.send(SemanticMessage::Progress {
+                step: 0,
+                total,
+                label: format!("Embedding dotazu ({})…", model),
+            });
+
+            let vecs = match crate::slices::settings::vector_service::request_embeddings(
+                &api_key,
+                &model,
+                &[&query],
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = tx.send(SemanticMessage::Error(e));
+                    return;
+                }
+            };
+            let Some(qvec) = vecs.first() else {
+                let _ = tx.send(SemanticMessage::Error(
+                    "Embedding se nepodařilo spočítat".to_string(),
+                ));
+                return;
+            };
+
+            // Cosine over the stored vectors, progress per record.
+            let mut allowed: HashSet<PathBuf> = HashSet::new();
+            for (i, (path, _id, v)) in candidates.iter().enumerate() {
+                if cosine_similarity(qvec, v) >= threshold {
+                    allowed.insert(path.clone());
+                }
+                let _ = tx.send(SemanticMessage::Progress {
+                    step: i + 1,
+                    total,
+                    label: format!("Sémantické hledání „{}“", query),
+                });
+            }
+
+            let hits = candidates.iter().filter(|(p, _, _)| allowed.contains(p)).count();
+            let _ = tx.send(SemanticMessage::Done {
+                allowed,
+                label: format!("Sémantický filtr: {} shod", hits),
+            });
+        });
     }
 }

@@ -15,7 +15,7 @@ impl ScratchState {
                     idx,
                     q,
                     self.status_filter,
-                    self.semantic_allowed.as_deref(),
+                    self.semantic_allowed.as_ref(),
                 )
             })
             .collect()
@@ -34,7 +34,7 @@ impl ScratchState {
             line_idx,
             q,
             self.status_filter,
-            self.semantic_allowed.as_deref(),
+            self.semantic_allowed.as_ref(),
         )
     }
 
@@ -53,7 +53,7 @@ impl ScratchState {
         self.jump_to_first_visible();
     }
 
-    fn jump_to_first_visible(&mut self) {
+    pub fn jump_to_first_visible(&mut self) {
         let records = self.visible_records();
         if records.is_empty() {
             return;

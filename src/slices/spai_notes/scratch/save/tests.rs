@@ -370,3 +370,38 @@ fn filter_is_live_only_matches_stay_visible() {
     assert_eq!(state.scratch.visible_count(), 3);
     fs::remove_dir_all(&a).ok();
 }
+
+#[test]
+fn semantic_allow_set_survives_buffer_edits_no_shift() {
+    let a = temp_project("semshift");
+    let mut state = state_on(&a);
+    for t in ["build", "review", "docs"] {
+        state.create_quick_note_with_status(
+            t,
+            super::super::super::note::SpaiType::Todo,
+            super::super::super::note::SpaiStatus::Todo,
+            &format!(". {}
+", t),
+        )
+        .unwrap();
+    }
+    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
+    // Simulate a semantic result: only the "review" record allowed (path-keyed).
+    let file = state.projects[state.selected_project_idx].items.iter()
+        .find(|it| it.title.contains("review")).unwrap().file_path.clone();
+    let mut allowed = std::collections::HashSet::new();
+    allowed.insert(file);
+    state.scratch.semantic_allowed = Some(allowed);
+
+    // The user types a continuation line on the FIRST record — indices shift,
+    // the allow-set must not.
+    state.scratch.cursor_line = 0;
+    state.scratch.split_line();
+    assert_eq!(state.scratch.visible_count(), 1, "only review stays visible");
+    // The review record is still findable by text in the buffer.
+    assert!(
+        state.scratch.lines.iter().any(|l| l.text.contains("review")),
+        "review record still in the buffer"
+    );
+    fs::remove_dir_all(&a).ok();
+}

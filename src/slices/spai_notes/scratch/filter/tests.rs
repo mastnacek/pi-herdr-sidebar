@@ -74,16 +74,40 @@ fn filter_matches_compose_with_and() {
     assert!(matches(&lines, 0, &proj_only, StatusFilter::All, None));
     assert!(!matches(&lines, 2, &proj_only, StatusFilter::All, None));
 
-    let semantic = vec![0usize];
+    // Semantic allow-set keyed by file path; the record under idx 0 carries it.
+    let mut semantic: std::collections::HashSet<std::path::PathBuf> = Default::default();
+    semantic.insert(std::path::PathBuf::from("/tmp/x.md"));
+    let mk_file = |t: &str, path: &str| ScratchLine {
+        text: t.to_string(),
+        origin: LineOrigin::FromFile {
+            path: std::path::PathBuf::from(path),
+            id: "SPAI-001".into(),
+            project: "herdr".into(),
+            loaded_text: t.to_string(),
+        },
+    };
+    let lines2 = vec![
+        mk_file(". Fix build @herdr", "/tmp/x.md"),
+        mk("detail"),
+        mk_file(". Jiný úkol @jiný", "/tmp/y.md"),
+    ];
     assert!(matches(
-        &lines,
+        &lines2,
         0,
         &FilterQuery::default(),
         StatusFilter::All,
         Some(&semantic)
     ));
+    // Continuation line 1 must pass too (the record start carries the path).
+    assert!(matches(
+        &lines2,
+        1,
+        &FilterQuery::default(),
+        StatusFilter::All,
+        Some(&semantic)
+    ));
     assert!(!matches(
-        &lines,
+        &lines2,
         2,
         &FilterQuery::default(),
         StatusFilter::All,

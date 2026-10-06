@@ -149,7 +149,7 @@ pub fn matches(
     idx: usize,
     query: &FilterQuery,
     status: StatusFilter,
-    semantic_allowed: Option<&[usize]>,
+    semantic_allowed: Option<&std::collections::HashSet<std::path::PathBuf>>,
 ) -> bool {
     // Status filter first (cheap).
     match status {
@@ -213,9 +213,17 @@ pub fn matches(
         }
     }
 
-    // Semantic filter (phase 4): the allowed set, computed on Enter.
+    // Semantic filter: the allow-set is keyed by FILE PATH (stable across
+    // buffer edits — line indices shift the moment a line is added/removed).
+    // Compared against the record's start line (the one carrying the origin).
     if let Some(allowed) = semantic_allowed {
-        if !allowed.contains(&idx) {
+        let (start, _) = super::line_model::record_span(lines, idx);
+        let ok = lines[start]
+            .origin
+            .file_path()
+            .map(|p| allowed.contains(p))
+            .unwrap_or(false);
+        if !ok {
             return false;
         }
     }
