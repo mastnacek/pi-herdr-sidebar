@@ -89,6 +89,28 @@ fn render_lines(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     let para = Paragraph::new(lines).wrap(Wrap { trim: false });
     frame.render_widget(para, area);
+
+    // Full-row highlight of the cursor line: painted directly onto the
+    // buffer over the whole row width (Paragraph only styles its text
+    // cells, a plain style set here covers the rest of the row too).
+    if let Some(row_y) = cursor_row_y(area, state, scroll) {
+        let row = Rect::new(area.x, row_y, area.width, 1);
+        frame.buffer_mut().set_style(row, Style::default().bg(HIGHLIGHT_BG));
+    }
+}
+
+/// The cursor-line highlight background (dark amber — readable with every
+/// fg colour the highlighter uses, distinct from the yellow frame).
+pub const HIGHLIGHT_BG: Color = Color::Rgb(58, 48, 8);
+
+/// Buffer y of the cursor line inside this area, or None when off-screen.
+fn cursor_row_y(area: Rect, state: &SpaiNotesState, scroll: usize) -> Option<u16> {
+    let rel = state.scratch.cursor_line.checked_sub(scroll)?;
+    if rel < area.height as usize {
+        Some(area.y + rel as u16)
+    } else {
+        None
+    }
 }
 
 /// One buffer line: every line renders in normal highlighting (records stay
@@ -320,5 +342,71 @@ mod previews {
         state.scratch.filter =
             Some(crate::slices::spai_notes::scratch::filter::FilterQuery::parse("build"));
         println!("{}", draw(&state, 90, 24));
+    }
+}
+
+#[cfg(test)]
+mod highlight_tests {
+    use super::*;
+    use crate::slices::spai_notes::scratch::line_model::ScratchLine;
+    use crate::slices::spai_notes::state::SpaiNotesState;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    fn draw<'a>(state: &'a SpaiNotesState, w: u16, h: u16) -> ratatui::buffer::Buffer {
+        let mut t = Terminal::new(TestBackend::new(w, h)).unwrap();
+        t.draw(|f| render_scratch(f, f.area(), state)).unwrap();
+        t.backend().buffer().clone()
+    }
+
+    #[test]
+    fn cursor_line_background_covers_the_full_row() {
+        let mut state = SpaiNotesState::new(None);
+        state.open_scratch(None);
+        state.scratch.lines = vec![
+            ScratchLine { text: ". first".into(), origin: LineOrigin::New },
+            ScratchLine { text: "? second record".into(), origin: LineOrigin::New },
+        ];
+        state.scratch.cursor_line = 1;
+        state.scratch.cursor_char = 5;
+
+        let backend = draw(&state, 60, 10);
+        // Row of line 1 (buffer row 1): every cell carries the highlight bg,
+        // including the space beyond the text (full-width highlight).
+        for x in 1..59 {
+            let cell = &backend[(x, 2)];
+            assert_eq!(cell.bg, HIGHLIGHT_BG, "cell {x} bg: {:?}", cell.bg);
+        }
+        // The line above is NOT highlighted.
+        assert_ne!(backend[(5, 1)].bg, HIGHLIGHT_BG);
+    }
+
+    #[test]
+    fn highlight_bg_is_readable_with_highlighter_colors() {
+        // Dark amber: every fg the highlighter uses stays clearly visible.
+        let fg_colors = [
+            Color::Rgb(241, 252, 121), // Úkol badge
+            Color::Rgb(255, 215, 0),   // task yellow
+            Color::Rgb(186, 85, 211),  // idea purple
+            Color::Rgb(127, 179, 255), // note blue
+            Color::Rgb(144, 238, 144), // done green
+            Color::White,
+            Color::DarkGray,
+        ];
+        for fg in fg_colors {
+            let contrast = |a: [u8; 3], b: [u8; 3]| -> f64 {
+                let lum = |c: [u8; 3]| -> f64 {
+                    0.2126 * c[0] as f64 + 0.7152 * c[1] as f64 + 0.0722 * c[2] as f64
+                };
+                (lum(a) - lum(b)).abs()
+            };
+            let bg = [58, 48, 8];
+            let fgc = match fg {
+                Color::Rgb(r, g, b) => [r, g, b],
+                Color::White => [255, 255, 255],
+                Color::DarkGray => [128, 128, 128],
+                _ => continue,
+            };
+            assert!(contrast(fgc, bg) > 60.0, "fg {fg:?} too close to bg");
+        }
     }
 }
