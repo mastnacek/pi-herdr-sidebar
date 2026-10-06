@@ -181,6 +181,7 @@ fn handle_buffer_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
             true
         }
         KeyCode::Char('f') if ctrl => {
+            scratch.filter_before_input = scratch.filter.clone();
             scratch.input_mode = Some(ScratchInput::FuzzyFilter);
             scratch.input_buffer.clear();
             true

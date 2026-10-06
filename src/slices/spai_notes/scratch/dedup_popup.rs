@@ -29,14 +29,11 @@ pub fn render_dedup_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNote
         return;
     }
 
-    // Anchor: below the cursor line (which is inside the visible window).
-    let (scroll, _) = super::view::visible_window(
-        state.scratch.lines.len(),
-        state.scratch.cursor_line,
-        buffer_area.height as usize,
-    );
-    let rel = state.scratch.cursor_line.saturating_sub(scroll);
-    let anchor_y = buffer_area.y + 1 + rel as u16 + 1;
+    // Anchor: below the cursor line (accounting for filtered-out records).
+    let Some(cursor_y) = super::line_render::cursor_visual_row(buffer_area, state) else {
+        return;
+    };
+    let anchor_y = cursor_y + 1;
 
     let mut y = anchor_y;
     if y + height > buffer_area.y + buffer_area.height {

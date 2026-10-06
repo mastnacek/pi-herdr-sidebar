@@ -43,15 +43,12 @@ pub fn render_mention_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNo
     }
 
     // Anchor below the cursor line (same rule as the dedup popup).
-    let (win_scroll, _) = super::view::visible_window(
-        state.scratch.lines.len(),
-        state.scratch.cursor_line,
-        buffer_area.height as usize,
-    );
-    let rel = state.scratch.cursor_line.saturating_sub(win_scroll);
-    let mut y = buffer_area.y + 1 + rel as u16 + 1;
+    let Some(cursor_y) = super::line_render::cursor_visual_row(buffer_area, state) else {
+        return;
+    };
+    let mut y = cursor_y + 1;
     if y + height > buffer_area.y + buffer_area.height {
-        y = buffer_area.y + 1 + rel as u16 + 1 - height; // above the line
+        y = cursor_y.saturating_sub(height); // above the line
     }
     y = y.max(buffer_area.y);
 

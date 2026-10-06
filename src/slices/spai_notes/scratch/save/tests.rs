@@ -330,3 +330,43 @@ fn loaded_scope_cursor_starts_on_first_record() {
     assert!(state.scratch.cursor_line < scroll + h);
     fs::remove_dir_all(&a).ok();
 }
+
+#[test]
+fn filter_is_live_only_matches_stay_visible() {
+    let a = temp_project("live");
+    let mut state = state_on(&a);
+    for t in ["build", "review", "build again"] {
+        state.create_quick_note_with_status(
+            t,
+            super::super::super::note::SpaiType::Todo,
+            super::super::super::note::SpaiStatus::Todo,
+            &format!(". {}
+", t),
+        )
+        .unwrap();
+    }
+    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
+
+    // Simulate typing into the filter input: live application per keystroke.
+    state.scratch.input_mode = Some(super::super::state::ScratchInput::FuzzyFilter);
+    for c in "buil".chars() {
+        state.scratch.input_buffer.push(c);
+        let text = state.scratch.input_buffer.clone();
+        state.scratch.apply_filter_text(Some(text));
+    }
+    // "review" has no 'b' → hidden; both "build…" records match the
+    // subsequence → visible.
+    let count = state.scratch.visible_count();
+    assert_eq!(count, 2, "review is hidden by 'buil'");
+
+    // Typing 'rev' hides both build records, shows only "review".
+    state.scratch.input_buffer.clear();
+    state.scratch.apply_filter_text(Some("rev".to_string()));
+    assert_eq!(state.scratch.visible_count(), 1);
+
+    // Esc cancels: the snapshot filter (None) is restored → all visible.
+    state.scratch.input_buffer.clear();
+    state.scratch.filter = state.scratch.filter_before_input.take();
+    assert_eq!(state.scratch.visible_count(), 3);
+    fs::remove_dir_all(&a).ok();
+}

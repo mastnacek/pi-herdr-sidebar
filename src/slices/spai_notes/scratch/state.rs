@@ -126,6 +126,8 @@ pub struct ScratchState {
     pub help_visible: bool,
     /// Pending record delete (Ctrl+Del twice): the line index being deleted.
     pub confirm_delete: Option<usize>,
+    /// Filter snapshot taken when the filter input opened (Esc restores it).
+    pub filter_before_input: Option<FilterQuery>,
     /// Plugin state dir (draft storage); filled on open from the context.
     pub state_dir: Option<PathBuf>,
 }
@@ -148,6 +150,7 @@ impl ScratchState {
         self.mention = None;
         self.help_visible = false;
         self.confirm_delete = None;
+        self.filter_before_input = None;
     }
 
     pub fn close(&mut self) {
@@ -159,6 +162,7 @@ impl ScratchState {
         self.mention = None;
         self.help_visible = false;
         self.confirm_delete = None;
+        self.filter_before_input = None;
     }
 
     pub fn reset_for_scope(&mut self) {

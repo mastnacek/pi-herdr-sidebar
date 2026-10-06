@@ -62,19 +62,27 @@ pub fn visible_window(total: usize, cursor: usize, height: usize) -> (usize, usi
 fn render_lines(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     let scratch = &state.scratch;
     let inner_h = area.height as usize;
-    let (scroll, _) = visible_window(scratch.lines.len(), scratch.cursor_line, inner_h);
+
+    // With an active filter, hidden records are skipped entirely — only the
+    // matches stay visible (live search). The record under the cursor never
+    // hides (you are editing it); visibility is recomputed every frame.
+    let shown: Vec<usize> = (0..scratch.lines.len())
+        .filter(|&i| i == scratch.cursor_line || !scratch.record_hidden(i))
+        .collect();
+    let cursor_pos = shown
+        .iter()
+        .position(|&i| i == scratch.cursor_line)
+        .unwrap_or(0);
+    let (scroll, _) = visible_window(shown.len(), cursor_pos, inner_h);
 
     let mut lines: Vec<Line> = Vec::new();
 
-    for (i, line) in scratch
-        .lines
+    for &i in shown
         .iter()
-        .enumerate()
         .skip(scroll)
         .take(inner_h)
     {
-        let _ = i == scratch.cursor_line;
-        lines.push(render_line(line));
+        lines.push(render_line(&scratch.lines[i]));
     }
 
     if scratch.lines.is_empty() {
@@ -98,7 +106,8 @@ fn render_lines(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     // Full-row highlight of the cursor line, painted directly onto the
     // buffer over the whole row width (Paragraph styles only its text
     // cells; a plain style set here covers the rest of the row too).
-    if let Some(row_y) = cursor_row_y(area, state, scroll) {
+    // `cursor_pos` is the position within the (filtered) visible list.
+    if let Some(row_y) = cursor_row_y(area, cursor_pos, scroll) {
         let row = Rect::new(area.x, row_y, area.width, 1);
         frame
             .buffer_mut()

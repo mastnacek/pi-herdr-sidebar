@@ -14,24 +14,34 @@ pub fn handle_filter_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
     let scratch = &mut state.spai_notes.scratch;
     match key.code {
         KeyCode::Enter => {
+            // The filter is already applied live; Enter just leaves the input.
             let text = scratch.input_buffer.trim().to_string();
             scratch.input_mode = None;
+            scratch.filter_before_input = None;
             scratch.input_buffer.clear();
             scratch.apply_filter_text(if text.is_empty() { None } else { Some(text) });
             scratch.last_summary = Some(format!("Filtr: {} záznamů", scratch.visible_count()));
             true
         }
         KeyCode::Esc => {
+            // Cancel: restore the filter that was active before Ctrl+F.
             scratch.input_mode = None;
             scratch.input_buffer.clear();
+            scratch.filter = scratch.filter_before_input.take();
             true
         }
         KeyCode::Backspace => {
             scratch.input_buffer.pop();
+            // LIVE: re-apply after every change — only matches stay visible.
+            let text = scratch.input_buffer.trim().to_string();
+            scratch.apply_filter_text(if text.is_empty() { None } else { Some(text) });
             true
         }
         KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             scratch.input_buffer.push(c);
+            // LIVE: re-apply after every change — only matches stay visible.
+            let text = scratch.input_buffer.trim().to_string();
+            scratch.apply_filter_text(if text.is_empty() { None } else { Some(text) });
             true
         }
         _ => true,

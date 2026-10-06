@@ -26,7 +26,10 @@ pub fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                     Style::default().fg(Color::White),
                 ),
                 Span::styled(
-                    "  Enter = filtrovat · Esc = zrušit",
+                    format!(
+                        "  {} záznamů · Esc = zrušit",
+                        scratch.visible_count()
+                    ),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));

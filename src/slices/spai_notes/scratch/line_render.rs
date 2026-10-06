@@ -12,14 +12,32 @@ use super::super::state::SpaiNotesState;
 /// fg colour the highlighter uses, distinct from the yellow frame).
 pub const HIGHLIGHT_BG: Color = Color::Rgb(58, 48, 8);
 
-/// Buffer y of the cursor line inside this area, or None when off-screen.
-pub fn cursor_row_y(area: Rect, state: &SpaiNotesState, scroll: usize) -> Option<u16> {
-    let rel = state.scratch.cursor_line.checked_sub(scroll)?;
+/// Buffer y of the cursor inside this area, or None when off-screen.
+/// `cursor_pos` is the cursor's position within the (filtered) visible list.
+pub fn cursor_row_y(area: Rect, cursor_pos: usize, scroll: usize) -> Option<u16> {
+    let rel = cursor_pos.checked_sub(scroll)?;
     if rel < area.height as usize {
         Some(area.y + rel as u16)
     } else {
         None
     }
+}
+
+/// Visual row (buffer y) of the cursor inside a rendered scratch area —
+/// used by the popups to anchor under the cursor line, accounting for
+/// hidden (filtered-out) records.
+pub fn cursor_visual_row(area: Rect, state: &SpaiNotesState) -> Option<u16> {
+    let scratch = &state.scratch;
+    let shown: Vec<usize> = (0..scratch.lines.len())
+        .filter(|&i| i == scratch.cursor_line || !scratch.record_hidden(i))
+        .collect();
+    let cursor_pos = shown
+        .iter()
+        .position(|&i| i == scratch.cursor_line)
+        .unwrap_or(0);
+    let inner_h = area.height as usize;
+    let (scroll, _) = super::view::visible_window(shown.len(), cursor_pos, inner_h);
+    cursor_row_y(area, cursor_pos, scroll)
 }
 
 /// One buffer line: every line renders in normal highlighting (records stay
