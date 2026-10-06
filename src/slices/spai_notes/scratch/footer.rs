@@ -16,6 +16,12 @@ pub fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     let mut lines: Vec<Line> = Vec::new();
 
+    // A running semantic search shows the SAME progress bar as the Settings
+    // tab vectorization: spinner + [████░░░] step/total (pct%) + label.
+    if scratch.semantic_running() {
+        lines.push(semantic_progress_line(state));
+    }
+
     // Footer input line (filter / semantic query) takes the first row.
     match scratch.input_mode {
         Some(ScratchInput::FuzzyFilter) => {
@@ -101,6 +107,47 @@ pub fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     lines.push(Line::from(second));
     frame.render_widget(Paragraph::new(lines), area);
+}
+
+/// The semantic-search progress bar — same layout as `settings/view.rs`
+/// renders during vectorization: `⠙ Sémantické hledání…` / `[████░░░] 3/12 (25%)`.
+fn semantic_progress_line(state: &SpaiNotesState) -> Line<'static> {
+    use super::state::SemanticProgress;
+    let (step, total, label) = match &state.scratch.semantic_progress {
+        SemanticProgress::Running { step, total, label } => (*step, *total, label.clone()),
+        SemanticProgress::Idle => (0, 1, "Sémantické hledání…".to_string()),
+    };
+    let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let tick = state
+        .scratch
+        .semantic_job
+        .as_ref()
+        .map(|j| j.spinner_tick)
+        .unwrap_or(0);
+    let spinner = spinner_frames[tick % spinner_frames.len()];
+
+    let pct = if total > 0 { (step * 100) / total } else { 0 };
+    let bar_len = 16;
+    let fill = (pct * bar_len) / 100;
+    let full = "█".repeat(fill);
+    let empty = "░".repeat(bar_len.saturating_sub(fill));
+
+    Line::from(vec![
+        Span::styled(
+            format!(" {} ", spinner),
+            Style::default().fg(Color::Yellow).bold(),
+        ),
+        Span::styled(label, Style::default().fg(Color::Yellow).bold()),
+        Span::raw("    "),
+        Span::styled(
+            format!("[{}{}] ", full, empty),
+            Style::default().fg(Color::Rgb(45, 213, 183)),
+        ),
+        Span::styled(
+            format!("{}/{} ({}%)", step, total, pct),
+            Style::default().fg(Color::White),
+        ),
+    ])
 }
 
 /// The single hint line (one mode — typing always works).

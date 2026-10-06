@@ -109,6 +109,41 @@ mod previews {
         println!("{}", draw(&state, 90, 24));
     }
 
+
+    /// `cargo test scratch_preview_semantic_progress -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn scratch_preview_semantic_progress() {
+        use crate::slices::spai_notes::scratch::state::{
+            SemanticJob, SemanticMessage, SemanticProgress,
+        };
+        use std::sync::mpsc;
+        let mut state = state_with_projects();
+        state.open_scratch(None);
+        let (tx, rx) = mpsc::channel::<SemanticMessage>();
+        tx.send(SemanticMessage::Progress {
+            step: 3,
+            total: 12,
+            label: "Sémantické hledání „build“".to_string(),
+        })
+        .unwrap();
+        state.scratch.semantic_job = Some(SemanticJob {
+            receiver: rx,
+            progress: SemanticProgress::Running {
+                step: 3,
+                total: 12,
+                label: "Sémantické hledání „build“".to_string(),
+            },
+            spinner_tick: 2,
+        });
+        state.scratch.semantic_progress = SemanticProgress::Running {
+            step: 3,
+            total: 12,
+            label: "Sémantické hledání „build“".to_string(),
+        };
+        println!("{}", draw(&state, 90, 24));
+    }
+
     /// `cargo test scratch_preview_mention_popup -- --ignored --nocapture`
     #[test]
     #[ignore]
