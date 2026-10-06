@@ -80,7 +80,7 @@ fn handle_insert_keys(key: &KeyEvent, state: &mut SidebarState) {
         KeyCode::End => state.spai_notes.on_edit_cursor_line_end(),
         KeyCode::PageUp => state.spai_notes.scroll_edit_body(false, 5),
         KeyCode::PageDown => state.spai_notes.scroll_edit_body(true, 5),
-        KeyCode::Char(c) if !ctrl && !key.modifiers.contains(KeyModifiers::ALT) => {
+        KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             state.spai_notes.on_edit_char_typed(c)
         }
         _ => {}

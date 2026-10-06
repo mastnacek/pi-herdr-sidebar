@@ -9,6 +9,7 @@
 //! - [`draft`] — unsaved-lines autosave in `HERDR_PLUGIN_STATE_DIR`
 //! - [`save`] — Ctrl+S pipeline + `u` (undo batch)
 //! - [`dedup`] / [`dedup_popup`] — Ctrl+D engine glue and popup rendering
+//! - [`mention`] / [`mention_popup`] — `@` project autocomplete + rendering
 //! - [`filter`] — token parser, fuzzy scoring, AND-composition
 //! - [`semantic`] — `~` filter: one embedding + cosine over stored vectors
 //! - [`scope`] — New / Project / All loading, record opening, status cycling
@@ -24,6 +25,8 @@ pub mod draft;
 pub mod filter;
 pub mod footer;
 pub mod line_model;
+pub mod mention;
+pub mod mention_popup;
 pub mod save;
 pub mod scope;
 pub mod semantic;

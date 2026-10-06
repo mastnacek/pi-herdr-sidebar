@@ -15,6 +15,54 @@ use super::storage_format::format_spai_markdown;
 use super::time_utils::current_timestamp_and_date;
 use std::path::PathBuf;
 
+/// A Czech inline stamp `[10.2.2026 14:22:37]` (seconds optional), read back
+/// into `YYYY-MM-DD HH:MM:SS`. Returns it with the text after the token.
+fn take_stamp_token(s: &str) -> (String, Option<String>) {
+    let Some(rest) = s.strip_prefix('[') else {
+        return (s.to_string(), None);
+    };
+    let Some(close) = rest.find(']') else {
+        return (s.to_string(), None);
+    };
+    let body = &rest[..close];
+    let after = rest[close + 1..].trim_start();
+    let Some((date, time)) = body.split_once(' ') else {
+        return (s.to_string(), None);
+    };
+    let mut d = date.split('.');
+    let (day, month, year) = match (d.next(), d.next(), d.next(), d.next()) {
+        (Some(dd), Some(mm), Some(yy), None) if !dd.is_empty() && !mm.is_empty() && !yy.is_empty() => {
+            (dd, mm, yy)
+        }
+        _ => return (s.to_string(), None),
+    };
+    let mut t = time.split(':');
+    let (h, mi, s2) = match (t.next(), t.next(), t.next(), t.next()) {
+        (Some(h), Some(mi), None, None) => (h, mi, "0"),
+        (Some(h), Some(mi), Some(s), None) => (h, mi, s),
+        _ => return (s.to_string(), None),
+    };
+    let ok = |x: &str| !x.is_empty() && x.chars().all(|c| c.is_ascii_digit());
+    if ![day, month, year, h, mi, s2].iter().all(|p| ok(p)) {
+        return (s.to_string(), None);
+    }
+    let iso = format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        year.parse::<u32>().unwrap_or(0),
+        month.parse::<u32>().unwrap_or(0),
+        day.parse::<u32>().unwrap_or(0),
+        h.parse::<u32>().unwrap_or(0),
+        mi.parse::<u32>().unwrap_or(0),
+        s2.parse::<u32>().unwrap_or(0),
+    );
+    (after.to_string(), Some(iso))
+}
+
+/// The `YYYY-MM-DD` part of an ISO timestamp, for the file-name date.
+fn today_part(iso: &str) -> Option<String> {
+    iso.get(..10).map(String::from)
+}
+
 pub struct WrittenNote {
     pub id: String,
     pub path: PathBuf,
@@ -32,6 +80,12 @@ pub fn write_record(proj: &SpaiProjectSummary, text: &str) -> Result<WrittenNote
 
     let detected = detect_spai_input(first_line);
     let clean_title = strip_leading_prefix(first_line).unwrap_or(first_line).trim();
+
+    // A Scratchpad line carries its stamp inline (`[10.2.2026 14:22:37]`,
+    // inserted right after the prefix): use it as the note's timestamp —
+    // the date of *typing* — and keep it out of the title and body.
+    let (clean_title, typed_stamp) = take_stamp_token(clean_title);
+    let clean_title: &str = clean_title.trim();
     let title = if clean_title.is_empty() {
         first_line.to_string()
     } else {
@@ -41,8 +95,12 @@ pub fn write_record(proj: &SpaiProjectSummary, text: &str) -> Result<WrittenNote
     std::fs::create_dir_all(&proj.spai_dir)
         .map_err(|e| format!("Složku docs/spai nelze vytvořit: {}", e))?;
 
-    let (today, timestamp) = current_timestamp_and_date();
+    let (today, saved_stamp) = current_timestamp_and_date();
+    let timestamp = typed_stamp.unwrap_or(saved_stamp);
+    let today = today_part(&timestamp).unwrap_or(today);
     let slug = slugify(&title);
+    // The body keeps the record exactly as typed (stamp included) — the
+    // frontmatter timestamp is the parsed one; nothing the user wrote is lost.
     let body = text.trim().to_string();
 
     // create_new refuses on collision; bump the id and retry.
@@ -199,5 +257,40 @@ mod tests {
         assert_eq!(routed.name, "herdr");
         assert!(route_mention(". Nic @neexistuje", &projects).is_none());
         assert!(route_mention(". Nic", &projects).is_none());
+    }
+
+    #[test]
+    fn an_inline_stamp_becomes_the_note_timestamp_and_leaves_the_title() {
+        let proj = temp_project("stamp");
+        let note = write_record(&proj, ". [10.2.2026 14:22:37] Opravit build @proj").unwrap();
+        let content = fs::read_to_string(&note.path).unwrap();
+        // Title is clean; the stamp moved into the frontmatter timestamp.
+        assert!(content.contains("# SPAI-001: Opravit build"), "title: {content}");
+        assert!(content.contains("timestamp: 2026-02-10 14:22:37"), "ts: {content}");
+        // The file name carries the *typed* date, not the save date.
+        assert!(
+            note.path.file_name().unwrap().to_string_lossy().starts_with("2026-02-10-"),
+            "name: {:?}",
+            note.path
+        );
+        // The body keeps exactly what was typed.
+        assert!(content.contains(". [10.2.2026 14:22:37] Opravit build @proj"), "body: {content}");
+        fs::remove_dir_all(&proj.path).ok();
+    }
+
+    #[test]
+    fn a_stamp_with_minutes_only_is_accepted_and_a_yaml_list_is_not() {
+        let proj = temp_project("stamp2");
+        let note = write_record(&proj, ". [10.2.2026 14:22] Krátký čas").unwrap();
+        let content = fs::read_to_string(&note.path).unwrap();
+        assert!(content.contains("timestamp: 2026-02-10 14:22:00"), "ts: {content}");
+
+        let note2 = write_record(&proj, "- [ai, chat] Značky nejsou čas").unwrap();
+        let content2 = fs::read_to_string(&note2.path).unwrap();
+        assert!(
+            content2.contains(&format!("title: \"[ai, chat] Značky nejsou čas\"")),
+            "a non-stamp bracket stays in the title: {content2}"
+        );
+        fs::remove_dir_all(&proj.path).ok();
     }
 }

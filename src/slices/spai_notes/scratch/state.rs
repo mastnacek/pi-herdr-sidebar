@@ -57,6 +57,15 @@ pub enum ScratchInput {
     SemanticFilter,
 }
 
+/// `@` project autocomplete: anchored under the cursor line while a mention
+/// token is being typed (the matches come from `SpaiNotesState.projects` at
+/// render time, so this stays settings-free and tiny).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MentionPopup {
+    pub anchor_line: usize,
+    pub selected: usize,
+}
+
 /// Ctrl+D popup state for the line under the cursor (plan §3).
 #[derive(Default)]
 pub struct ScratchDedup {
@@ -119,6 +128,8 @@ pub struct ScratchState {
     /// Ctrl+S warning when a fresh dedup result is similar: `⚠ similar: SPAI-009`.
     pub warn_similar: Option<String>,
     pub dedup: ScratchDedup,
+    /// `@` autocomplete popup while a mention token is open, or `None`.
+    pub mention: Option<MentionPopup>,
     /// Plugin state dir (draft storage); filled on open from the context.
     pub state_dir: Option<PathBuf>,
 }
@@ -139,6 +150,7 @@ impl ScratchState {
         self.filter = None;
         self.semantic_allowed = None;
         self.status_filter = StatusFilter::All;
+        self.mention = None;
     }
 
     pub fn close(&mut self) {
@@ -147,6 +159,7 @@ impl ScratchState {
         self.input_mode = None;
         self.input_buffer.clear();
         self.confirm_close = false;
+        self.mention = None;
     }
 
     pub fn reset_for_scope(&mut self) {
@@ -163,6 +176,7 @@ impl ScratchState {
         self.last_summary = None;
         self.warn_similar = None;
         self.dedup = ScratchDedup::default();
+        self.mention = None;
     }
 
     // ── Cursor helpers ────────────────────────────────────────────
@@ -228,6 +242,8 @@ impl ScratchState {
     pub fn close_dedup(&mut self) {
         self.dedup = ScratchDedup::default();
     }
+
+    // `@` autocomplete plumbing lives in `super::mention` (file-size cap).
 }
 
 /// Byte offset of a char index (UTF-8 safe).

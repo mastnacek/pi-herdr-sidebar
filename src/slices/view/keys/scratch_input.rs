@@ -30,7 +30,7 @@ pub fn handle_filter_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
             scratch.input_buffer.pop();
             true
         }
-        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+        KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             scratch.input_buffer.push(c);
             true
         }
@@ -75,7 +75,7 @@ pub fn handle_semantic_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
             state.spai_notes.scratch.input_buffer.pop();
             true
         }
-        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+        KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             state.spai_notes.scratch.input_buffer.push(c);
             true
         }

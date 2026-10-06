@@ -70,11 +70,37 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let scratch = &mut state.spai_notes.scratch;
 
+    // `@` autocomplete sits above the buffer while a mention token is open.
+    if scratch.mention.is_some() {
+        match key.code {
+            KeyCode::Esc => {
+                scratch.close_mention_popup();
+                return true;
+            }
+            KeyCode::Up => {
+                scratch.mention_move_selection(&state.spai_notes.projects, -1);
+                return true;
+            }
+            KeyCode::Down => {
+                scratch.mention_move_selection(&state.spai_notes.projects, 1);
+                return true;
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                if !scratch.accept_mention(&state.spai_notes.projects) {
+                    scratch.close_mention_popup();
+                }
+                return true;
+            }
+            _ => {} // typing falls through and re-filters the popup below
+        }
+    }
+
     match key.code {
         KeyCode::Esc => {
             // Edit → Read (the draft is autosaved on close/scope switches).
             scratch.mode = ScratchMode::Read;
             scratch.confirm_close = false;
+            scratch.close_mention_popup();
             true
         }
         KeyCode::Char('s') if ctrl => {
@@ -87,6 +113,7 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
         }
         KeyCode::Enter => {
             scratch.split_line();
+            scratch.update_mention_popup();
             true
         }
         KeyCode::Backspace => {
@@ -95,6 +122,7 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
                     "Uložený řádek — měňte jej v Read (Enter) nebo v editoru".to_string(),
                 );
             }
+            scratch.update_mention_popup();
             true
         }
         KeyCode::Delete => {
@@ -103,6 +131,7 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
                     "Uložený řádek — měňte jej v Read (Enter) nebo v editoru".to_string(),
                 );
             }
+            scratch.update_mention_popup();
             true
         }
         KeyCode::Up => {
@@ -144,14 +173,16 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
         KeyCode::Tab => {
             let _ = scratch.insert_char(' ');
             let _ = scratch.insert_char(' ');
+            scratch.update_mention_popup();
             true
         }
-        KeyCode::Char(c) if !ctrl && !key.modifiers.contains(KeyModifiers::ALT) => {
+        KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             if !scratch.insert_char(c) {
                 state.spai_notes.status_message = Some(
                     "Uložený řádek — měňte jej v Read (Enter) nebo v editoru".to_string(),
                 );
             }
+            scratch.update_mention_popup();
             true
         }
         _ => true, // the Scratchpad owns the keyboard while open

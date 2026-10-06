@@ -41,6 +41,8 @@ pub fn render_scratch(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     // Dedup popup anchored under the cursor line (above the footer).
     super::dedup_popup::render_dedup_popup(frame, inner, state);
+    // `@` project autocomplete while a mention token is open.
+    super::mention_popup::render_mention_popup(frame, inner, state);
 }
 
 /// Visible window of lines that keeps the cursor on screen.
@@ -260,6 +262,25 @@ mod previews {
             selected: 0,
             receiver: None,
         };
+        println!("{}", draw(&state, 90, 24));
+    }
+
+    /// `cargo test scratch_preview_mention_popup -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn scratch_preview_mention_popup() {
+        let mut state = state_with_projects();
+        state.projects.push(SpaiProjectSummary::new(
+            "pi-spai".to_string(),
+            PathBuf::from("D:/work/pi-spai"),
+            PathBuf::from("D:/work/pi-spai/docs/spai"),
+        ));
+        state.open_scratch(None);
+        for c in ". Opravit @her".chars() {
+            state.scratch.insert_char(c);
+            state.scratch.cursor_char = state.scratch.current_line_len();
+        }
+        state.scratch.update_mention_popup();
         println!("{}", draw(&state, 90, 24));
     }
 

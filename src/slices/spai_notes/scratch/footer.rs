@@ -131,6 +131,8 @@ fn edit_hint_line(state: &SpaiNotesState) -> Line<'static> {
         Span::styled("uložit  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Ctrl+D] ", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
         Span::styled("duplicity  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[@] ", Style::default().fg(Color::Cyan).bold()),
+        Span::styled("projekt  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Esc] ", Style::default().fg(Color::Cyan).bold()),
         Span::styled("read", Style::default().fg(Color::DarkGray)),
     ])

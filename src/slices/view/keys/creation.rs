@@ -67,7 +67,7 @@ pub fn handle_creation_dialog(key: &KeyEvent, state: &mut SidebarState) -> bool 
         KeyCode::End => state.spai_notes.on_dialog_cursor_end(),
         KeyCode::Delete => state.spai_notes.on_dialog_delete(),
         KeyCode::Backspace => state.spai_notes.on_dialog_backspace(),
-        KeyCode::Char(c) if !ctrl && !key.modifiers.contains(KeyModifiers::ALT) => {
+        KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
             state.spai_notes.on_dialog_char_typed(c)
         }
         _ => {}

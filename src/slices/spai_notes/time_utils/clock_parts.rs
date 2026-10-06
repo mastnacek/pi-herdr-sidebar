@@ -111,6 +111,18 @@ fn local_fallback() -> CalendarMoment {
     civil_from_unix(secs)
 }
 
+/// Current local time as a Czech inline stamp: `[10.2.2026 14:22:37]`.
+///
+/// Same shape `piprompt-core` stamps on a numbered entry: Czech date (no
+/// leading zeros on day/month), zero-padded clock. The Scratchpad inserts it
+/// right after a bare prefix, and [`crate::slices::spai_notes::note_writer`]
+/// reads it back into the note's `timestamp` frontmatter, so a draft written
+/// yesterday keeps yesterday's date when saved today.
+pub fn current_stamp_czech() -> String {
+    let (y, m, d, h, mi, s) = now_local();
+    format!("[{}.{}.{} {:02}:{:02}:{:02}]", d, m, y, h, mi, s)
+}
+
 /// Current local date (`YYYY-MM-DD`) and timestamp (`YYYY-MM-DD HH:MM:SS`).
 ///
 /// Uses the OS-local time (DST included) so notes created after midnight in
