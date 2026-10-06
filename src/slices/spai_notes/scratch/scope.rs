@@ -75,7 +75,11 @@ impl SpaiNotesState {
             }
         }
 
-        scratch.clamp_cursor();
+        // The cursor starts on the FIRST record; the window scrolls as it
+        // moves (visible_window keeps it in view).
+        scratch.cursor_line = 0;
+        scratch.cursor_char = 0;
+        scratch.scroll = 0;
         self.scratch = scratch;
     }
 

@@ -298,3 +298,35 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
     );
     fs::remove_dir_all(&a).ok();
 }
+#[test]
+fn loaded_scope_cursor_starts_on_first_record() {
+    let a = temp_project("cursor");
+    let mut state = state_on(&a);
+    for t in ["prvni", "druhy", "treti"] {
+        state.create_quick_note_with_status(
+            t,
+            super::super::super::note::SpaiType::Todo,
+            super::super::super::note::SpaiStatus::Todo,
+            &format!(". {}
+", t),
+        )
+        .unwrap();
+    }
+    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
+    // Cursor on the FIRST record (not the trailing typing slot).
+    assert_eq!(state.scratch.cursor_line, 0);
+    // Arrow down walks into the records; scrolling keeps the cursor visible.
+    for i in 1..4 {
+        state.scratch.cursor_down();
+        assert_eq!(state.scratch.cursor_line, i);
+    }
+    // The visible window contains the cursor.
+    let (scroll, h) = super::super::view::visible_window(
+        state.scratch.lines.len(),
+        state.scratch.cursor_line,
+        5,
+    );
+    assert!(state.scratch.cursor_line >= scroll);
+    assert!(state.scratch.cursor_line < scroll + h);
+    fs::remove_dir_all(&a).ok();
+}
