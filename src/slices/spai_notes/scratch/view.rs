@@ -23,6 +23,13 @@ pub fn render_scratch(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         scratch.scope.label(),
         if scratch.dirty { " ●" } else { "" },
     );
+    // Distinct mode colours: Edit = yellow (writing, like the `. ` marks),
+    // Read = cyan (browsing).
+    let mode_color = if read_mode {
+        Color::Cyan
+    } else {
+        Color::Rgb(255, 215, 0)
+    };
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -30,9 +37,9 @@ pub fn render_scratch(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         .split(area);
 
     let block = Block::bordered()
-        .title(Span::styled(title, Style::default().fg(Color::Cyan).bold()))
+        .title(Span::styled(title, Style::default().fg(mode_color).bold()))
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(mode_color));
     let inner = block.inner(rows[0]);
     frame.render_widget(block, rows[0]);
 
@@ -101,7 +108,9 @@ fn render_line(
 ) -> Line<'static> {
     let mut spans: Vec<Span> = Vec::new();
 
-    let text = if is_cursor && line.origin.is_editable() {
+    // Every line is editable (bidirectional), so the cursor marker always
+    // shows on the cursor line.
+    let text = if is_cursor {
         insert_marker(&line.text, cursor_char)
     } else {
         line.text.clone()
@@ -113,16 +122,20 @@ fn render_line(
             spans.extend(highlight_spai_input_spans(&text));
         }
         origin => {
-            let label = format!(
-                "  ✓ → {} {}",
-                origin.project().unwrap_or(""),
-                origin.record_id().unwrap_or("")
-            );
             let style = Style::default()
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::DIM | Modifier::ITALIC);
             spans.push(Span::styled(text, style));
-            spans.push(Span::styled(label, style));
+            // The ✓ label belongs to the record head (the marked line);
+            // continuation lines of the same file stay label-free.
+            if super::line_model::is_marked(&line.text) {
+                let label = format!(
+                    "  ✓ → {} {}",
+                    origin.project().unwrap_or(""),
+                    origin.record_id().unwrap_or("")
+                );
+                spans.push(Span::styled(label, style));
+            }
         }
     }
 

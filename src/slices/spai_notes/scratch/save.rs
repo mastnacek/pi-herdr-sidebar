@@ -4,21 +4,28 @@
 //! `@mention`, else the current project; a line with no resolvable project
 //! stays in the scratchpad with an error (nothing is lost). One failing line
 //! never blocks the others. `u` in Read mode deletes the last batch.
+//!
+//! Editing is bidirectional: a Saved record whose text has changed since the
+//! save is **updated in its file** (same id, same path) instead of creating
+//! a duplicate. FromFile records (Project/All scope) are summaries — they are
+//! edited through the Notes editor (Enter/o), so Ctrl+S skips them.
 use super::line_model::{LineOrigin, ScratchLine};
 use super::super::note_writer;
 use super::super::state::SpaiNotesState;
 use std::path::PathBuf;
 
 impl SpaiNotesState {
-    /// Saves every new marked record. Returns the count written.
+    /// Saves every new marked record and updates modified Saved ones.
+    /// Returns the number of created files (updates are reported separately).
     /// Ctrl+S never blocks; per-line failures are collected into the summary.
     pub fn scratch_save_all(&mut self) -> usize {
         // Collect record spans first (indices shift as groups collapse).
-        let mut records: Vec<(usize, usize, String)> = Vec::new();
+        let mut creates: Vec<(usize, usize, String)> = Vec::new();
+        let mut updates: Vec<(usize, usize, PathBuf, String)> = Vec::new(); // + original text
         for &start in super::line_model::record_starts(&self.scratch.lines).iter().rev() {
-            let line = &self.scratch.lines[start];
-            if !line.origin.is_editable() || !super::line_model::is_marked(&line.text) {
-                continue;
+            let head = &self.scratch.lines[start];
+            if !super::line_model::is_marked(&head.text) {
+                continue; // prose line 0
             }
             let (s, e) = super::line_model::record_span(&self.scratch.lines, start);
             let text = self.scratch.lines[s..e]
@@ -26,12 +33,25 @@ impl SpaiNotesState {
                 .map(|l| l.text.clone())
                 .collect::<Vec<_>>()
                 .join("\n");
-            records.push((s, e, text));
-        }
-
-        if records.is_empty() {
-            self.scratch.last_summary = Some("Nic k uložení — žádný označený řádek".to_string());
-            return 0;
+            match &head.origin {
+                LineOrigin::New => creates.push((s, e, text)),
+                LineOrigin::Saved { path, saved_text, .. } => {
+                    // Original full record: every Saved line keeps its own
+                    // original text.
+                    let original = self.scratch.lines[s..e]
+                        .iter()
+                        .filter_map(|l| match &l.origin {
+                            LineOrigin::Saved { saved_text, .. } => Some(saved_text.clone()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    if text != original {
+                        updates.push((s, e, path.clone(), original));
+                    }
+                }
+                LineOrigin::FromFile { .. } => {} // summaries: edit via the editor
+            }
         }
 
         // Fresh dedup warning (footer only, no prompt, plan §3).
@@ -40,12 +60,12 @@ impl SpaiNotesState {
             .fresh_similar_id()
             .map(|id| format!("⚠ similar: {}", id));
 
-        let mut saved: Vec<(usize, String, PathBuf, String, String)> = Vec::new();
+        let mut saved: Vec<(usize, String, PathBuf, String)> = Vec::new();
         let mut errors: Vec<String> = Vec::new();
         let mut files: Vec<PathBuf> = Vec::new();
 
         // Save bottom-up so earlier indices stay valid while groups collapse.
-        for &(start, end, ref text) in records.iter() {
+        for &(start, end, ref text) in creates.iter() {
             // Route: first matching @mention; an *explicit but unknown* mention
             // keeps the line in the scratchpad (nothing is lost). Without any
             // mention the record falls back to the current project (plan §2.1).
@@ -75,29 +95,46 @@ impl SpaiNotesState {
             match note_writer::write_record(&proj, text) {
                 Ok(w) => {
                     files.push(w.path.clone());
-                    saved.push((start, w.id, w.path, w.project, text.clone()));
+                    saved.push((start, w.id, w.path, w.project));
                 }
                 Err(e) => errors.push(format!("Řádek {}: {}", start + 1, e)),
             }
         }
 
-        // Apply the successful saves (reverse order: remove continuations).
+        // Apply the successful creates (reverse order: remove continuations).
         {
             let scratch = &mut self.scratch;
-            for (start, id, path, project, text) in saved.iter().rev() {
+            for (start, id, path, project) in saved.iter().rev() {
                 let (s, e) = super::line_model::record_span(&scratch.lines, *start);
-                for _ in s + 1..e {
-                    scratch.lines.remove(s + 1);
-                }
-                scratch.lines[s] = ScratchLine {
-                    text: scratch.lines[s].text.clone(),
-                    origin: LineOrigin::Saved {
+                // Continuation lines stay visible as Saved lines of the same
+                // file (each keeps its own original text for `u`).
+                for i in s..e {
+                    let own = scratch.lines[i].text.clone();
+                    scratch.lines[i].origin = LineOrigin::Saved {
                         path: path.clone(),
                         id: id.clone(),
                         project: project.clone(),
-                        saved_text: text.clone(),
-                    },
-                };
+                        saved_text: own,
+                    };
+                }
+            }
+        }
+
+        // Apply the updates (reverse order; spans do not change).
+        let mut updated = 0usize;
+        for (start, end, path, _original) in updates.iter().rev() {
+            let (s, e) = super::line_model::record_span(&self.scratch.lines, *start);
+            let text = self.scratch.lines[s..e]
+                .iter()
+                .map(|l| l.text.clone())
+                .collect::<Vec<_>>()
+                .join("\n");
+            match note_writer::update_record(path, &text) {
+                Ok(()) => updated += 1,
+                Err(er) => {
+                    let _ = end;
+                    errors.push(format!("Řádek {}: {}", s + 1, er));
+                }
             }
         }
 
@@ -108,7 +145,7 @@ impl SpaiNotesState {
         // Summary: `Uloženo 3 · herdr SPAI-014, SPAI-015 · pi-spai SPAI-022`.
         let count = saved.len();
         let mut by_project: std::collections::BTreeMap<String, Vec<String>> = Default::default();
-        for (_, id, _, project, _) in saved.iter() {
+        for (_, id, _, project) in saved.iter() {
             by_project
                 .entry(project.clone())
                 .or_default()
@@ -122,6 +159,9 @@ impl SpaiNotesState {
         if !summary_parts.is_empty() {
             summary.push_str(&format!(" · {}", summary_parts.join(" · ")));
         }
+        if updated > 0 {
+            summary.push_str(&format!(" · aktualizováno {}", updated));
+        }
         if !errors.is_empty() {
             summary.push_str(&format!(" · {} chyb", errors.len()));
             if let Some(first) = errors.first() {
@@ -130,9 +170,21 @@ impl SpaiNotesState {
         }
         self.scratch.last_summary = Some(summary);
 
-        // Undo bookkeeping.
+        // Undo bookkeeping (only created files; `u` does not revert updates).
         self.scratch.last_batch = files;
-        self.scratch.dirty = count == 0;
+        self.scratch.dirty = false;
+
+        // Bidirectional UX: after a save the cursor must be able to type
+        // again — land it on a fresh New line when it sits on a Saved one.
+        let cursor_on_saved = matches!(
+            self.scratch.lines.get(self.scratch.cursor_line).map(|l| &l.origin),
+            Some(LineOrigin::Saved { .. } | LineOrigin::FromFile { .. })
+        );
+        if cursor_on_saved {
+            self.scratch.lines.push(ScratchLine::empty());
+            self.scratch.cursor_line = self.scratch.lines.len() - 1;
+            self.scratch.cursor_char = 0;
+        }
 
         // Draft of whatever remains unsaved.
         super::draft::save_draft(&self.scratch);
@@ -153,10 +205,9 @@ impl SpaiNotesState {
             if std::fs::remove_file(path).is_ok() {
                 undone += 1;
             }
-            // Revert the matching line to the whole original record group
-            // (Saved → New; continuation lines come back as their own lines).
-            let mut restored: Option<(usize, Vec<String>)> = None;
-            for (i, line) in self.scratch.lines.iter().enumerate() {
+            // Revert every Saved line of this file back to New with its
+            // original text (head and continuations alike).
+            for line in self.scratch.lines.iter_mut() {
                 if let LineOrigin::Saved {
                     path: p,
                     saved_text,
@@ -164,28 +215,10 @@ impl SpaiNotesState {
                 } = &line.origin
                 {
                     if p == path {
-                        restored = Some((
-                            i,
-                            saved_text
-                                .split('\n')
-                                .map(String::from)
-                                .collect(),
-                        ));
-                        break;
+                        line.text = saved_text.clone();
+                        line.origin = LineOrigin::New;
                     }
                 }
-            }
-            if let Some((i, group)) = restored {
-                let new_lines: Vec<ScratchLine> = group
-                    .into_iter()
-                    .map(|text| ScratchLine {
-                        text,
-                        origin: LineOrigin::New,
-                    })
-                    .collect();
-                let count = new_lines.len();
-                self.scratch.lines.splice(i..i + 1, new_lines);
-                let _ = count;
             }
         }
 

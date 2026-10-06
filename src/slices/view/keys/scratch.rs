@@ -123,20 +123,12 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
             true
         }
         KeyCode::Backspace => {
-            if !scratch.backspace() {
-                state.spai_notes.status_message = Some(
-                    "Uložený řádek — měňte jej v Read (Enter) nebo v editoru".to_string(),
-                );
-            }
+            scratch.backspace();
             scratch.update_mention_popup();
             true
         }
         KeyCode::Delete => {
-            if !scratch.forward_delete() {
-                state.spai_notes.status_message = Some(
-                    "Uložený řádek — měňte jej v Read (Enter) nebo v editoru".to_string(),
-                );
-            }
+            scratch.forward_delete();
             scratch.update_mention_popup();
             true
         }
@@ -187,11 +179,7 @@ fn handle_edit_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
             true
         }
         KeyCode::Char(c) if crate::shared::keys::is_text_input(key) => {
-            if !scratch.insert_char(c) {
-                state.spai_notes.status_message = Some(
-                    "Uložený řádek — měňte jej v Read (Enter) nebo v editoru".to_string(),
-                );
-            }
+            scratch.insert_char(c);
             scratch.update_mention_popup();
             true
         }

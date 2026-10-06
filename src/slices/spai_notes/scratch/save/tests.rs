@@ -68,8 +68,17 @@ fn routes_at_mention_to_the_right_folder_and_falls_back_to_current() {
         "unrouted line fell back to the current project"
     );
 
-    // Both lines are now Saved.
-    assert!(state.scratch.lines.iter().all(|l| !l.origin.is_editable()));
+    // Both records are Saved; the only New line left is the trailing typing
+    // slot (empty) the save pipeline adds for immediate further typing.
+    for line in &state.scratch.lines {
+        if !line.text.is_empty() {
+            assert!(
+                !matches!(line.origin, LineOrigin::New),
+                "record lines are Saved: {:?}",
+                line.origin
+            );
+        }
+    }
 
     fs::remove_dir_all(&a).ok();
     fs::remove_dir_all(&b).ok();
@@ -84,7 +93,7 @@ fn unknown_mention_leaves_the_line_in_the_scratchpad() {
     let n = state.scratch_save_all();
     assert_eq!(n, 0, "nothing saved");
     let line = &state.scratch.lines[0];
-    assert!(line.origin.is_editable(), "line stays (nothing is lost)");
+    assert!(matches!(line.origin, LineOrigin::New), "line stays (nothing is lost)");
     assert!(
         state
             .scratch
@@ -144,7 +153,7 @@ fn partial_failure_does_not_destroy_the_rest() {
         .iter()
         .find(|l| l.text.contains("Špatný"))
         .unwrap();
-    assert!(bad.origin.is_editable(), "failed line stays editable");
+    assert!(matches!(bad.origin, LineOrigin::New), "failed line stays editable");
     // The good line is Saved with a label.
     let good = state
         .scratch
@@ -152,7 +161,33 @@ fn partial_failure_does_not_destroy_the_rest() {
         .iter()
         .find(|l| l.text.contains("Dobrý"))
         .unwrap();
-    assert!(!good.origin.is_editable());
+    assert!(!matches!(good.origin, LineOrigin::New));
+    fs::remove_dir_all(&a).ok();
+}
+
+#[test]
+fn after_save_new_entries_can_be_added_immediately() {
+    let a = temp_project("flow");
+    let mut state = state_on(&a);
+    add_line(&mut state, ". První");
+    assert_eq!(state.scratch_save_all(), 1);
+
+    // The save leaves the cursor on a fresh empty line; typing a new record
+    // must work without any extra navigation.
+    assert_eq!(state.scratch.lines.last().unwrap().text, "");
+    for c in ". Druhý".chars() {
+        assert!(state.scratch.insert_char(c), "typing must not be blocked");
+        state.scratch.cursor_char = state.scratch.current_line_len();
+    }
+    assert_eq!(state.scratch_save_all(), 1, "the second entry created");
+
+    let spai = a.join("docs").join("spai");
+    let names: Vec<String> = fs::read_dir(&spai)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(names.len(), 2, "two files: {names:?}");
     fs::remove_dir_all(&a).ok();
 }
 
@@ -169,23 +204,41 @@ fn undo_batch_deletes_the_files_and_restores_lines() {
     let n = state.scratch_undo_batch().unwrap();
     assert_eq!(n, 1);
     assert!(!file.exists(), "file deleted");
-    // The line is back to New with the original text (group restored).
-    assert_eq!(state.scratch.lines.len(), 2, "continuation restored");
+    // The lines are back to New with the original texts (group restored);
+    // the third line is the trailing typing slot the save added.
+    assert_eq!(state.scratch.lines.len(), 3, "continuation restored");
     assert_eq!(state.scratch.lines[0].text, ". Vratný záznam");
     assert_eq!(state.scratch.lines[1].text, "pokračování");
-    assert!(state.scratch.lines[0].origin.is_editable());
+    assert_eq!(state.scratch.lines[2].text, "");
+    assert!(matches!(state.scratch.lines[0].origin, LineOrigin::New));
+    assert!(matches!(state.scratch.lines[1].origin, LineOrigin::New));
     fs::remove_dir_all(&a).ok();
 }
 
 #[test]
-fn saved_lines_are_not_editable_and_ctrl_d_is_manual_only() {
+fn saved_lines_stay_editable_and_re_save_updates_the_file() {
     let a = temp_project("readonly");
     let mut state = state_on(&a);
     add_line(&mut state, ". Uložený záznam");
     assert_eq!(state.scratch_save_all(), 1);
 
-    // Typing on a Saved line is rejected.
-    assert!(!state.scratch.insert_char('X'), "Saved line rejects edits");
+    // Bidirectional: editing the Saved record works (cursor back onto it)…
+    state.scratch.cursor_line = 0;
+    state.scratch.cursor_char = state.scratch.current_line_len();
+    assert!(state.scratch.insert_char('!'));
+    // …and Ctrl+S updates the same file (no new id, content changed).
+    let file = state.scratch.last_batch[0].clone();
+    assert_eq!(state.scratch_save_all(), 0, "no new file created");
+    let content = fs::read_to_string(&file).unwrap();
+    assert!(content.contains("Uložený záznam!"), "updated body: {content}");
+    assert!(content.contains("# SPAI-001:"), "same id kept: {content}");
+
+    // The cursor lands on a fresh New line so new entries flow immediately.
+    assert!(matches!(
+        state.scratch.lines.last().unwrap().origin,
+        LineOrigin::New
+    ));
+    assert!(state.scratch.insert_char('X'), "can type after save");
     // The fresh dedup panel makes the next Ctrl+S warn (no prompt).
     state.scratch.dedup.visible = true;
     state.scratch.dedup.matches.push(super::super::super::similarity::SimilarNoteMatch {

@@ -33,9 +33,6 @@ impl ScratchState {
     /// cursor-aware for the middle of a scratchpad line.
     pub fn mention_context(&self) -> Option<(usize, String)> {
         let line = self.current_line()?;
-        if !line.origin.is_editable() {
-            return None;
-        }
         let chars: Vec<char> = line.text.chars().collect();
         let upto = self.cursor_char.min(chars.len());
         let mut at = None;
@@ -236,7 +233,8 @@ mod tests {
     }
 
     #[test]
-    fn saved_lines_never_open_the_popup() {
+    fn saved_lines_open_the_popup_too() {
+        // Bidirectional editing: an editable Saved record routes again.
         let mut s = state_with(". fix @her", 10);
         s.lines[0].origin = LineOrigin::Saved {
             path: PathBuf::from("x.md"),
@@ -244,8 +242,7 @@ mod tests {
             project: "p".to_string(),
             saved_text: ". fix @her".to_string(),
         };
-        assert!(s.mention_context().is_none());
         s.update_mention_popup();
-        assert!(s.mention.is_none());
+        assert!(s.mention.is_some());
     }
 }

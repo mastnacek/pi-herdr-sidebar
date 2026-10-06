@@ -4,6 +4,11 @@
 //! the shared table, or a bare mark symbol) starts a record; following
 //! unmarked lines belong to it as continuation. Prose (unmarked) lines stay
 //! in the scratchpad and are never saved.
+//!
+//! Editing is **bidirectional** (plan §2.4 as lived): every line is editable,
+//! including Saved ones. A Saved record whose text changes is updated in its
+//! file on the next Ctrl+S (same id, same file); `saved_text` keeps the
+//! original so `u` (undo batch) can restore it.
 use super::super::spai_prefixes::strip_leading_prefix;
 use std::path::PathBuf;
 
@@ -15,17 +20,20 @@ pub struct ScratchLine {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LineOrigin {
-    /// Typed in this session (or restored from the draft) — editable, savable.
+    /// Typed in this session (or restored from the draft) — saves as a new file.
     New,
-    /// Written to disk by a Ctrl+S batch. `saved_text` keeps the original
-    /// record so `u` (undo batch) can restore it.
+    /// Written to disk by a Ctrl+S batch; further edits update the file.
+    /// `saved_text` keeps the original text of this line so `u` (undo batch)
+    /// can restore it.
     Saved {
         path: PathBuf,
         id: String,
         project: String,
         saved_text: String,
     },
-    /// A record loaded from a project (Project/All scope) — behaves like Saved.
+    /// A record loaded from a project (Project/All scope). These are summaries
+    /// (`. SPAI-014 Title`), not the full record text — real editing goes
+    /// through the Notes editor (Enter/o), so Ctrl+S skips them.
     FromFile {
         path: PathBuf,
         id: String,
@@ -57,9 +65,6 @@ impl LineOrigin {
         }
     }
 
-    pub fn is_editable(&self) -> bool {
-        matches!(self, LineOrigin::New)
-    }
 }
 
 /// A line carrying a SPAI mark: a full table prefix (`. `, `x `, `!- `, …) or

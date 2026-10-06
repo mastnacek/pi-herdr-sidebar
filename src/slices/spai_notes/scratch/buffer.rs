@@ -1,18 +1,16 @@
 //! Edit-mode buffer operations for the Scratchpad (plan §1).
 //!
-//! Char-level editing over the flat line list; Saved lines reject edits so
-//! text and file cannot diverge (plan §2.4).
+//! Char-level editing over the flat line list. Every line is editable —
+//! including Saved ones (bidirectional editing): changes to a Saved record
+//! are written back to its file on the next Ctrl+S.
 use super::line_model::{LineOrigin, ScratchLine};
 use super::state::{byte_of_char, ScratchState};
 use crate::slices::spai_notes::spai_prefixes::SPAI_PREFIXES;
 use crate::slices::spai_notes::time_utils::current_stamp_czech;
 
 impl ScratchState {
-    /// Inserts a char at the cursor. Rejected on Saved lines.
+    /// Inserts a char at the cursor (any line — Saved included).
     pub fn insert_char(&mut self, c: char) -> bool {
-        if !self.editable_at_cursor() {
-            return false;
-        }
         if self.lines.is_empty() {
             self.lines.push(ScratchLine::empty());
         }
@@ -49,11 +47,8 @@ impl ScratchState {
     }
 
     /// Removes the char before the cursor; merges with the previous line at
-    /// position 0. Rejected on Saved lines.
+    /// position 0 (any line — Saved included).
     pub fn backspace(&mut self) -> bool {
-        if !self.editable_at_cursor() {
-            return false;
-        }
         if self.lines.is_empty() {
             return false;
         }
@@ -65,10 +60,7 @@ impl ScratchState {
             self.cursor_char -= 1;
             self.dirty = true;
         } else if self.cursor_line > 0 {
-            // Merge with the previous line (if it is editable).
-            if !self.lines[self.cursor_line - 1].origin.is_editable() {
-                return false;
-            }
+            // Merge with the previous line (any line — Saved included).
             let prev_len = self.lines[self.cursor_line - 1].text.chars().count();
             let cur = self.lines.remove(self.cursor_line);
             self.lines[self.cursor_line - 1].text.push_str(&cur.text);
@@ -81,7 +73,7 @@ impl ScratchState {
 
     /// Removes the char at the cursor; joins with the next line at EOL.
     pub fn forward_delete(&mut self) -> bool {
-        if !self.editable_at_cursor() || self.lines.is_empty() {
+        if self.lines.is_empty() {
             return false;
         }
         let len = self.current_line_len();

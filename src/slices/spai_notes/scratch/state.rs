@@ -1,9 +1,9 @@
 //! Scratchpad state (plan §1, §4): mode, scope, buffer, cursor, dirty flag.
 //!
 //! The buffer is a flat list of [`ScratchLine`]s; a record is a marked line
-//! plus its unmarked continuation lines (see [`super::line_model`]). Saved
-//! lines are never editable in the buffer — changes go through Read actions
-//! or the Notes editor, so text and file cannot diverge.
+//! plus its unmarked continuation lines (see [`super::line_model`]). Every
+//! line is editable (bidirectional editing): a Saved record whose text
+//! changes is written back to its file on the next Ctrl+S.
 //!
 //! Split for the line cap:
 //! - [`super::buffer`] — Edit-mode text operations on the buffer
@@ -206,14 +206,6 @@ impl ScratchState {
         }
         let len = self.current_line_len();
         self.cursor_char = self.cursor_char.min(len);
-    }
-
-    /// Is the line under the cursor editable? Empty buffer counts as editable.
-    pub fn editable_at_cursor(&self) -> bool {
-        match self.lines.get(self.cursor_line) {
-            None => true,
-            Some(l) => l.origin.is_editable(),
-        }
     }
 
     /// Is the current line a marked record candidate (savable)?

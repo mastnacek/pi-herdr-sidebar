@@ -9,9 +9,9 @@
 use super::discovery::SpaiProjectSummary;
 use super::input_highlighter::detect_spai_input;
 use super::note::{SpaiFacets, SpaiNoteItem};
-use super::note_io::{create_note_file, next_spai_number};
+use super::note_io::{create_note_file, next_spai_number, write_atomic};
 use super::spai_prefixes::strip_leading_prefix;
-use super::storage_format::format_spai_markdown;
+use super::storage_format::{format_spai_markdown, parse_spai_markdown};
 use super::time_utils::current_timestamp_and_date;
 use std::path::PathBuf;
 
@@ -61,6 +61,38 @@ fn take_stamp_token(s: &str) -> (String, Option<String>) {
 /// The `YYYY-MM-DD` part of an ISO timestamp, for the file-name date.
 fn today_part(iso: &str) -> Option<String> {
     iso.get(..10).map(String::from)
+}
+
+/// Rewrites an existing note file with new record `text` (bidirectional
+/// editing): the id, file path, tags, facets and extra frontmatter stay; the
+/// title, type/status, body and (when the line carries an inline stamp) the
+/// timestamp come from the edited text. The file name is NOT renamed — the
+/// id stays the anchor.
+pub fn update_record(path: &std::path::Path, text: &str) -> Result<(), String> {
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("Čtení selhalo: {}", e))?;
+    let mut item = parse_spai_markdown(&content, path.to_path_buf())
+        .ok_or_else(|| "Soubor nelze načíst jako SPAI poznámku".to_string())?;
+
+    let first_line = text.lines().next().unwrap_or("").trim();
+    if first_line.is_empty() {
+        return Err("Prázdný záznam".to_string());
+    }
+    let detected = detect_spai_input(first_line);
+    let clean = strip_leading_prefix(first_line).unwrap_or(first_line).trim();
+    let (clean, typed_stamp) = take_stamp_token(clean);
+    if !clean.is_empty() {
+        item.title = clean.to_string();
+    }
+    item.kind = detected.kind;
+    item.status = detected.status;
+    item.symbol = detected.status.symbol().to_string();
+    item.body = text.trim().to_string();
+    if let Some(ts) = typed_stamp {
+        item.timestamp = ts;
+    }
+
+    write_atomic(path, &format_spai_markdown(&item))
 }
 
 pub struct WrittenNote {
