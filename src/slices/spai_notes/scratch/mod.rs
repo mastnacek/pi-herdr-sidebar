@@ -28,6 +28,7 @@ pub mod filter;
 pub mod footer;
 pub mod help;
 pub mod line_model;
+pub mod line_render;
 pub mod mention;
 pub mod mention_popup;
 pub mod save;
@@ -35,6 +36,7 @@ pub mod scope;
 pub mod semantic;
 pub mod state;
 pub mod view;
+pub mod view_previews;
 pub mod visibility;
 
 /// Hook called by the event loop's tick so background dedup results land
