@@ -58,6 +58,24 @@ impl ScratchState {
         self.jump_to_first_visible();
     }
 
+    /// Moves the cursor to the previous/next **visible** line (↑/↓ with an
+    /// active filter). Line-stepping through hidden records would pop each
+    /// one into view as the cursor line (the cursor line is never hidden),
+    /// visually rotating the filtered list — so navigation skips them.
+    /// Without a filter this is an ordinary one-line step.
+    pub fn cursor_step_visible(&mut self, delta: i32) {
+        let shown: Vec<usize> = (0..self.lines.len())
+            .filter(|&i| i == self.cursor_line || !self.record_hidden(i))
+            .collect();
+        let pos = shown
+            .iter()
+            .position(|&i| i == self.cursor_line)
+            .unwrap_or(0);
+        let target = (pos as i32 + delta).clamp(0, shown.len() as i32 - 1) as usize;
+        self.cursor_line = shown[target];
+        self.cursor_char = self.cursor_char.min(self.current_line_len());
+    }
+
     pub fn jump_to_first_visible(&mut self) {
         let records = self.visible_records();
         if records.is_empty() {

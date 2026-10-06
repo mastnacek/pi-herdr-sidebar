@@ -437,3 +437,72 @@ pokračovací řádek
     );
     fs::remove_dir_all(&a).ok();
 }
+
+#[test]
+fn navigation_skips_hidden_records_no_popin() {
+    let a = temp_project("navskip");
+    let mut state = state_on(&a);
+    for t in ["jedna", "dva", "tri", "ctyri"] {
+        state.create_quick_note_with_status(
+            t,
+            super::super::super::note::SpaiType::Todo,
+            super::super::super::note::SpaiStatus::Todo,
+            &format!(". {}
+", t),
+        )
+        .unwrap();
+    }
+    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
+    // Semantic filter allows only records "dva" and "ctyri" (by path).
+    let paths: Vec<_> = state.projects[state.selected_project_idx]
+        .items
+        .iter()
+        .filter(|it| it.title.contains("dva") || it.title.contains("ctyri"))
+        .map(|it| it.file_path.clone())
+        .collect();
+    let mut allowed = std::collections::HashSet::new();
+    for p in paths {
+        allowed.insert(p);
+    }
+    state.scratch.semantic_allowed = Some(allowed);
+    state.scratch.cursor_line = 0;
+    assert_eq!(state.scratch.visible_count(), 2);
+
+    // What is visible and what hidden?
+    let vis: Vec<String> = state
+        .scratch
+        .lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            format!(
+                "{}:{}:{}",
+                i,
+                l.text,
+                if state.scratch.record_hidden(i) { "H" } else { "V" }
+            )
+        })
+        .collect();
+    eprintln!("VIS={vis:?}");
+
+    // (The Project scope loads records in descending id order: 004, 003,
+    // 002, 001 — visible are "ctyri" (line 0) and "dva" (line 2).)
+    assert!(!state.scratch.record_hidden(0));
+    assert!(state.scratch.record_hidden(1));
+
+    // ↓ jumps OVER the hidden record straight to the next VISIBLE one —
+    // no pop-in of hidden entries while navigating.
+    state.scratch.cursor_step_visible(1);
+    assert!(
+        state.scratch.lines[state.scratch.cursor_line]
+            .text
+            .contains("dva"),
+        "landed on the next VISIBLE record, skipping the hidden one"
+    );
+    // ↑ back; clamped at the edges.
+    state.scratch.cursor_step_visible(-1);
+    assert!(state.scratch.lines[state.scratch.cursor_line].text.contains("ctyri"));
+    state.scratch.cursor_step_visible(-5);
+    assert!(state.scratch.lines[state.scratch.cursor_line].text.contains("ctyri"));
+    fs::remove_dir_all(&a).ok();
+}

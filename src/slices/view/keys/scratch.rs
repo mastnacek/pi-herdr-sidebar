@@ -217,12 +217,12 @@ fn handle_buffer_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
             true
         }
         KeyCode::Up => {
-            scratch.cursor_up();
+            scratch.cursor_step_visible(-1);
             scratch.confirm_delete = None;
             true
         }
         KeyCode::Down => {
-            scratch.cursor_down();
+            scratch.cursor_step_visible(1);
             scratch.confirm_delete = None;
             true
         }
@@ -244,13 +244,13 @@ fn handle_buffer_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
         }
         KeyCode::PageUp => {
             for _ in 0..10 {
-                scratch.cursor_up();
+                scratch.cursor_step_visible(-1);
             }
             true
         }
         KeyCode::PageDown => {
             for _ in 0..10 {
-                scratch.cursor_down();
+                scratch.cursor_step_visible(1);
             }
             true
         }
