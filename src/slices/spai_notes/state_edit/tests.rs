@@ -57,6 +57,63 @@ fn edit_dialog_persists_title_and_body() {
 }
 
 #[test]
+fn edit_dialog_opens_ready_to_type() {
+    // SPAI-013: opening in Normal mode made typing appear broken — every letter
+    // was a vim command until the user discovered `i`.
+    let project = temp_project();
+    let note_path = project
+        .join("docs")
+        .join("spai")
+        .join("2026-01-01-SPAI-002-typing.md");
+    fs::write(
+        &note_path,
+        "---\ntype: Todo\ntitle: \"Hello\"\ntimestamp: 1\nstatus: todo\nsource: pi-spai\nspai_symbol: '.'\n---\n\n# SPAI-002: Hello\n. Hello\n",
+    )
+    .unwrap();
+
+    let mut state = SpaiNotesState::new(Some(project.clone()));
+    let idx = state
+        .projects
+        .iter()
+        .position(|p| p.path == project)
+        .expect("temp project discovered");
+    state.selected_project_idx = idx;
+
+    state.open_edit_dialog();
+    assert_eq!(
+        state.edit_dialog.mode,
+        EditMode::Insert,
+        "the dialog must open ready to type"
+    );
+    assert_eq!(
+        state.edit_dialog.cursor,
+        state.edit_dialog.title_input.chars().count(),
+        "cursor starts at the end of the title"
+    );
+
+    state.on_edit_char_typed('!');
+    assert!(
+        state.edit_dialog.title_input.ends_with('!'),
+        "a printable key must land in the title immediately: {}",
+        state.edit_dialog.title_input
+    );
+    assert!(state.edit_dialog.dirty, "typing marks the dialog dirty");
+
+    state.leave_insert_mode();
+    assert_eq!(
+        state.edit_dialog.mode,
+        EditMode::Normal,
+        "Esc returns to Normal, where the vim bindings live"
+    );
+    assert!(
+        state.edit_dialog.active,
+        "Esc from Insert must not close the dialog"
+    );
+
+    fs::remove_dir_all(&project).ok();
+}
+
+#[test]
 fn edit_dialog_rejects_empty_title() {
     let mut state = SpaiNotesState::new(None);
     state.edit_dialog.title_input = "   ".to_string();

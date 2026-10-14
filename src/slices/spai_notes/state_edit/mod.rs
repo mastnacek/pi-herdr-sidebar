@@ -1,16 +1,18 @@
 //! Integrated edit dialog behaviour for the SPAI Notes tab (`e` shortcut).
 //!
-//! Vim-like modes (plan §3, 2026-10-05 decision): the dialog opens in
-//! **Normal** (read), `i`/`a`/`A` switch to **Insert** (today's editing
-//! behaviour), `Esc` returns to Normal, `Esc`/`q` in Normal closes (dirty →
-//! confirm discard). The fields stay separate: `Tab` switches Title ↔ Body,
-//! saving writes the same `format_spai_markdown`.
+//! Vim-like modes (plan §3, 2026-10-05 decision): the dialog opens **ready to
+//! type** (Insert); `Esc` returns to Normal, where `i`/`a`/`A` re-enter Insert
+//! and `Esc`/`q` closes (dirty → confirm discard). The fields stay separate:
+//! `Tab` switches Title ↔ Body, saving writes the same `format_spai_markdown`.
 //!
 //! Split for the 300-line cap:
-//! - [`super::state_edit::insert`] — Insert mode (text entry, today's model)
+//! - [`super::state_edit::insert`] — Insert mode (text entry)
 //! - [`super::state_edit::normal`] — Normal mode commands
 mod insert;
 mod normal;
+
+#[cfg(test)]
+mod tests;
 
 pub use normal::At;
 
@@ -21,7 +23,8 @@ use super::storage_format::format_spai_markdown;
 use super::text_cursor::char_len;
 
 impl SpaiNotesState {
-    /// Opens the integrated editor pre-filled from the selected note, in Normal.
+    /// Opens the integrated editor pre-filled from the selected note, in Insert
+    /// mode so the first keystroke lands (SPAI-013).
     pub fn open_edit_dialog(&mut self) {
         let (title, body) = if let Some(item) = self.selected_item() {
             (item.title.clone(), item.body.clone())
@@ -32,7 +35,10 @@ impl SpaiNotesState {
         self.edit_dialog.title_input = title;
         self.edit_dialog.body_input = body;
         self.edit_dialog.field = EditField::Title;
-        self.edit_dialog.mode = EditMode::Normal;
+        // Ready to type, not Normal: opening in Normal mode made every letter a
+        // command (i/a/A/x/d...), which reads to the operator as "editing does
+        // not work". Esc still returns to Normal, where the vim bindings live.
+        self.edit_dialog.mode = EditMode::Insert;
         self.edit_dialog.dirty = false;
         self.edit_dialog.confirm_discard = false;
         self.edit_dialog.cursor = char_len(&self.edit_dialog.title_input);
