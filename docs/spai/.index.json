@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-14 11:58:37",
+  "lastUpdated": "2026-10-14 18:46:23",
   "records": [
     {
       "id": "SPAI-001",
@@ -148,6 +148,23 @@
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-10-14-SPAI-015-display-read-only-spai-and-uma-memory-relations-in.md"
+    },
+    {
+      "id": "SPAI-016",
+      "title": "Keep SPAI ids stable: never renumber an existing item. The 2026-10-14 renumbering moved the relations item from SPAI-012 to SPAI-015 while an older item already held SPAI-012, silently repointing every external reference (UMA facts treat ids as stable provenance). Append a new item and cancel the old one instead",
+      "type": "Note",
+      "status": "note",
+      "symbol": "-",
+      "timestamp": "2026-10-14 18:46:23",
+      "tags": [
+        "ids",
+        "spai",
+        "convention"
+      ],
+      "priority": "medium",
+      "project": "pi_sidebar",
+      "projectPath": "D:/01_programovani/herdr/plugins/pi-herdr-sidebar",
+      "file": "2026-10-14-SPAI-016-keep-spai-ids-stable-never-renumber-an-existing-it.md"
     }
   ]
 }
