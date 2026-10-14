@@ -188,3 +188,62 @@ fn viewer_preview_hides_the_file_name() {
         "preview must not render the file name:\n{frame}"
     );
 }
+
+#[test]
+fn viewer_shows_read_only_uma_relations() {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "spai_relations_{}_{}",
+        std::process::id(),
+        nanos
+    ));
+    let fact_dir = root.join(".uma").join("decision");
+    std::fs::create_dir_all(&fact_dir).unwrap();
+    let fact_id = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    std::fs::write(
+        fact_dir.join(format!("{fact_id}.md")),
+        format!(
+            "---\nid: {fact_id}\ntype: decision\ntitle: \"Keep stores separate\"\nspai: [SPAI-042]\n---\nbody\n"
+        ),
+    )
+    .unwrap();
+
+    let item = crate::slices::spai_notes::note::SpaiNoteItem {
+        id: "SPAI-042".to_string(),
+        title: "Task with memory".to_string(),
+        kind: crate::slices::spai_notes::note::SpaiType::Todo,
+        status: crate::slices::spai_notes::note::SpaiStatus::Todo,
+        symbol: ".".to_string(),
+        timestamp: "2026-10-14 12:30:00".to_string(),
+        tags: vec![],
+        facets: crate::slices::spai_notes::note::SpaiFacets::default(),
+        body: format!(". Task with memory\nMemory: {fact_id}\n"),
+        file_path: root.join("docs/spai/2026-10-14-SPAI-042-task.md"),
+        file_name: "2026-10-14-SPAI-042-task.md".to_string(),
+        extra_frontmatter: Vec::new(),
+    };
+    let mut state = SpaiNotesState::new(None);
+    state.projects = vec![SpaiProjectSummary::with_items(
+        "relations".to_string(),
+        root.clone(),
+        root.join("docs/spai"),
+        vec![item],
+    )];
+
+    let frame = render(&state, 110, 30);
+    assert!(
+        frame.contains("Vazby / Links:"),
+        "relation section missing:\n{frame}"
+    );
+    assert!(frame.contains('↔'), "both-direction glyph missing:\n{frame}");
+    assert!(frame.contains("…9G5FAV"), "short id missing:\n{frame}");
+    assert!(frame.contains("[decision]"), "fact type missing:\n{frame}");
+    assert!(
+        frame.contains("Keep stores separate"),
+        "fact title missing:\n{frame}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
