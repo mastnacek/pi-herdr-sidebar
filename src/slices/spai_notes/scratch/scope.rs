@@ -5,9 +5,9 @@
 //!   `symbol id title`, newest first (items arrive sorted by timestamp).
 //! - **All**: lazily over every project (`ensure_items`), rendered
 //!   virtually; the filter runs over what is loaded.
+use super::super::state::SpaiNotesState;
 use super::line_model::{LineOrigin, ScratchLine};
 use super::state::{ScratchScope, ScratchState};
-use super::super::state::SpaiNotesState;
 
 impl SpaiNotesState {
     /// Opens the Scratchpad: restores the draft for the New scope.
@@ -41,16 +41,14 @@ impl SpaiNotesState {
             ScratchScope::New => {
                 let restored = super::draft::load_draft(&mut scratch);
                 if restored > 0 {
-                    scratch.last_summary =
-                        Some(format!("Draft obnoven ({} skupin)", restored));
+                    scratch.last_summary = Some(format!("Draft obnoven ({} skupin)", restored));
                 }
             }
             ScratchScope::Project => {
                 let idx = self.selected_project_idx;
                 if let Some(proj) = self.projects.get_mut(idx) {
                     proj.ensure_items();
-                    let lines: Vec<ScratchLine> =
-                        proj.items.iter().map(item_to_line).collect();
+                    let lines: Vec<ScratchLine> = proj.items.iter().map(item_to_line).collect();
                     scratch.lines = lines;
                 }
                 // Always offer a place for new lines below the loaded records.
@@ -107,16 +105,16 @@ impl SpaiNotesState {
         let proj_idx = self
             .projects
             .iter()
-            .position(|p| {
-                p.name == project
-                    || p.items.iter().any(|it| it.file_path == path)
-            })
+            .position(|p| p.name == project || p.items.iter().any(|it| it.file_path == path))
             .unwrap_or(self.selected_project_idx);
         self.selected_project_idx = proj_idx;
 
         if let Some(proj) = self.projects.get_mut(proj_idx) {
             proj.ensure_items();
-            if let Some(pos) = proj.items.iter().position(|it| it.file_path == path || it.id == id)
+            if let Some(pos) = proj
+                .items
+                .iter()
+                .position(|it| it.file_path == path || it.id == id)
             {
                 self.selected_item_idx = pos;
             } else {
@@ -163,8 +161,8 @@ impl SpaiNotesState {
         let res = self.cycle_selected_status();
         if let Ok(()) = res {
             let prefix = format!("{} ", self.projects[proj_idx].items[pos].symbol);
-            let rest = super::super::spai_prefixes::strip_leading_prefix(&line_text)
-                .unwrap_or(&line_text);
+            let rest =
+                super::super::spai_prefixes::strip_leading_prefix(&line_text).unwrap_or(&line_text);
             if let Some(l) = self.scratch.lines.get_mut(line_idx) {
                 l.text = format!("{}{}", prefix, rest.trim_start());
             }
@@ -186,8 +184,11 @@ impl SpaiNotesState {
         let target = super::super::note_writer::route_mention(&line_text, &self.projects)
             .map(|p| p.name.clone())
             .or_else(|| {
-                super::super::note_writer::current_project(self.current_project_path.as_deref(), &self.projects)
-                    .map(|p| p.name.clone())
+                super::super::note_writer::current_project(
+                    self.current_project_path.as_deref(),
+                    &self.projects,
+                )
+                .map(|p| p.name.clone())
             })
             .unwrap_or_else(|| "—".to_string());
 
@@ -206,11 +207,7 @@ fn item_to_line(item: &super::super::note::SpaiNoteItem) -> ScratchLine {
         origin: LineOrigin::FromFile {
             path: item.file_path.clone(),
             id: item.id.clone(),
-            project: item
-                .facets
-                .project
-                .clone()
-                .unwrap_or_else(|| String::new()),
+            project: item.facets.project.clone().unwrap_or_default(),
             loaded_text: text,
         },
     }

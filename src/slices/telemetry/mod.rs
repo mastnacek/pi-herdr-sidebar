@@ -49,6 +49,7 @@ pub struct RepoTelemetry {
     /// Repo root directory name (e.g. "pi-eval-harness").
     pub name: String,
     /// Full path to repo root.
+    #[allow(dead_code)]
     pub root: PathBuf,
     /// Number of session-edited files inside this repo.
     pub touched_files: u32,
@@ -93,6 +94,7 @@ pub struct LiveTelemetry {
 #[derive(Deserialize)]
 struct SessionHeader {
     cwd: Option<String>,
+    #[allow(dead_code)]
     id: Option<String>,
 }
 
@@ -174,6 +176,7 @@ pub struct Entry {
     pub replacement: Option<serde_json::Value>,
 }
 
+#[allow(dead_code)]
 pub fn parse_newest_session(cwd: Option<&str>) -> Option<LiveTelemetry> {
     let file = find_newest_session(cwd)?;
     parse_session(&file, "")

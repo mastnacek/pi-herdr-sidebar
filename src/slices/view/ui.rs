@@ -4,7 +4,7 @@ use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     symbols,
     text::{Line, Span},
-    widgets::{Block, BorderType, LineGauge, Paragraph, Tabs},
+    widgets::{Block, BorderType, LineGauge, Tabs},
     Frame,
 };
 

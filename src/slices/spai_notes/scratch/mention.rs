@@ -15,10 +15,7 @@ pub fn mention_matches(
     state: &ScratchState,
     projects: &[SpaiProjectSummary],
 ) -> Vec<ProjectSuggestion> {
-    let filter = state
-        .mention_context()
-        .map(|(_, f)| f)
-        .unwrap_or_default();
+    let filter = state.mention_context().map(|(_, f)| f).unwrap_or_default();
     get_project_suggestions(projects, &filter)
 }
 
@@ -195,7 +192,10 @@ mod tests {
             .iter()
             .map(|s| s.insert_text.clone())
             .collect();
-        assert_eq!(texts.first().map(String::as_str), Some("@\"mojek projekty\""));
+        assert_eq!(
+            texts.first().map(String::as_str),
+            Some("@\"mojek projekty\"")
+        );
     }
 
     #[test]

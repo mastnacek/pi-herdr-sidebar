@@ -1,11 +1,16 @@
 //! Formatter for the right-hand SPAI note viewer with 5D facets display.
 use super::note::{SpaiNoteItem, SpaiStatus};
+use super::uma_links::UmaMemoryLink;
 use ratatui::{
     style::{Color, Style, Stylize},
     text::{Line, Span},
 };
 
-pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
+pub fn format_viewer_content(
+    item: &SpaiNoteItem,
+    memory_links: &[UmaMemoryLink],
+    width: u16,
+) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     lines.push(Line::raw(""));
@@ -63,30 +68,92 @@ pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
     // 2. 5D Facets Metadata Section
     let mut facet_spans = Vec::new();
     if let Some(area) = &item.facets.area {
-        facet_spans.push(Span::styled(" Oblast: ", Style::default().fg(Color::DarkGray)));
-        facet_spans.push(Span::styled(area.clone(), Style::default().fg(Color::Rgb(45, 213, 183)).bold()));
+        facet_spans.push(Span::styled(
+            " Oblast: ",
+            Style::default().fg(Color::DarkGray),
+        ));
+        facet_spans.push(Span::styled(
+            area.clone(),
+            Style::default().fg(Color::Rgb(45, 213, 183)).bold(),
+        ));
     }
     if let Some(effort) = &item.facets.effort {
-        facet_spans.push(Span::styled("  Náročnost: ", Style::default().fg(Color::DarkGray)));
-        facet_spans.push(Span::styled(effort.clone(), Style::default().fg(Color::Rgb(241, 252, 121))));
+        facet_spans.push(Span::styled(
+            "  Náročnost: ",
+            Style::default().fg(Color::DarkGray),
+        ));
+        facet_spans.push(Span::styled(
+            effort.clone(),
+            Style::default().fg(Color::Rgb(241, 252, 121)),
+        ));
     }
     if let Some(urgency) = &item.facets.urgency {
-        facet_spans.push(Span::styled("  Naléhavost: ", Style::default().fg(Color::DarkGray)));
-        facet_spans.push(Span::styled(urgency.clone(), Style::default().fg(Color::Rgb(255, 121, 198))));
+        facet_spans.push(Span::styled(
+            "  Naléhavost: ",
+            Style::default().fg(Color::DarkGray),
+        ));
+        facet_spans.push(Span::styled(
+            urgency.clone(),
+            Style::default().fg(Color::Rgb(255, 121, 198)),
+        ));
     }
     if let Some(who) = &item.facets.who {
-        facet_spans.push(Span::styled("  Řešitel: ", Style::default().fg(Color::DarkGray)));
-        facet_spans.push(Span::styled(who.clone(), Style::default().fg(Color::Rgb(189, 147, 249))));
+        facet_spans.push(Span::styled(
+            "  Řešitel: ",
+            Style::default().fg(Color::DarkGray),
+        ));
+        facet_spans.push(Span::styled(
+            who.clone(),
+            Style::default().fg(Color::Rgb(189, 147, 249)),
+        ));
     }
     if let Some(dl) = &item.facets.deadline {
-        facet_spans.push(Span::styled("  Termín: ", Style::default().fg(Color::DarkGray)));
-        facet_spans.push(Span::styled(dl.clone(), Style::default().fg(Color::Rgb(255, 83, 69)).bold()));
+        facet_spans.push(Span::styled(
+            "  Termín: ",
+            Style::default().fg(Color::DarkGray),
+        ));
+        facet_spans.push(Span::styled(
+            dl.clone(),
+            Style::default().fg(Color::Rgb(255, 83, 69)).bold(),
+        ));
     }
 
     if !facet_spans.is_empty() {
-        let mut f_line = vec![Span::styled("  5D Facety:", Style::default().fg(Color::DarkGray).bold())];
+        let mut f_line = vec![Span::styled(
+            "  5D Facety:",
+            Style::default().fg(Color::DarkGray).bold(),
+        )];
         f_line.extend(facet_spans);
         lines.push(Line::from(f_line));
+    }
+
+    if !memory_links.is_empty() {
+        lines.push(Line::styled(
+            "  Vazby / Links:",
+            Style::default().fg(Color::DarkGray).bold(),
+        ));
+        for link in memory_links {
+            let direction = format!("  {} ", link.direction.glyph());
+            let id = format!("…{} ", link.short_id());
+            let fact_type = format!("[{}] ", truncate(&link.fact_type, 16));
+            let used = direction.chars().count() + id.chars().count() + fact_type.chars().count();
+            let title_width = usize::from(width).saturating_sub(used);
+            let title = if link.title.trim().is_empty() {
+                "Bez názvu"
+            } else {
+                &link.title
+            };
+            lines.push(Line::from(vec![
+                Span::styled(direction, Style::default().fg(Color::Cyan).bold()),
+                Span::styled(id, Style::default().fg(Color::Yellow)),
+                Span::styled(fact_type, Style::default().fg(Color::Magenta)),
+                Span::styled(
+                    truncate(title, title_width),
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+        }
+        lines.push(Line::raw(""));
     }
 
     lines.push(Line::styled(
@@ -127,3 +194,18 @@ pub fn format_viewer_content(item: &SpaiNoteItem) -> Vec<Line<'static>> {
 
     lines
 }
+
+fn truncate(text: &str, width: usize) -> String {
+    if text.chars().count() <= width {
+        return text.to_string();
+    }
+    if width <= 3 {
+        return text.chars().take(width).collect();
+    }
+    let mut short: String = text.chars().take(width - 3).collect();
+    short.push_str("...");
+    short
+}
+
+#[cfg(test)]
+mod tests;

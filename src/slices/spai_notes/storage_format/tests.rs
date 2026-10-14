@@ -1,3 +1,4 @@
+use super::parser::parse_inline_tags;
 use super::*;
 use crate::slices::spai_notes::note::SpaiType;
 use std::path::PathBuf;
@@ -84,7 +85,7 @@ fn title_escapes_quotes_and_backslashes_both_ways() {
     let title = format!("a {bs} \"q\" b");
     let escaped = title
         .replace(&bs.to_string(), &bs.to_string().repeat(2))
-        .replace('"', &format!("{bs}\"")); 
+        .replace('"', &format!("{bs}\""));
     let src = format!(
         "---
 type: Todo
@@ -118,7 +119,8 @@ fn frontmatter_end_ignores_dashes_inside_values_and_longer_lines() {
 fn header_is_not_confused_with_its_text_elsewhere_in_the_body() {
     // The same text as the header line appears earlier in the body; the body
     // must start after the real header, not after the earlier occurrence.
-    let src = "---\nstatus: todo\n---\n\nbody mentions # SPAI-001: T before\n# SPAI-001: T\n\n. T\n";
+    let src =
+        "---\nstatus: todo\n---\n\nbody mentions # SPAI-001: T before\n# SPAI-001: T\n\n. T\n";
     let item = parse_spai_markdown(&src, note("2026-01-01-SPAI-001-t.md")).unwrap();
     assert!(
         !item.body.contains("# SPAI-001: T"),
@@ -132,7 +134,10 @@ fn header_is_not_confused_with_its_text_elsewhere_in_the_body() {
 fn missing_id_falls_back_to_a_unique_marker_not_spai_001() {
     let src = "no frontmatter\n\n# Just a heading\n\n. T\n";
     let item = parse_spai_markdown(src, note("random-name.md")).unwrap();
-    assert_eq!(item.id, "SPAI-???", "fallback id would collide with real SPAI-001");
+    assert_eq!(
+        item.id, "SPAI-???",
+        "fallback id would collide with real SPAI-001"
+    );
 }
 
 #[test]
@@ -148,5 +153,8 @@ fn body_prefix_update_preserves_trailing_newline_and_crlf() {
 
     let crlf = ". task\r\nsecond line\r\n";
     let updated = update_body_status_prefix(crlf, SpaiStatus::Working);
-    assert_eq!(updated, "/ task\r\nsecond line\r\n", "CRLF style kept: {updated:?}");
+    assert_eq!(
+        updated, "/ task\r\nsecond line\r\n",
+        "CRLF style kept: {updated:?}"
+    );
 }

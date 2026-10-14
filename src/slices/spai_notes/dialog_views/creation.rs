@@ -5,7 +5,9 @@
 //! and a two-line footer (selected-type hint + shortcuts). The type list
 //! panel, context panel and inline dedup card are gone — dedup lives in the
 //! on-demand overlay (`dedup_overlay.rs`).
-use super::creation_parts::{build_project_picker_lines, build_shortcuts_line, build_type_footer, build_type_overview};
+use super::creation_parts::{
+    build_project_picker_lines, build_shortcuts_line, build_type_footer, build_type_overview,
+};
 use super::dedup_overlay::render_dedup_overlay;
 use crate::shared::theme;
 use crate::slices::spai_notes::input_highlighter::highlight_spai_input_spans;
@@ -93,8 +95,7 @@ pub fn render_creation_dialog(frame: &mut Frame, area: Rect, state: &SpaiNotesSt
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Rgb(45, 213, 183)));
 
-        let ac_lines =
-            build_project_picker_lines(&state.creation_dialog.suggestions, selected);
+        let ac_lines = build_project_picker_lines(&state.creation_dialog.suggestions, selected);
         let ac_para = Paragraph::new(ac_lines).block(ac_block).scroll((scroll, 0));
         frame.render_widget(ac_para, ac_area);
     }
@@ -146,5 +147,3 @@ fn build_input_line(state: &SpaiNotesState) -> Line<'static> {
 
     Line::from(spans)
 }
-
-

@@ -75,7 +75,6 @@ impl LineOrigin {
             }
         }
     }
-
 }
 
 /// A line carrying a SPAI mark: a full table prefix (`. `, `x `, `!- `, …) or
@@ -86,8 +85,26 @@ pub fn is_marked(line: &str) -> bool {
     }
     matches!(
         line.trim(),
-        "." | "/" | "x" | "X" | "z" | "Z" | "?" | "-" | "+" | "=" | "*" | "%" | "~" | "$" | "♥"
-            | "h" | "H" | "#" | ";" | "!" | "!!"
+        "." | "/"
+            | "x"
+            | "X"
+            | "z"
+            | "Z"
+            | "?"
+            | "-"
+            | "+"
+            | "="
+            | "*"
+            | "%"
+            | "~"
+            | "$"
+            | "♥"
+            | "h"
+            | "H"
+            | "#"
+            | ";"
+            | "!"
+            | "!!"
     )
 }
 
@@ -102,15 +119,15 @@ pub fn record_starts(lines: &[ScratchLine]) -> Vec<usize> {
     starts
 }
 
-/// Does the record containing `idx` match? Record-level check: the group
-/// (start..end) matches as a whole — a continuation line inherits its
-/// record's verdict instead of being judged as its own "record".
-use super::filter::{FilterQuery, StatusFilter};
-
 /// The record group containing `idx`: from its start to the next record start.
 pub fn record_span(lines: &[ScratchLine], idx: usize) -> (usize, usize) {
     let starts = record_starts(lines);
-    let start = starts.iter().rev().find(|&&s| s <= idx).copied().unwrap_or(0);
+    let start = starts
+        .iter()
+        .rev()
+        .find(|&&s| s <= idx)
+        .copied()
+        .unwrap_or(0);
     let end = starts
         .iter()
         .find(|&&s| s > start)
@@ -167,6 +184,9 @@ mod tests {
         assert_eq!(record_span(&lines, 0), (0, 1));
         assert_eq!(record_span(&lines, 2), (1, 4));
         assert_eq!(record_span(&lines, 5), (4, 6));
-        assert_eq!(record_text(&lines, 2), ". Fix build @herdr\ndetail jeden\ndetail dva");
+        assert_eq!(
+            record_text(&lines, 2),
+            ". Fix build @herdr\ndetail jeden\ndetail dva"
+        );
     }
 }

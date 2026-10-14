@@ -1,8 +1,8 @@
 //! Scratchpad footer (plan §1, §2): mode, keys, current-line type hint,
 //! live `→ target project` routing preview, save summary, Ctrl+S warning.
 //! In Read mode: filters (`/` `~` `f`) and scope (Tab/Shift+Tab).
-use super::state::{ScratchInput, ScratchScope};
 use super::super::state::SpaiNotesState;
+use super::state::{ScratchInput, ScratchScope};
 use ratatui::{
     layout::Rect,
     style::{Color, Style, Stylize},
@@ -32,10 +32,7 @@ pub fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                     Style::default().fg(Color::White),
                 ),
                 Span::styled(
-                    format!(
-                        "  {} záznamů · Esc = zrušit",
-                        scratch.visible_count()
-                    ),
+                    format!("  {} záznamů · Esc = zrušit", scratch.visible_count()),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
@@ -161,7 +158,10 @@ fn hint_line(state: &SpaiNotesState) -> Line<'static> {
         Span::styled(format!("{}  ", target), Style::default().fg(Color::Cyan)),
         Span::styled("[Ctrl+S] ", Style::default().fg(Color::Green).bold()),
         Span::styled("uložit  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Ctrl+D] ", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
+        Span::styled(
+            "[Ctrl+D] ",
+            Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+        ),
         Span::styled("duplicity  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Ctrl+O] ", Style::default().fg(Color::Green).bold()),
         Span::styled("otevřít  ", Style::default().fg(Color::DarkGray)),
@@ -177,6 +177,7 @@ fn hint_line(state: &SpaiNotesState) -> Line<'static> {
 }
 
 /// Scope list helper for the footer (New → Project → All).
+#[allow(dead_code)]
 pub fn scope_label(scope: ScratchScope) -> &'static str {
     scope.label()
 }

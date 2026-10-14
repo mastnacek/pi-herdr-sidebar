@@ -2,7 +2,6 @@
 //! semantic filters, plus the dedup popup keys. Split from scratch.rs for
 //! the line cap.
 use super::super::state::SidebarState;
-use crate::slices::spai_notes::scratch::filter::StatusFilter;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn threshold(state: &SidebarState) -> f64 {

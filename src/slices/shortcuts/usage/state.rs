@@ -123,6 +123,7 @@ impl UsageOverview {
     }
 
     /// Sets the focused panel.
+    #[allow(dead_code)]
     pub fn set_focus(&mut self, panel: Panel) {
         self.focus = panel;
     }

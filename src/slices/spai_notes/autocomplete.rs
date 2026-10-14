@@ -4,6 +4,7 @@ use super::discovery::SpaiProjectSummary;
 #[derive(Debug, Clone)]
 pub struct ProjectSuggestion {
     pub name: String,
+    #[allow(dead_code)]
     pub path: String,
     pub insert_text: String,
 }

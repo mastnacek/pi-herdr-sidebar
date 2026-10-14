@@ -9,12 +9,13 @@ use super::discovery::{
     discover_spai_projects, file_fingerprint, projects_cache_path, SpaiProjectSummary,
 };
 use super::note::SpaiNoteItem;
+use super::uma_links::UmaMemoryLink;
 use std::path::{Path, PathBuf};
 
 /// Cheap change signal: `(mtime, len)` of pi's project cache and of the selected
 /// project's notes dir. Two `stat()` calls stand in for what used to be a full
 /// re-read of every note on every refresh tick.
-type Fingerprint = (u64, u64, u64, u64);
+type Fingerprint = (u64, u64, u64, u64, u64, u64);
 
 #[derive(Debug)]
 pub struct SpaiNotesState {
@@ -22,8 +23,10 @@ pub struct SpaiNotesState {
     pub selected_project_idx: usize,
     pub selected_item_idx: usize,
     pub current_project_path: Option<PathBuf>,
+    #[allow(dead_code)]
     pub filter_active_project: bool,
     pub viewer_scroll: u16,
+    #[allow(dead_code)]
     pub edit_mode: bool,
     pub status_message: Option<String>,
     /// Two-step delete guard: first Delete arms, second Delete removes from disk.
@@ -61,7 +64,7 @@ impl SpaiNotesState {
             edit_dialog: NoteEditDialog::default(),
             scratch: super::scratch::state::ScratchState::default(),
             dedup: DedupPanel::default(),
-            projects_fingerprint: (0, 0, 0, 0),
+            projects_fingerprint: (0, 0, 0, 0, 0, 0),
         };
         state.ensure_selected_items();
         state.projects_fingerprint = state.fingerprint();
@@ -90,12 +93,14 @@ impl SpaiNotesState {
         let cache = projects_cache_path()
             .and_then(|p| file_fingerprint(&p))
             .unwrap_or_default();
-        let notes = self
-            .projects
-            .get(self.selected_project_idx)
+        let selected = self.projects.get(self.selected_project_idx);
+        let notes = selected
             .and_then(|p| file_fingerprint(&p.spai_dir))
             .unwrap_or_default();
-        (cache.0, cache.1, notes.0, notes.1)
+        let uma = selected
+            .and_then(|p| file_fingerprint(&p.uma_dir))
+            .unwrap_or_default();
+        (cache.0, cache.1, notes.0, notes.1, uma.0, uma.1)
     }
 
     /// Notes are read on demand — the viewer only ever shows one project.
@@ -151,6 +156,16 @@ impl SpaiNotesState {
 
     pub fn selected_item(&self) -> Option<&SpaiNoteItem> {
         self.current_items().get(self.selected_item_idx)
+    }
+
+    pub fn selected_memory_links(&self) -> &[UmaMemoryLink] {
+        let Some(item) = self.selected_item() else {
+            return &[];
+        };
+        self.projects
+            .get(self.selected_project_idx)
+            .map(|project| project.memory_links_for(item))
+            .unwrap_or(&[])
     }
 
     pub fn selected_file_path(&self) -> Option<PathBuf> {

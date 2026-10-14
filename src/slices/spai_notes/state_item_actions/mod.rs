@@ -57,11 +57,12 @@ impl SpaiNotesState {
         // dir creation). The caller passes `body` as the prefix line
         // `"<glyph> <title>"`, so the writer's prefix detection resolves the
         // same kind/status the dialog selected.
-        let written = super::note_writer::write_record(&proj, body.trim())?;
+        let written = super::note_writer::write_record(proj, body.trim())?;
         debug_assert_eq!(written.item.status, status, "glyph/status mismatch");
 
         let id = written.id.clone();
         proj.items.insert(0, written.item);
+        proj.reload_memory_links();
         self.selected_item_idx = 0;
         self.viewer_scroll = 0;
 
@@ -101,8 +102,7 @@ impl SpaiNotesState {
         }
 
         let item = proj.items.remove(self.selected_item_idx);
-        std::fs::remove_file(&item.file_path)
-            .map_err(|e| format!("Smazání selhalo: {}", e))?;
+        std::fs::remove_file(&item.file_path).map_err(|e| format!("Smazání selhalo: {}", e))?;
 
         let title = item.title.clone();
         if self.selected_item_idx >= proj.items.len() {

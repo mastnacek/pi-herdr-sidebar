@@ -12,8 +12,9 @@ impl SpaiNotesState {
         if pending == Some(line_idx) {
             self.scratch.confirm_delete = None;
             match self.scratch_delete_record(line_idx) {
-                Ok(n) => self.scratch.last_summary =
-                    Some(format!("Smazáno: {} ({} řádků)", n.0, n.1)),
+                Ok(n) => {
+                    self.scratch.last_summary = Some(format!("Smazáno: {} ({} řádků)", n.0, n.1))
+                }
                 Err(e) => self.scratch.last_summary = Some(format!("⚠ {}", e)),
             }
         } else {
@@ -45,8 +46,7 @@ impl SpaiNotesState {
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| id.clone());
-        std::fs::remove_file(&path)
-            .map_err(|e| format!("Soubor {} nelze smazat: {}", fname, e))?;
+        std::fs::remove_file(&path).map_err(|e| format!("Soubor {} nelze smazat: {}", fname, e))?;
 
         // Drop stale undo entries pointing at the deleted file.
         self.scratch.last_batch.retain(|p| p != &path);
@@ -58,9 +58,14 @@ impl SpaiNotesState {
 
         // Keep the cursor sane and leave an empty line to keep typing.
         self.scratch.cursor_line = s.min(self.scratch.lines.len().saturating_sub(1));
-        self.scratch.cursor_char = self.scratch.cursor_char.min(self.scratch.current_line_len());
+        self.scratch.cursor_char = self
+            .scratch
+            .cursor_char
+            .min(self.scratch.current_line_len());
         if self.scratch.lines.is_empty() {
-            self.scratch.lines.push(super::line_model::ScratchLine::empty());
+            self.scratch
+                .lines
+                .push(super::line_model::ScratchLine::empty());
         }
 
         // Refresh the notes-slice caches.
@@ -100,12 +105,20 @@ mod tests {
         let a = temp_project("del");
         let mut state = state_on(&a);
         state
-            .create_quick_note_with_status("smaz", crate::slices::spai_notes::note::SpaiType::Todo, crate::slices::spai_notes::note::SpaiStatus::Todo, ". smaz
-")
+            .create_quick_note_with_status(
+                "smaz",
+                crate::slices::spai_notes::note::SpaiType::Todo,
+                crate::slices::spai_notes::note::SpaiStatus::Todo,
+                ". smaz
+",
+            )
             .unwrap();
         // Load it into the scratchpad as a FromFile record.
-        state.switch_scratch_scope(crate::slices::spai_notes::scratch::state::ScratchScope::Project);
-        let file = state.projects[state.selected_project_idx].items[0].file_path.clone();
+        state
+            .switch_scratch_scope(crate::slices::spai_notes::scratch::state::ScratchScope::Project);
+        let file = state.projects[state.selected_project_idx].items[0]
+            .file_path
+            .clone();
         assert!(file.exists());
 
         // First press arms, second deletes.
@@ -113,7 +126,11 @@ mod tests {
         assert!(file.exists(), "armed only");
         state.scratch_delete_request(0);
         assert!(!file.exists(), "file deleted");
-        assert!(state.scratch.lines.iter().all(|l| l.text != ". SPAI-001 smaz"));
+        assert!(state
+            .scratch
+            .lines
+            .iter()
+            .all(|l| l.text != ". SPAI-001 smaz"));
 
         fs::remove_dir_all(&a).ok();
     }
@@ -134,10 +151,12 @@ mod tests {
     fn delete_requires_a_file_backed_record() {
         let a = temp_project("del3");
         let mut state = state_on(&a);
-        state.scratch.lines = vec![crate::slices::spai_notes::scratch::line_model::ScratchLine {
-            text: ". nový řádek".to_string(),
-            origin: LineOrigin::New,
-        }];
+        state.scratch.lines = vec![
+            crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                text: ". nový řádek".to_string(),
+                origin: LineOrigin::New,
+            },
+        ];
         state.scratch_delete_request(0);
         state.scratch_delete_request(0);
         assert!(

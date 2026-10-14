@@ -28,24 +28,152 @@ impl Default for DetectedSpaiInput {
     }
 }
 
-type PrefixSpec = (&'static [&'static str], SpaiType, SpaiStatus, &'static str, &'static str, &'static str, Color);
+type PrefixSpec = (
+    &'static [&'static str],
+    SpaiType,
+    SpaiStatus,
+    &'static str,
+    &'static str,
+    &'static str,
+    Color,
+);
 
 const PREFIX_SPECS: &[PrefixSpec] = &[
-    (&["/. ", "/· ", "/.", "/·"], SpaiType::Todo, SpaiStatus::Waiting, "Čeká", "Čeká", "/. ", Color::Rgb(189, 147, 249)),
-    (&[". ", "."], SpaiType::Todo, SpaiStatus::Todo, "Úkol", "Úkol", ". ", Color::Rgb(255, 215, 0)),
-    (&["/ ", "/"], SpaiType::Todo, SpaiStatus::Working, "Rozpracováno", "Rozpracováno", "/ ", Color::Rgb(0, 255, 255)),
-    (&["x ", "X ", "x", "X"], SpaiType::Todo, SpaiStatus::Done, "Hotovo", "Hotovo", "x ", Color::Rgb(144, 238, 144)),
-    (&["z ", "Z ", "z", "Z"], SpaiType::Todo, SpaiStatus::Cancelled, "Zrušeno", "Zrušeno", "z ", Color::Rgb(127, 140, 141)),
-    (&["? ", "?"], SpaiType::Idea, SpaiStatus::Idea, "Nápad", "Nápad", "? ", Color::Rgb(186, 85, 211)),
-    (&["- ", "-"], SpaiType::Note, SpaiStatus::Note, "Poznámka", "Poznámka", "- ", Color::Rgb(127, 179, 255)),
-    (&["+ ", "+"], SpaiType::Note, SpaiStatus::Skutek, "Skutek dne", "Skutek", "+ ", Color::Rgb(255, 94, 219)),
-    (&["= ", "="], SpaiType::Note, SpaiStatus::Mood, "Nálada", "Nálada", "= ", Color::Rgb(255, 184, 108)),
-    (&["* ", "*"], SpaiType::Note, SpaiStatus::Win, "Výhra", "Výhra", "* ", Color::Rgb(163, 230, 53)),
-    (&["% ", "%"], SpaiType::Note, SpaiStatus::Fuckup, "Průser", "Průser", "% ", Color::Rgb(214, 69, 69)),
-    (&["~ ", "~"], SpaiType::Note, SpaiStatus::Sleep, "Spánek", "Spánek", "~ ", Color::Rgb(78, 205, 196)),
-    (&["$ ", "$"], SpaiType::Todo, SpaiStatus::Shopping, "Nákupy", "Nákupy", "$ ", Color::Rgb(255, 230, 109)),
-    (&["♥ ", "♥", "h ", "h"], SpaiType::Note, SpaiStatus::Health, "Zdraví", "Zdraví", "♥ ", Color::Rgb(255, 107, 107)),
-    (&["# ", "#"], SpaiType::Note, SpaiStatus::Tally, "Metrika", "Metrika", "# ", Color::Rgb(0, 255, 255)),
+    (
+        &["/. ", "/· ", "/.", "/·"],
+        SpaiType::Todo,
+        SpaiStatus::Waiting,
+        "Čeká",
+        "Čeká",
+        "/. ",
+        Color::Rgb(189, 147, 249),
+    ),
+    (
+        &[". ", "."],
+        SpaiType::Todo,
+        SpaiStatus::Todo,
+        "Úkol",
+        "Úkol",
+        ". ",
+        Color::Rgb(255, 215, 0),
+    ),
+    (
+        &["/ ", "/"],
+        SpaiType::Todo,
+        SpaiStatus::Working,
+        "Rozpracováno",
+        "Rozpracováno",
+        "/ ",
+        Color::Rgb(0, 255, 255),
+    ),
+    (
+        &["x ", "X ", "x", "X"],
+        SpaiType::Todo,
+        SpaiStatus::Done,
+        "Hotovo",
+        "Hotovo",
+        "x ",
+        Color::Rgb(144, 238, 144),
+    ),
+    (
+        &["z ", "Z ", "z", "Z"],
+        SpaiType::Todo,
+        SpaiStatus::Cancelled,
+        "Zrušeno",
+        "Zrušeno",
+        "z ",
+        Color::Rgb(127, 140, 141),
+    ),
+    (
+        &["? ", "?"],
+        SpaiType::Idea,
+        SpaiStatus::Idea,
+        "Nápad",
+        "Nápad",
+        "? ",
+        Color::Rgb(186, 85, 211),
+    ),
+    (
+        &["- ", "-"],
+        SpaiType::Note,
+        SpaiStatus::Note,
+        "Poznámka",
+        "Poznámka",
+        "- ",
+        Color::Rgb(127, 179, 255),
+    ),
+    (
+        &["+ ", "+"],
+        SpaiType::Note,
+        SpaiStatus::Skutek,
+        "Skutek dne",
+        "Skutek",
+        "+ ",
+        Color::Rgb(255, 94, 219),
+    ),
+    (
+        &["= ", "="],
+        SpaiType::Note,
+        SpaiStatus::Mood,
+        "Nálada",
+        "Nálada",
+        "= ",
+        Color::Rgb(255, 184, 108),
+    ),
+    (
+        &["* ", "*"],
+        SpaiType::Note,
+        SpaiStatus::Win,
+        "Výhra",
+        "Výhra",
+        "* ",
+        Color::Rgb(163, 230, 53),
+    ),
+    (
+        &["% ", "%"],
+        SpaiType::Note,
+        SpaiStatus::Fuckup,
+        "Průser",
+        "Průser",
+        "% ",
+        Color::Rgb(214, 69, 69),
+    ),
+    (
+        &["~ ", "~"],
+        SpaiType::Note,
+        SpaiStatus::Sleep,
+        "Spánek",
+        "Spánek",
+        "~ ",
+        Color::Rgb(78, 205, 196),
+    ),
+    (
+        &["$ ", "$"],
+        SpaiType::Todo,
+        SpaiStatus::Shopping,
+        "Nákupy",
+        "Nákupy",
+        "$ ",
+        Color::Rgb(255, 230, 109),
+    ),
+    (
+        &["♥ ", "♥", "h ", "h"],
+        SpaiType::Note,
+        SpaiStatus::Health,
+        "Zdraví",
+        "Zdraví",
+        "♥ ",
+        Color::Rgb(255, 107, 107),
+    ),
+    (
+        &["# ", "#"],
+        SpaiType::Note,
+        SpaiStatus::Tally,
+        "Metrika",
+        "Metrika",
+        "# ",
+        Color::Rgb(0, 255, 255),
+    ),
 ];
 
 /// Detects SPAI record type, status, and theme color from current input line.
@@ -246,7 +374,11 @@ fn classify_tag_color(tag_inner: &str) -> Color {
     if let Some(pos) = tag_inner.find(['-', '+']) {
         if pos > 0 {
             let after_sign = &tag_inner[pos + 1..];
-            if after_sign.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            if after_sign
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit())
+            {
                 return if tag_inner.as_bytes()[pos] == b'-' {
                     Color::Rgb(255, 83, 69) // red expense
                 } else {
@@ -264,15 +396,9 @@ fn is_priority_word(word: &str) -> Option<(Color, bool)> {
         "!" | "!!" | "!!!" | "!high" | "!vysoka" | "!vysoká" => {
             Some((Color::Rgb(255, 83, 69), true))
         }
-        "!medium" | "!stredni" | "!střední" => {
-            Some((Color::Rgb(241, 252, 121), true))
-        }
-        "!low" | "!nizka" | "!nízká" => {
-            Some((Color::Rgb(139, 233, 253), false))
-        }
-        _ if word.starts_with('!') && word.len() > 1 => {
-            Some((Color::Rgb(255, 83, 69), true))
-        }
+        "!medium" | "!stredni" | "!střední" => Some((Color::Rgb(241, 252, 121), true)),
+        "!low" | "!nizka" | "!nízká" => Some((Color::Rgb(139, 233, 253), false)),
+        _ if word.starts_with('!') && word.len() > 1 => Some((Color::Rgb(255, 83, 69), true)),
         _ => None,
     }
 }
@@ -291,4 +417,3 @@ pub fn is_time_format(word: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
-

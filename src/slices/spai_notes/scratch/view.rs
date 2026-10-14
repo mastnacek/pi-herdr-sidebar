@@ -1,9 +1,8 @@
 //! Scratchpad rendering (plan §1, §6): full-area editor, virtualised line
 //! window, saved-line visuals (`✓ → project SPAI-014`, dim + italic).
-use super::footer::render_footer;
-use super::line_model::LineOrigin;
-use super::line_render::{cursor_row_y, render_line, HIGHLIGHT_BG};
 use super::super::state::SpaiNotesState;
+use super::footer::render_footer;
+use super::line_render::{cursor_row_y, render_line, HIGHLIGHT_BG};
 use crate::shared::theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -77,11 +76,7 @@ fn render_lines(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    for &i in shown
-        .iter()
-        .skip(scroll)
-        .take(inner_h)
-    {
+    for &i in shown.iter().skip(scroll).take(inner_h) {
         lines.push(render_line(&scratch.lines[i]));
     }
 

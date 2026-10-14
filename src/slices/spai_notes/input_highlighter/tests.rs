@@ -18,16 +18,31 @@ fn detects_all_spai_prefixes() {
 #[test]
 fn detects_priority_prefixed_to_any_element() {
     assert_eq!(detect_spai_input("!. task").short_label, "Úkol");
-    assert_eq!(detect_spai_input("!. task").badge_color, Color::Rgb(255, 83, 69));
+    assert_eq!(
+        detect_spai_input("!. task").badge_color,
+        Color::Rgb(255, 83, 69)
+    );
 
-    assert_eq!(detect_spai_input("!- critical note").short_label, "Poznámka");
-    assert_eq!(detect_spai_input("!- critical note").badge_color, Color::Rgb(255, 83, 69));
+    assert_eq!(
+        detect_spai_input("!- critical note").short_label,
+        "Poznámka"
+    );
+    assert_eq!(
+        detect_spai_input("!- critical note").badge_color,
+        Color::Rgb(255, 83, 69)
+    );
 
     assert_eq!(detect_spai_input("!? critical idea").short_label, "Nápad");
-    assert_eq!(detect_spai_input("!? critical idea").badge_color, Color::Rgb(255, 83, 69));
+    assert_eq!(
+        detect_spai_input("!? critical idea").badge_color,
+        Color::Rgb(255, 83, 69)
+    );
 
     assert_eq!(detect_spai_input("!+ key deed").short_label, "Skutek");
-    assert_eq!(detect_spai_input("!+ key deed").badge_color, Color::Rgb(255, 83, 69));
+    assert_eq!(
+        detect_spai_input("!+ key deed").badge_color,
+        Color::Rgb(255, 83, 69)
+    );
 
     assert_eq!(detect_spai_input("!* big win").short_label, "Výhra");
     assert_eq!(detect_spai_input("!% big incident").short_label, "Průser");

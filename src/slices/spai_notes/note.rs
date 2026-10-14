@@ -203,6 +203,7 @@ impl SpaiNoteItem {
 }
 
 /// Matches standard SPAI prefix on raw lines (. / /. x z ? -)
+#[allow(dead_code)]
 pub fn parse_spai_prefix(line: &str) -> Option<(&'static str, SpaiType, SpaiStatus)> {
     let trimmed = line.trim_start();
     if trimmed.starts_with("/. ") {

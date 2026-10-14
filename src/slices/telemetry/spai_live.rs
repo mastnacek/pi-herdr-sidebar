@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct SpaiRecord {
     pub id: String,
     pub title: String,
@@ -27,6 +28,7 @@ pub struct SpaiRecord {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[allow(dead_code)]
 pub struct SpaiIndex {
     #[serde(default)]
     pub version: u32,
@@ -51,6 +53,7 @@ pub struct SpaiCounts {
 
 #[derive(Debug, Clone, Default)]
 pub struct SpaiTelemetry {
+    #[allow(dead_code)]
     pub file_path: Option<PathBuf>,
     pub index: SpaiIndex,
     pub counts: SpaiCounts,

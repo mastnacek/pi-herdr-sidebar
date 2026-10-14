@@ -241,7 +241,11 @@ fn render_right_viewer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     let (title, content_lines) = if let Some(item) = item_opt {
         (
             format!(" {} · {} ", item.id, item.title),
-            super::viewer_content::format_viewer_content(item),
+            super::viewer_content::format_viewer_content(
+                item,
+                state.selected_memory_links(),
+                area.width,
+            ),
         )
     } else {
         (

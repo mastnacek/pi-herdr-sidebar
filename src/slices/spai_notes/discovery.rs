@@ -11,6 +11,8 @@ use std::time::UNIX_EPOCH;
 
 use super::note::SpaiNoteItem;
 use super::storage_format::parse_spai_markdown;
+use crate::slices::spai_notes::uma_links::{resolve_memory_links, UmaMemoryLink};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CachedProject {
@@ -29,18 +31,23 @@ pub struct SpaiProjectSummary {
     pub name: String,
     pub path: PathBuf,
     pub spai_dir: PathBuf,
+    pub uma_dir: PathBuf,
     pub items: Vec<SpaiNoteItem>,
     items_loaded: bool,
+    memory_links: HashMap<PathBuf, Vec<UmaMemoryLink>>,
 }
 
 impl SpaiProjectSummary {
     pub fn new(name: String, path: PathBuf, spai_dir: PathBuf) -> Self {
+        let uma_dir = path.join(".uma");
         Self {
             name,
             path,
             spai_dir,
+            uma_dir,
             items: Vec::new(),
             items_loaded: false,
+            memory_links: HashMap::new(),
         }
     }
 
@@ -50,13 +57,18 @@ impl SpaiProjectSummary {
         spai_dir: PathBuf,
         items: Vec<SpaiNoteItem>,
     ) -> Self {
-        Self {
+        let uma_dir = path.join(".uma");
+        let mut summary = Self {
             name,
             path,
             spai_dir,
+            uma_dir,
             items,
             items_loaded: true,
-        }
+            memory_links: HashMap::new(),
+        };
+        summary.reload_memory_links();
+        summary
     }
 
     /// Reads and parses the note files of this project, once.
@@ -66,9 +78,22 @@ impl SpaiProjectSummary {
         }
     }
 
+    /// Rebuilds the read-only UMA relation snapshot after SPAI mutations.
+    pub fn reload_memory_links(&mut self) {
+        self.memory_links = resolve_memory_links(&self.uma_dir, &self.items);
+    }
+
+    pub fn memory_links_for(&self, item: &SpaiNoteItem) -> &[UmaMemoryLink] {
+        self.memory_links
+            .get(&item.file_path)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
     fn scan_items(&mut self) {
         self.items_loaded = true;
         self.items.clear();
+        self.memory_links.clear();
         if !self.spai_dir.exists() {
             return;
         }
@@ -92,6 +117,7 @@ impl SpaiProjectSummary {
 
         // Sort items by timestamp or ID descending (newest first)
         self.items.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        self.reload_memory_links();
     }
 }
 

@@ -40,18 +40,45 @@ fn status_filter_uses_the_mark() {
     let lines = vec![
         mk(". open task", LineOrigin::New),
         mk("cont", LineOrigin::New),
-        mk("x done task", LineOrigin::FromFile {
-            path: Default::default(),
-            id: "SPAI-001".into(),
-            project: "herdr".into(),
-            loaded_text: "x done task".into(),
-        }),
+        mk(
+            "x done task",
+            LineOrigin::FromFile {
+                path: Default::default(),
+                id: "SPAI-001".into(),
+                project: "herdr".into(),
+                loaded_text: "x done task".into(),
+            },
+        ),
     ];
 
-    assert!(!matches(&lines, 0, &FilterQuery::default(), StatusFilter::Done, None));
-    assert!(matches(&lines, 0, &FilterQuery::default(), StatusFilter::Open, None));
-    assert!(matches(&lines, 2, &FilterQuery::default(), StatusFilter::Done, None));
-    assert!(!matches(&lines, 2, &FilterQuery::default(), StatusFilter::Open, None));
+    assert!(!matches(
+        &lines,
+        0,
+        &FilterQuery::default(),
+        StatusFilter::Done,
+        None
+    ));
+    assert!(matches(
+        &lines,
+        0,
+        &FilterQuery::default(),
+        StatusFilter::Open,
+        None
+    ));
+    assert!(matches(
+        &lines,
+        2,
+        &FilterQuery::default(),
+        StatusFilter::Done,
+        None
+    ));
+    assert!(!matches(
+        &lines,
+        2,
+        &FilterQuery::default(),
+        StatusFilter::Open,
+        None
+    ));
 }
 
 #[test]

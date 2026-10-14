@@ -14,7 +14,7 @@ mod normal;
 
 pub use normal::At;
 
-use super::dialog_state::{EditMode, EditField};
+use super::dialog_state::{EditField, EditMode};
 use super::note_io::write_atomic;
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
@@ -112,6 +112,7 @@ impl SpaiNotesState {
             .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
         item.title = updated.title;
         item.body = updated.body;
+        proj.reload_memory_links();
         self.status_message = Some("Poznámka uložena".to_string());
         self.close_edit_dialog();
 

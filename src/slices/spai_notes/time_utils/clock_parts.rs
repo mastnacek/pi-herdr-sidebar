@@ -143,7 +143,10 @@ mod tests {
     fn timestamp_uses_local_wall_time_format() {
         let (date, time) = current_timestamp_and_date();
         assert_eq!(date.len(), 10, "YYYY-MM-DD: {date}");
-        assert!(time.starts_with(&date), "timestamp starts with the date: {time}");
+        assert!(
+            time.starts_with(&date),
+            "timestamp starts with the date: {time}"
+        );
         assert_eq!(time.len(), 19, "YYYY-MM-DD HH:MM:SS: {time}");
         // Sanity: local wall time is within 26 hours of UTC.
         let secs = std::time::SystemTime::now()

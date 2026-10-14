@@ -60,7 +60,11 @@ pub fn build_type_footer(opt: &SpaiTypeOption) -> Line<'static> {
             Style::default().fg(Color::White).bold(),
         ),
         Span::styled(
-            format!("{} · př.: {}", opt.desc, opt.examples.first().unwrap_or(&"")),
+            format!(
+                "{} · př.: {}",
+                opt.desc,
+                opt.examples.first().unwrap_or(&"")
+            ),
             Style::default().fg(Color::DarkGray),
         ),
     ])
@@ -139,6 +143,9 @@ mod tests {
         assert!(text.contains("př.:"), "example: {text}");
         // No other type's description leaks in.
         let idea = &SPAI_TYPE_OPTIONS[5];
-        assert!(!text.contains(idea.desc), "footer must be single-type: {text}");
+        assert!(
+            !text.contains(idea.desc),
+            "footer must be single-type: {text}"
+        );
     }
 }

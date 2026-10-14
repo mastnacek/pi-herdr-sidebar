@@ -161,6 +161,7 @@ impl SidebarState {
     }
 
     /// Copies the full weather forecast (all locations × all days) to the clipboard.
+    #[allow(dead_code)]
     pub fn copy_weather_report(&mut self) {
         let report = crate::slices::telemetry::weather_live::collect_all_locations_report();
         let ok = crate::slices::telemetry::weather_live::copy_to_clipboard(&report);

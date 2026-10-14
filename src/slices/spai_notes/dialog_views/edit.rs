@@ -6,7 +6,7 @@
 //! dims the fields and shows no cursor.
 use super::dedup_overlay::render_dedup_overlay;
 use crate::shared::theme;
-use crate::slices::spai_notes::dialog_state::{EditMode, EditField};
+use crate::slices::spai_notes::dialog_state::{EditField, EditMode};
 use crate::slices::spai_notes::state::SpaiNotesState;
 use crate::slices::spai_notes::text_layout;
 use ratatui::{
@@ -91,7 +91,11 @@ fn render_title_field(frame: &mut Frame, area: Rect, state: &SpaiNotesState, has
         Span::styled(
             "  > ",
             Style::default()
-                .fg(if focused { Color::Yellow } else { Color::DarkGray })
+                .fg(if focused {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })
                 .bold(),
         ),
         Span::styled(text, Style::default().fg(Color::White).bold()),
@@ -101,7 +105,11 @@ fn render_title_field(frame: &mut Frame, area: Rect, state: &SpaiNotesState, has
         .title(Span::styled(
             theme::field_title("✏️ Název", focused),
             Style::default()
-                .fg(if focused { Color::Yellow } else { Color::DarkGray })
+                .fg(if focused {
+                    Color::Yellow
+                } else {
+                    Color::DarkGray
+                })
                 .bold(),
         ))
         .border_type(BorderType::Rounded)
@@ -136,7 +144,11 @@ fn render_body_field(frame: &mut Frame, area: Rect, state: &SpaiNotesState, has_
         .title(Span::styled(
             theme::field_title("📄 Tělo poznámky", focused),
             Style::default()
-                .fg(if focused { Color::Cyan } else { Color::DarkGray })
+                .fg(if focused {
+                    Color::Cyan
+                } else {
+                    Color::DarkGray
+                })
                 .bold(),
         ))
         .border_type(BorderType::Rounded)
@@ -174,10 +186,7 @@ fn render_body_field(frame: &mut Frame, area: Rect, state: &SpaiNotesState, has_
     } as u16;
 
     let lines: Vec<Line> = body_rows.into_iter().map(Line::from).collect();
-    frame.render_widget(
-        Paragraph::new(lines).block(block).scroll((scroll, 0)),
-        area,
-    );
+    frame.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), area);
 }
 
 fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
@@ -193,9 +202,17 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
     } else {
         Line::from(vec![
             Span::styled(
-                if insert_mode { " -- INSERT --" } else { " -- NORMAL --" },
+                if insert_mode {
+                    " -- INSERT --"
+                } else {
+                    " -- NORMAL --"
+                },
                 Style::default()
-                    .fg(if insert_mode { Color::Green } else { Color::Cyan })
+                    .fg(if insert_mode {
+                        Color::Green
+                    } else {
+                        Color::Cyan
+                    })
                     .bold(),
             ),
             Span::styled(dirty_marker, Style::default().fg(Color::Yellow)),
@@ -215,7 +232,10 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         Span::styled(" uložit  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[Ctrl+E]", Style::default().fg(Color::Cyan).bold()),
         Span::styled(" ext  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[Ctrl+D]", Style::default().fg(Color::Rgb(255, 184, 108)).bold()),
+        Span::styled(
+            "[Ctrl+D]",
+            Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+        ),
         Span::styled(" duplicity  ", Style::default().fg(Color::DarkGray)),
         Span::styled("[PgUp/PgDn]", Style::default().fg(Color::Cyan).bold()),
         Span::styled(" posun", Style::default().fg(Color::DarkGray)),

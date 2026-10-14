@@ -31,7 +31,9 @@ fn take_stamp_token(s: &str) -> (String, Option<String>) {
     };
     let mut d = date.split('.');
     let (day, month, year) = match (d.next(), d.next(), d.next(), d.next()) {
-        (Some(dd), Some(mm), Some(yy), None) if !dd.is_empty() && !mm.is_empty() && !yy.is_empty() => {
+        (Some(dd), Some(mm), Some(yy), None)
+            if !dd.is_empty() && !mm.is_empty() && !yy.is_empty() =>
+        {
             (dd, mm, yy)
         }
         _ => return (s.to_string(), None),
@@ -69,8 +71,7 @@ fn today_part(iso: &str) -> Option<String> {
 /// timestamp come from the edited text. The file name is NOT renamed — the
 /// id stays the anchor.
 pub fn update_record(path: &std::path::Path, text: &str) -> Result<(), String> {
-    let content =
-        std::fs::read_to_string(path).map_err(|e| format!("Čtení selhalo: {}", e))?;
+    let content = std::fs::read_to_string(path).map_err(|e| format!("Čtení selhalo: {}", e))?;
     let mut item = parse_spai_markdown(&content, path.to_path_buf())
         .ok_or_else(|| "Soubor nelze načíst jako SPAI poznámku".to_string())?;
 
@@ -79,7 +80,9 @@ pub fn update_record(path: &std::path::Path, text: &str) -> Result<(), String> {
         return Err("Prázdný záznam".to_string());
     }
     let detected = detect_spai_input(first_line);
-    let clean = strip_leading_prefix(first_line).unwrap_or(first_line).trim();
+    let clean = strip_leading_prefix(first_line)
+        .unwrap_or(first_line)
+        .trim();
     let (clean, typed_stamp) = take_stamp_token(clean);
     if !clean.is_empty() {
         item.title = clean.to_string();
@@ -111,7 +114,9 @@ pub fn write_record(proj: &SpaiProjectSummary, text: &str) -> Result<WrittenNote
     }
 
     let detected = detect_spai_input(first_line);
-    let clean_title = strip_leading_prefix(first_line).unwrap_or(first_line).trim();
+    let clean_title = strip_leading_prefix(first_line)
+        .unwrap_or(first_line)
+        .trim();
 
     // A Scratchpad line carries its stamp inline (`[10.2.2026 14:22:37]`,
     // inserted right after the prefix): use it as the note's timestamp —
@@ -227,7 +232,11 @@ mod tests {
     fn temp_project(tag: &str) -> SpaiProjectSummary {
         let dir = std::env::temp_dir().join(format!("spai_writer_{}_{}", tag, std::process::id()));
         fs::create_dir_all(dir.join("docs").join("spai")).unwrap();
-        SpaiProjectSummary::new("proj".to_string(), dir.clone(), dir.join("docs").join("spai"))
+        SpaiProjectSummary::new(
+            "proj".to_string(),
+            dir.clone(),
+            dir.join("docs").join("spai"),
+        )
     }
 
     #[test]
@@ -264,8 +273,18 @@ mod tests {
         // The id counter skips used ids, so a second write never collides.
         let second = write_record(&proj, ". První").unwrap();
         assert_ne!(first.path, second.path);
-        assert_eq!(fs::read_to_string(&first.path).unwrap().contains("# SPAI-001"), true);
-        assert_eq!(fs::read_to_string(&second.path).unwrap().contains("# SPAI-002"), true);
+        assert_eq!(
+            fs::read_to_string(&first.path)
+                .unwrap()
+                .contains("# SPAI-001"),
+            true
+        );
+        assert_eq!(
+            fs::read_to_string(&second.path)
+                .unwrap()
+                .contains("# SPAI-002"),
+            true
+        );
         fs::remove_dir_all(&proj.path).ok();
     }
 
@@ -297,16 +316,29 @@ mod tests {
         let note = write_record(&proj, ". [10.2.2026 14:22:37] Opravit build @proj").unwrap();
         let content = fs::read_to_string(&note.path).unwrap();
         // Title is clean; the stamp moved into the frontmatter timestamp.
-        assert!(content.contains("# SPAI-001: Opravit build"), "title: {content}");
-        assert!(content.contains("timestamp: 2026-02-10 14:22:37"), "ts: {content}");
+        assert!(
+            content.contains("# SPAI-001: Opravit build"),
+            "title: {content}"
+        );
+        assert!(
+            content.contains("timestamp: 2026-02-10 14:22:37"),
+            "ts: {content}"
+        );
         // The file name carries the *typed* date, not the save date.
         assert!(
-            note.path.file_name().unwrap().to_string_lossy().starts_with("2026-02-10-"),
+            note.path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("2026-02-10-"),
             "name: {:?}",
             note.path
         );
         // The body keeps exactly what was typed.
-        assert!(content.contains(". [10.2.2026 14:22:37] Opravit build @proj"), "body: {content}");
+        assert!(
+            content.contains(". [10.2.2026 14:22:37] Opravit build @proj"),
+            "body: {content}"
+        );
         fs::remove_dir_all(&proj.path).ok();
     }
 
@@ -315,7 +347,10 @@ mod tests {
         let proj = temp_project("stamp2");
         let note = write_record(&proj, ". [10.2.2026 14:22] Krátký čas").unwrap();
         let content = fs::read_to_string(&note.path).unwrap();
-        assert!(content.contains("timestamp: 2026-02-10 14:22:00"), "ts: {content}");
+        assert!(
+            content.contains("timestamp: 2026-02-10 14:22:00"),
+            "ts: {content}"
+        );
 
         let note2 = write_record(&proj, "- [ai, chat] Značky nejsou čas").unwrap();
         let content2 = fs::read_to_string(&note2.path).unwrap();

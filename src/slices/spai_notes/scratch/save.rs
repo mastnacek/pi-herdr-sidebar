@@ -10,10 +10,10 @@
 //! a duplicate — for Saved records and for FromFile records loaded with
 //! Ctrl+T alike. FromFile lines carry the id (`SPAI-014`), which is stripped
 //! before the rewrite so the title is never polluted.
-use super::line_model::{LineOrigin, ScratchLine};
 use super::super::note_writer;
 use super::super::spai_prefixes::strip_leading_prefix;
 use super::super::state::SpaiNotesState;
+use super::line_model::{LineOrigin, ScratchLine};
 use std::path::PathBuf;
 
 impl SpaiNotesState {
@@ -24,7 +24,10 @@ impl SpaiNotesState {
         // Collect record spans first (indices shift as groups collapse).
         let mut creates: Vec<(usize, usize, String)> = Vec::new();
         let mut updates: Vec<(usize, usize, PathBuf)> = Vec::new();
-        for &start in super::line_model::record_starts(&self.scratch.lines).iter().rev() {
+        for &start in super::line_model::record_starts(&self.scratch.lines)
+            .iter()
+            .rev()
+        {
             let head = &self.scratch.lines[start];
             if !super::line_model::is_marked(&head.text) {
                 continue; // prose line 0
@@ -37,7 +40,11 @@ impl SpaiNotesState {
                 .join("\n");
             match &head.origin {
                 LineOrigin::New => creates.push((s, e, text)),
-                LineOrigin::Saved { path, saved_text, .. } => {
+                LineOrigin::Saved {
+                    path,
+                    saved_text: _,
+                    ..
+                } => {
                     // Original full record: every Saved line keeps its own
                     // original text.
                     let original = self.scratch.lines[s..e]
@@ -52,7 +59,9 @@ impl SpaiNotesState {
                         updates.push((s, e, path.clone()));
                     }
                 }
-                LineOrigin::FromFile { path, loaded_text, .. } => {
+                LineOrigin::FromFile {
+                    path, loaded_text, ..
+                } => {
                     // Continuations typed under the summary count as changes.
                     if text != *loaded_text {
                         updates.push((s, e, path.clone()));
@@ -72,7 +81,7 @@ impl SpaiNotesState {
         let mut files: Vec<PathBuf> = Vec::new();
 
         // Save bottom-up so earlier indices stay valid while groups collapse.
-        for &(start, end, ref text) in creates.iter() {
+        for &(start, _end, ref text) in creates.iter() {
             // Route: first matching @mention; an *explicit but unknown* mention
             // keeps the line in the scratchpad (nothing is lost). Without any
             // mention the record falls back to the current project (plan §2.1).
@@ -99,7 +108,7 @@ impl SpaiNotesState {
                 continue;
             };
 
-            match note_writer::write_record(&proj, text) {
+            match note_writer::write_record(proj, text) {
                 Ok(w) => {
                     files.push(w.path.clone());
                     saved.push((start, w.id, w.path, w.project));
@@ -144,13 +153,17 @@ impl SpaiNotesState {
                 Ok(()) => {
                     updated += 1;
                     // Refresh the change-detection baseline line by line.
-                    let new_lines: Vec<String> =
-                        file_text.lines().map(String::from).collect();
+                    let new_lines: Vec<String> = file_text.lines().map(String::from).collect();
                     let head_origin = self.scratch.lines[s].origin.clone();
                     for (i, line) in self.scratch.lines[s..e].iter_mut().enumerate() {
                         let own = line.text.clone();
                         match &head_origin {
-                            LineOrigin::Saved { path: p, id: id2, project: pr, .. } => {
+                            LineOrigin::Saved {
+                                path: p,
+                                id: id2,
+                                project: pr,
+                                ..
+                            } => {
                                 line.origin = LineOrigin::Saved {
                                     path: p.clone(),
                                     id: id2.clone(),
@@ -158,15 +171,17 @@ impl SpaiNotesState {
                                     saved_text: own,
                                 };
                             }
-                            LineOrigin::FromFile { path: p, id: id2, project: pr, .. } => {
+                            LineOrigin::FromFile {
+                                path: p,
+                                id: id2,
+                                project: pr,
+                                ..
+                            } => {
                                 line.origin = LineOrigin::FromFile {
                                     path: p.clone(),
                                     id: id2.clone(),
                                     project: pr.clone(),
-                                    loaded_text: new_lines
-                                        .get(i)
-                                        .cloned()
-                                        .unwrap_or(own.clone()),
+                                    loaded_text: new_lines.get(i).cloned().unwrap_or(own.clone()),
                                 };
                             }
                             LineOrigin::New => {}
@@ -216,7 +231,10 @@ impl SpaiNotesState {
         // Bidirectional UX: after a save the cursor must be able to type
         // again — land it on a fresh New line when it sits on a Saved one.
         let cursor_on_saved = matches!(
-            self.scratch.lines.get(self.scratch.cursor_line).map(|l| &l.origin),
+            self.scratch
+                .lines
+                .get(self.scratch.cursor_line)
+                .map(|l| &l.origin),
             Some(LineOrigin::Saved { .. } | LineOrigin::FromFile { .. })
         );
         if cursor_on_saved {
@@ -301,7 +319,10 @@ mod id_tests {
 
     #[test]
     fn strips_the_id_but_not_the_mark_prefix() {
-        assert_eq!(strip_leading_id(". SPAI-014 Opravit build"), ". Opravit build");
+        assert_eq!(
+            strip_leading_id(". SPAI-014 Opravit build"),
+            ". Opravit build"
+        );
         assert_eq!(strip_leading_id("x SPAI-003 hotová věc"), "x hotová věc");
         assert_eq!(
             strip_leading_id("? SPAI-007 nápad\npokračování"),

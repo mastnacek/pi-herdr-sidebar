@@ -59,10 +59,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         display_sym: "x",
         name: "Hotovo (done)",
         desc: "Dokončený a uzavřený úkol",
-        examples: &[
-            "x @projekt hotovo :2h:",
-            "x nasazeno na produkční server",
-        ],
+        examples: &["x @projekt hotovo :2h:", "x nasazeno na produkční server"],
         kind: SpaiType::Todo,
         status: SpaiStatus::Done,
         color: Color::Rgb(144, 238, 144), // Light green
@@ -72,10 +69,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         display_sym: "z",
         name: "Zrušeno (cancelled)",
         desc: "Zrušený nebo neplatný úkol",
-        examples: &[
-            "z @projekt už není potřeba",
-            "z zrušeno po dohodě s týmem",
-        ],
+        examples: &["z @projekt už není potřeba", "z zrušeno po dohodě s týmem"],
         kind: SpaiType::Todo,
         status: SpaiStatus::Cancelled,
         color: Color::Rgb(127, 140, 141), // Dim gray
@@ -176,10 +170,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         display_sym: "$",
         name: "Nákupní seznam (shopping)",
         desc: "Položka nákupního seznamu k pořízení",
-        examples: &[
-            "$ @domov mléko @Lidl",
-            "$ @kancelar nový HDMI kabel",
-        ],
+        examples: &["$ @domov mléko @Lidl", "$ @kancelar nový HDMI kabel"],
         kind: SpaiType::Todo,
         status: SpaiStatus::Shopping,
         color: Color::Rgb(255, 230, 109), // Yellow
@@ -202,10 +193,7 @@ pub const SPAI_TYPE_OPTIONS: &[SpaiTypeOption] = &[
         display_sym: "#",
         name: "Metrika (tally)",
         desc: "Číselná metrika nebo počítadlo návyků a hodnot",
-        examples: &[
-            "# @produktivita káva 3",
-            "# @kondice kroky 8500",
-        ],
+        examples: &["# @produktivita káva 3", "# @kondice kroky 8500"],
         kind: SpaiType::Note,
         status: SpaiStatus::Tally,
         color: Color::Rgb(0, 255, 255), // Cyan
@@ -243,9 +231,15 @@ pub fn find_type_option_index(input: &str) -> Option<usize> {
     for (idx, opt) in SPAI_TYPE_OPTIONS.iter().enumerate() {
         if rest.starts_with(opt.symbol)
             || rest == opt.display_sym
-            || (opt.display_sym == "/." && (rest.starts_with("/· ") || rest == "/·" || rest.starts_with("/.") || rest == "/."))
-            || (opt.display_sym == "x" && (rest.starts_with("X ") || rest == "X" || rest.starts_with("x ") || rest == "x"))
-            || (opt.display_sym == "z" && (rest.starts_with("Z ") || rest == "Z" || rest.starts_with("z ") || rest == "z"))
+            || (opt.display_sym == "/."
+                && (rest.starts_with("/· ")
+                    || rest == "/·"
+                    || rest.starts_with("/.")
+                    || rest == "/."))
+            || (opt.display_sym == "x"
+                && (rest.starts_with("X ") || rest == "X" || rest.starts_with("x ") || rest == "x"))
+            || (opt.display_sym == "z"
+                && (rest.starts_with("Z ") || rest == "Z" || rest.starts_with("z ") || rest == "z"))
         {
             return Some(idx);
         }

@@ -159,10 +159,7 @@ mod tests {
             format_short_date("24.09.2026"),
             Some("24.09.26".to_string())
         );
-        assert_eq!(
-            format_short_date("24.09.26"),
-            Some("24.09.26".to_string())
-        );
+        assert_eq!(format_short_date("24.09.26"), Some("24.09.26".to_string()));
     }
 
     #[test]

@@ -21,7 +21,10 @@ fn type_selection_cycles_forward_and_backward() {
 
     // Prev type wraps to last
     state.prev_type();
-    assert_eq!(state.creation_dialog.type_selection, SPAI_TYPE_OPTIONS.len() - 1);
+    assert_eq!(
+        state.creation_dialog.type_selection,
+        SPAI_TYPE_OPTIONS.len() - 1
+    );
 }
 
 #[test]
@@ -91,11 +94,7 @@ fn submit_title(word: &str) -> String {
     state.creation_dialog.title_input = word.to_string();
     state.creation_dialog.cursor = word.chars().count();
     state.submit_creation_dialog().expect("note created");
-    state
-        .selected_item()
-        .expect("item inserted")
-        .title
-        .clone()
+    state.selected_item().expect("item inserted").title.clone()
 }
 
 #[test]
@@ -103,7 +102,11 @@ fn submit_keeps_plain_words_intact() {
     // Regression: the old prefix list contained bare letters ("x", "h", "-",
     // ...), so "hello" became "ello" and "xylofon" became "ylofon".
     for word in ["hello", "xylofon", "zrušení zakázky", "+420peněz"] {
-        assert_eq!(submit_title(word), word, "title {word:?} must survive submit");
+        assert_eq!(
+            submit_title(word),
+            word,
+            "title {word:?} must survive submit"
+        );
     }
 }
 
@@ -123,7 +126,10 @@ fn apply_selected_type_never_touches_plain_words() {
     state.creation_dialog.cursor = 7;
     state.creation_dialog.type_selection = 0;
     state.apply_selected_type();
-    assert_eq!(state.creation_dialog.title_input, "xylofon", "input untouched");
+    assert_eq!(
+        state.creation_dialog.title_input, "xylofon",
+        "input untouched"
+    );
 }
 
 #[test]
@@ -135,10 +141,15 @@ fn arrow_type_cycling_is_gated_on_empty_input() {
     let before = state.creation_dialog.type_selection;
     state.next_type();
     state.prev_type();
-    assert_eq!(state.creation_dialog.type_selection, before, "↑↓ ignored while typing");
+    assert_eq!(
+        state.creation_dialog.type_selection, before,
+        "↑↓ ignored while typing"
+    );
 
     state.creation_dialog.title_input.clear();
     state.next_type();
-    assert_eq!(state.creation_dialog.type_selection, (before + 1) % SPAI_TYPE_OPTIONS.len());
+    assert_eq!(
+        state.creation_dialog.type_selection,
+        (before + 1) % SPAI_TYPE_OPTIONS.len()
+    );
 }
-

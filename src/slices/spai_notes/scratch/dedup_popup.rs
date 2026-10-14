@@ -84,10 +84,7 @@ pub fn render_dedup_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNote
                     format!("{} ", m.symbol),
                     Style::default().fg(Color::Yellow).bold(),
                 ),
-                Span::styled(
-                    format!("{}: {}", m.id, m.title),
-                    style,
-                ),
+                Span::styled(format!("{}: {}", m.id, m.title), style),
             ]));
         }
         lines.push(Line::from(vec![

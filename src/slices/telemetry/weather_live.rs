@@ -109,6 +109,7 @@ pub fn index_of_location(id: &str) -> usize {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CurrentWeather {
     pub temp_c: f64,
     pub wind_ms: f64,
@@ -121,6 +122,7 @@ pub struct CurrentWeather {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DayForecast {
     /// `2026-09-24` (local date)
     pub date: String,
@@ -143,6 +145,7 @@ pub struct WeatherTelemetry {
     pub days: Vec<DayForecast>,
     pub error: Option<String>,
     /// Whether this frame came from the disk cache (offline fallback).
+    #[allow(dead_code)]
     pub from_cache: bool,
 }
 
@@ -209,6 +212,7 @@ pub fn save_selected_location(index: usize) {
 // ---------------------------------------------------------------------------
 
 /// Local time label `DD.MM.YYYY HH:MM` (UTC+2, same convention as forecast grouping).
+#[allow(dead_code)]
 fn local_now_label() -> String {
     let secs = now_secs() as i64 + 2 * 3600;
     let days = secs.div_euclid(86_400);
@@ -227,6 +231,7 @@ fn local_now_label() -> String {
 /// Plain-text forecast report for ALL preset locations × all days.
 /// Uses fresh fetches (per-location cache holds only the current one), so the
 /// first call blocks for a few seconds while curl runs sequentially.
+#[allow(dead_code)]
 pub fn collect_all_locations_report() -> String {
     let mut out = format!(
         "Předpověď počasí – ČR (vygenerováno {})\n",
@@ -263,6 +268,7 @@ pub fn collect_all_locations_report() -> String {
 }
 
 /// Copy `text` to the system clipboard (Windows `clip`, macOS `pbcopy`, Linux `wl-copy`).
+#[allow(dead_code)]
 pub fn copy_to_clipboard(text: &str) -> bool {
     use std::io::Write;
     use std::process::Stdio;

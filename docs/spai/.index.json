@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-25 09:14:36",
+  "lastUpdated": "2026-10-14 11:58:37",
   "records": [
     {
       "id": "SPAI-001",
@@ -132,6 +132,22 @@
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-011-add-note-status-cycling-in-notes-tab-hotkey-x-todo.md"
+    },
+    {
+      "id": "SPAI-012",
+      "title": "Display read-only SPAI and UMA memory relations in the SPAI item detail pane",
+      "type": "Todo",
+      "status": "working",
+      "symbol": "/",
+      "timestamp": "2026-10-14 11:58:17",
+      "tags": [
+        "spai",
+        "uma",
+        "sidebar"
+      ],
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-10-14-SPAI-012-display-read-only-spai-and-uma-memory-relations-in.md"
     }
   ]
 }

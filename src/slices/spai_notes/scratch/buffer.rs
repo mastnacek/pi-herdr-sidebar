@@ -118,6 +118,7 @@ impl ScratchState {
         self.dirty = true;
     }
 
+    #[allow(dead_code)]
     pub fn cursor_up(&mut self) {
         if self.cursor_line > 0 {
             self.cursor_line -= 1;

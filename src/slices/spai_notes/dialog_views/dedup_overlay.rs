@@ -20,7 +20,8 @@ pub fn render_dedup_overlay(frame: &mut Frame, area: Rect, state: &SpaiNotesStat
 
     let eval_lines = 1usize;
     let matches_lines = state.dedup.matches.len().max(1);
-    let height = (matches_lines + eval_lines + 2).clamp(3, area.height.saturating_sub(6) as usize) as u16;
+    let height =
+        (matches_lines + eval_lines + 2).clamp(3, area.height.saturating_sub(6) as usize) as u16;
     let width = area.width.saturating_sub(8).max(20);
 
     let panel = Rect {
@@ -86,18 +87,33 @@ pub fn render_dedup_overlay(frame: &mut Frame, area: Rect, state: &SpaiNotesStat
     // Action hints — only the creation dialog offers O/A/U.
     if in_creation && !state.dedup.is_evaluating && !state.dedup.matches.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled(" [Ctrl+O] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled(
+                " [Ctrl+O] ",
+                Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
+            ),
             Span::styled("otevřít ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Ctrl+A] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled(
+                "[Ctrl+A] ",
+                Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
+            ),
             Span::styled("připojit ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Ctrl+U] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled(
+                "[Ctrl+U] ",
+                Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
+            ),
             Span::styled("stav ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Esc] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled(
+                "[Esc] ",
+                Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
+            ),
             Span::styled("zpět", Style::default().fg(Color::DarkGray)),
         ]));
     } else {
         lines.push(Line::from(vec![
-            Span::styled(" [Esc] ", Style::default().fg(Color::Rgb(139, 233, 253)).bold()),
+            Span::styled(
+                " [Esc] ",
+                Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
+            ),
             Span::styled("zpět", Style::default().fg(Color::DarkGray)),
         ]));
     }

@@ -51,14 +51,8 @@ pub fn token_jaccard(a: &str, b: &str) -> f64 {
     let norm_a = normalize_czech(a);
     let norm_b = normalize_czech(b);
 
-    let tokens_a: Vec<&str> = norm_a
-        .split_whitespace()
-        .filter(|t| t.len() >= 3)
-        .collect();
-    let tokens_b: Vec<&str> = norm_b
-        .split_whitespace()
-        .filter(|t| t.len() >= 3)
-        .collect();
+    let tokens_a: Vec<&str> = norm_a.split_whitespace().filter(|t| t.len() >= 3).collect();
+    let tokens_b: Vec<&str> = norm_b.split_whitespace().filter(|t| t.len() >= 3).collect();
 
     if tokens_a.is_empty() || tokens_b.is_empty() {
         return 0.0;

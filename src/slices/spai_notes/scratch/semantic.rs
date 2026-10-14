@@ -10,7 +10,7 @@ use super::super::similarity::cosine_similarity;
 use super::super::state::SpaiNotesState;
 use super::line_model::LineOrigin;
 use super::state::{SemanticJob, SemanticMessage};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -26,8 +26,7 @@ impl SpaiNotesState {
         threshold: f64,
     ) {
         if query.trim().len() < 3 {
-            self.scratch.last_summary =
-                Some("⚠ Dotaz je příliš krátký (min. 3 znaky)".to_string());
+            self.scratch.last_summary = Some("⚠ Dotaz je příliš krátký (min. 3 znaky)".to_string());
             return;
         }
         if api_key.trim().is_empty() {
@@ -55,10 +54,12 @@ impl SpaiNotesState {
             };
             for line in &self.scratch.lines {
                 let (path, id, project) = match &line.origin {
-                    LineOrigin::Saved { path, id, project, .. }
-                    | LineOrigin::FromFile { path, id, project, .. } => {
-                        (path.clone(), id.clone(), project.clone())
+                    LineOrigin::Saved {
+                        path, id, project, ..
                     }
+                    | LineOrigin::FromFile {
+                        path, id, project, ..
+                    } => (path.clone(), id.clone(), project.clone()),
                     LineOrigin::New => continue,
                 };
                 if project != proj.name {
@@ -69,7 +70,11 @@ impl SpaiNotesState {
                     .and_then(|f| f.to_str())
                     .unwrap_or("")
                     .to_string();
-                if let Some(v) = store.vectors.get(&file_name).or_else(|| store.vectors.get(&id)) {
+                if let Some(v) = store
+                    .vectors
+                    .get(&file_name)
+                    .or_else(|| store.vectors.get(&id))
+                {
                     candidates.push((path, id, v.clone()));
                 }
             }
@@ -130,7 +135,10 @@ impl SpaiNotesState {
                 });
             }
 
-            let hits = candidates.iter().filter(|(p, _, _)| allowed.contains(p)).count();
+            let hits = candidates
+                .iter()
+                .filter(|(p, _, _)| allowed.contains(p))
+                .count();
             // Make the coverage visible: records without a stored vector can
             // never appear in the results (no cosine input) — say so, or the
             // short list looks like a rendering bug.

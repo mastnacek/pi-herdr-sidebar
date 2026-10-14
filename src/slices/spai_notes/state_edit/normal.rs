@@ -1,6 +1,6 @@
 //! Normal mode commands of the integrated editor (plan §3): a small, honest
 //! set — movement, mode entry, status cycle. No "full Vim".
-use super::super::dialog_state::{EditMode, EditField};
+use super::super::dialog_state::{EditField, EditMode};
 use super::super::state::SpaiNotesState;
 use super::super::text_cursor::char_len;
 
@@ -14,8 +14,8 @@ impl SpaiNotesState {
                 At::LineEnd => None,
                 _ => None,
             } {
-                self.edit_dialog.cursor = (self.edit_dialog.cursor + delta)
-                    .min(match self.edit_dialog.field {
+                self.edit_dialog.cursor =
+                    (self.edit_dialog.cursor + delta).min(match self.edit_dialog.field {
                         EditField::Title => char_len(&self.edit_dialog.title_input),
                         EditField::Body => char_len(&self.edit_dialog.body_input),
                     });
@@ -25,7 +25,8 @@ impl SpaiNotesState {
                     EditField::Title => self.edit_dialog.title_input.clone(),
                     EditField::Body => self.edit_dialog.body_input.clone(),
                 };
-                let (_, end) = super::super::text_cursor::line_bounds(&text, self.edit_dialog.cursor);
+                let (_, end) =
+                    super::super::text_cursor::line_bounds(&text, self.edit_dialog.cursor);
                 self.edit_dialog.cursor = end;
             }
         }

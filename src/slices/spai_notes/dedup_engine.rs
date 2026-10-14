@@ -27,6 +27,7 @@ pub enum DedupOutcome {
 
 impl DedupOutcome {
     /// Matches from a synchronous run; `None` while running in the background.
+    #[allow(dead_code)]
     pub fn ready(&self) -> Option<Vec<SimilarNoteMatch>> {
         match self {
             DedupOutcome::Ready(m) => Some(m.clone()),
@@ -68,7 +69,9 @@ pub fn run(req: DedupRequest) -> DedupOutcome {
             crate::slices::settings::load_project_vectors(&proj_path).map(|s| s.vectors);
 
         let cand_vec = match crate::slices::settings::vector_service::request_embeddings(
-            &key, &emb_model, &[&raw],
+            &key,
+            &emb_model,
+            &[&raw],
         ) {
             Ok(mut vecs) => vecs.pop(),
             Err(_) => None,

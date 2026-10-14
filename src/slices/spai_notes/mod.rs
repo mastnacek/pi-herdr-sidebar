@@ -9,9 +9,9 @@ pub mod input_highlighter;
 pub mod note;
 pub mod note_io;
 pub mod note_writer;
+pub mod scratch;
 pub mod similarity;
 pub mod spai_prefixes;
-pub mod scratch;
 pub mod state;
 pub mod state_creation;
 pub mod state_edit;
@@ -22,6 +22,7 @@ pub mod text_cursor;
 pub mod text_layout;
 pub mod time_utils;
 pub mod type_options;
+pub mod uma_links;
 pub mod view;
 pub mod viewer_content;
 

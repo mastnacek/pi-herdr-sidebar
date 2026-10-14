@@ -8,9 +8,9 @@
 //! Split for the line cap:
 //! - [`super::buffer`] — Edit-mode text operations on the buffer
 //! - [`super::visibility`] — filter helpers and record navigation
+use super::super::similarity::SimilarNoteMatch;
 use super::filter::{FilterQuery, StatusFilter};
 use super::line_model::{is_marked, ScratchLine};
-use super::super::similarity::SimilarNoteMatch;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 
@@ -68,7 +68,11 @@ pub enum SemanticProgress {
     #[default]
     Idle,
     /// Embedding request + cosine scan in progress: step/total/label.
-    Running { step: usize, total: usize, label: String },
+    Running {
+        step: usize,
+        total: usize,
+        label: String,
+    },
 }
 
 /// Ctrl+D popup state for the line under the cursor (plan §3).
@@ -112,6 +116,7 @@ impl std::fmt::Debug for ScratchDedup {
 pub struct SemanticJob {
     pub receiver: std::sync::mpsc::Receiver<SemanticMessage>,
     /// Last reported progress (rendered as the settings-style bar).
+    #[allow(dead_code)]
     pub progress: SemanticProgress,
     /// Spinner frame, advanced every tick while the job runs.
     pub spinner_tick: usize,
@@ -119,8 +124,15 @@ pub struct SemanticJob {
 
 #[derive(Debug)]
 pub enum SemanticMessage {
-    Progress { step: usize, total: usize, label: String },
-    Done { allowed: std::collections::HashSet<PathBuf>, label: String },
+    Progress {
+        step: usize,
+        total: usize,
+        label: String,
+    },
+    Done {
+        allowed: std::collections::HashSet<PathBuf>,
+        label: String,
+    },
     Error(String),
 }
 
@@ -244,8 +256,11 @@ impl ScratchState {
     }
 
     /// Is the current line a marked record candidate (savable)?
+    #[allow(dead_code)]
     pub fn current_line_is_marked(&self) -> bool {
-        self.current_line().map(|l| is_marked(&l.text)).unwrap_or(false)
+        self.current_line()
+            .map(|l| is_marked(&l.text))
+            .unwrap_or(false)
     }
 
     // ── Dedup popup plumbing ──────────────────────────────────────
@@ -281,13 +296,14 @@ impl ScratchState {
     /// cursor jumps to the first match). Passive — called from the tick.
     pub fn poll_semantic(&mut self) {
         self.semantic_progress = SemanticProgress::Idle;
-        let Some(job) = &mut self.semantic_job else { return };
+        let Some(job) = &mut self.semantic_job else {
+            return;
+        };
         job.spinner_tick = job.spinner_tick.wrapping_add(1);
         while let Ok(msg) = job.receiver.try_recv() {
             match msg {
                 SemanticMessage::Progress { step, total, label } => {
-                    self.semantic_progress =
-                        SemanticProgress::Running { step, total, label };
+                    self.semantic_progress = SemanticProgress::Running { step, total, label };
                 }
                 SemanticMessage::Done { allowed, label } => {
                     self.semantic_allowed = Some(allowed);
@@ -323,7 +339,6 @@ impl ScratchState {
     // `@` autocomplete plumbing lives in `super::mention` (file-size cap).
 }
 
-
 #[cfg(test)]
 mod semantic_job_tests {
     use super::*;
@@ -339,19 +354,31 @@ mod semantic_job_tests {
             spinner_tick: 0,
         });
 
-        tx.send(SemanticMessage::Progress { step: 1, total: 4, label: " Embed…".into() })
-            .unwrap();
+        tx.send(SemanticMessage::Progress {
+            step: 1,
+            total: 4,
+            label: " Embed…".into(),
+        })
+        .unwrap();
         s.poll_semantic();
         assert!(s.semantic_running(), "job continues");
         assert_eq!(
             s.semantic_progress,
-            SemanticProgress::Running { step: 1, total: 4, label: " Embed…".into() }
+            SemanticProgress::Running {
+                step: 1,
+                total: 4,
+                label: " Embed…".into()
+            }
         );
 
         // Done: the allow-set lands (path-keyed), cursor jumps to first visible.
         let mut allowed = std::collections::HashSet::new();
         allowed.insert(PathBuf::from("/tmp/x.md"));
-        tx.send(SemanticMessage::Done { allowed, label: "2 shod".into() }).unwrap();
+        tx.send(SemanticMessage::Done {
+            allowed,
+            label: "2 shod".into(),
+        })
+        .unwrap();
         s.poll_semantic();
         assert!(!s.semantic_running());
         assert_eq!(s.semantic_allowed.as_ref().map(|a| a.len()), Some(1));
@@ -367,7 +394,8 @@ mod semantic_job_tests {
             progress: SemanticProgress::Idle,
             spinner_tick: 0,
         });
-        tx.send(SemanticMessage::Error("síť neběží".into())).unwrap();
+        tx.send(SemanticMessage::Error("síť neběží".into()))
+            .unwrap();
         s.poll_semantic();
         assert!(!s.semantic_running());
         assert!(s.last_summary.unwrap_or_default().contains("síť neběží"));

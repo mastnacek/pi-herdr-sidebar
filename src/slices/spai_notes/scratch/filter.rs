@@ -98,7 +98,9 @@ pub fn fuzzy_score(needle: &str, haystack: &str) -> Option<f64> {
     let mut last_idx: Option<usize> = None;
 
     for (i, &c) in h_chars.iter().enumerate() {
-        let Some(&want) = needle_chars.peek() else { break };
+        let Some(&want) = needle_chars.peek() else {
+            break;
+        };
         if c == want {
             needle_chars.next();
             score += 1.0;
@@ -138,8 +140,10 @@ fn record_is_done(lines: &[ScratchLine], idx: usize) -> bool {
     let first = &lines[start];
     match &first.origin {
         LineOrigin::New => false,
-        _ => super::line_model::is_marked(&first.text)
-            && first.text.trim_start().to_lowercase().starts_with('x'),
+        _ => {
+            super::line_model::is_marked(&first.text)
+                && first.text.trim_start().to_lowercase().starts_with('x')
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 //! Filter helpers and Read-mode record navigation (plan §4).
-use super::filter::{FilterQuery, StatusFilter};
+use super::filter::FilterQuery;
 use super::state::ScratchState;
 
 impl ScratchState {
@@ -88,6 +88,7 @@ impl ScratchState {
     }
 
     /// Moves the cursor by whole records (Read mode `↑/↓`, `j/k`).
+    #[allow(dead_code)]
     pub fn move_cursor_by_record(&mut self, delta: i32) {
         let records = self.visible_records();
         if records.is_empty() {
@@ -103,6 +104,7 @@ impl ScratchState {
     }
 
     /// `g`/`G`: first/last visible record.
+    #[allow(dead_code)]
     pub fn jump_to_edge(&mut self, top: bool) {
         let records = self.visible_records();
         let Some(target) = (if top {

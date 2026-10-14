@@ -1,12 +1,11 @@
 //! Per-line rendering for the Scratchpad: no-wrap Paragraph rows, the full-row
 //! cursor highlight and the inverted-cell cursor.
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 
-use super::line_model::ScratchLine;
 use super::super::state::SpaiNotesState;
+use super::line_model::ScratchLine;
 
 /// The cursor-line highlight background (dark amber — readable with every
 /// fg colour the highlighter uses, distinct from the yellow frame).
@@ -64,16 +63,12 @@ pub fn render_line(line: &ScratchLine) -> Line<'static> {
                 origin.project().unwrap_or(""),
                 origin.record_id().unwrap_or("")
             );
-            spans.push(Span::styled(
-                label,
-                Style::default().fg(Color::DarkGray),
-            ));
+            spans.push(Span::styled(label, Style::default().fg(Color::DarkGray)));
         }
     }
 
     Line::from(spans)
 }
-
 
 fn highlight_spai_input_spans(text: &str) -> Vec<Span<'static>> {
     super::super::input_highlighter::highlight_spai_input_spans(text)

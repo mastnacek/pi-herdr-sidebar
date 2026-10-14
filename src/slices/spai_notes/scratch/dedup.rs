@@ -88,11 +88,17 @@ impl SpaiNotesState {
             .get(self.scratch.dedup.selected)
             .map(|m| m.id.clone())?;
         // The project the anchor line routes to (same rule as the run).
-        let query = super::line_model::record_text(&self.scratch.lines, self.scratch.dedup.anchor_line);
+        let query =
+            super::line_model::record_text(&self.scratch.lines, self.scratch.dedup.anchor_line);
         let proj_idx = note_writer::route_mention(&query, &self.projects)
             .and_then(|p| self.projects.iter().position(|x| x.path == p.path))
             .unwrap_or(self.selected_project_idx);
-        let pos = self.projects.get(proj_idx)?.items.iter().position(|it| it.id == id)?;
+        let pos = self
+            .projects
+            .get(proj_idx)?
+            .items
+            .iter()
+            .position(|it| it.id == id)?;
         Some((proj_idx, pos))
     }
 
@@ -119,12 +125,10 @@ impl SpaiNotesState {
         let (proj_idx, pos) = self
             .scratch_dedup_target()
             .ok_or_else(|| "Není vybrána shoda".to_string())?;
-        let text_to_append = super::line_model::record_text(
-            &self.scratch.lines,
-            self.scratch.dedup.anchor_line,
-        )
-        .trim()
-        .to_string();
+        let text_to_append =
+            super::line_model::record_text(&self.scratch.lines, self.scratch.dedup.anchor_line)
+                .trim()
+                .to_string();
         if text_to_append.is_empty() {
             return Err("Text k připojení je prázdný".to_string());
         }

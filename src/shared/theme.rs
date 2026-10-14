@@ -75,6 +75,7 @@ pub fn field_title(label: &str, focused: bool) -> String {
 }
 
 /// Renders a section header line (`▌ Title`) used inside modals.
+#[allow(dead_code)]
 pub fn section_header(title: &str) -> ratatui::text::Line<'static> {
     use ratatui::{
         style::Stylize,

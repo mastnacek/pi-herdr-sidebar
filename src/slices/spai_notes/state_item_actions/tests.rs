@@ -1,6 +1,5 @@
 //! Unit tests for note lifecycle actions: status cycles, deletion, creation.
 use super::*;
-use crate::slices::spai_notes::discovery::SpaiProjectSummary;
 use std::fs;
 
 fn temp_project() -> std::path::PathBuf {
@@ -8,8 +7,7 @@ fn temp_project() -> std::path::PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let dir =
-        std::env::temp_dir().join(format!("spai_del_test_{}_{}", std::process::id(), nanos));
+    let dir = std::env::temp_dir().join(format!("spai_del_test_{}_{}", std::process::id(), nanos));
     fs::create_dir_all(dir.join("docs").join("spai")).unwrap();
     dir
 }
@@ -62,7 +60,10 @@ fn delete_removes_file_from_disk_and_drops_the_item() {
         .iter()
         .map(|i| i.title.as_str())
         .collect();
-    assert!(!titles.contains(&"gone"), "item removed from state: {titles:?}");
+    assert!(
+        !titles.contains(&"gone"),
+        "item removed from state: {titles:?}"
+    );
 
     fs::remove_dir_all(&project).ok();
 }
@@ -95,8 +96,15 @@ fn create_never_reuses_an_id_deleted_from_disk() {
     // Delete SPAI-002 (index 1), then create a new note.
     state.selected_item_idx = 1;
     state.confirm_delete_selected().unwrap();
-    let new_id = state.create_quick_note_with_status("new", SpaiType::Todo, SpaiStatus::Todo, ". new
-").unwrap();
+    let new_id = state
+        .create_quick_note_with_status(
+            "new",
+            SpaiType::Todo,
+            SpaiStatus::Todo,
+            ". new
+",
+        )
+        .unwrap();
 
     assert_ne!(new_id, "SPAI-002", "deleted id must not be reused");
     assert_eq!(new_id, "SPAI-004", "id continues from the disk max");
@@ -107,7 +115,10 @@ fn create_never_reuses_an_id_deleted_from_disk() {
         .find(|e| e.file_name().to_string_lossy().contains("SPAI-004"))
         .expect("a file named *SPAI-004* must exist");
     let on_disk = fs::read_to_string(created.path()).unwrap();
-    assert!(on_disk.contains("# SPAI-004: new"), "header in file: {on_disk}");
+    assert!(
+        on_disk.contains("# SPAI-004: new"),
+        "header in file: {on_disk}"
+    );
     assert!(on_disk.contains(". new"), "body in file: {on_disk}");
     assert_eq!(state.current_items().len(), 3);
 
@@ -122,8 +133,15 @@ fn create_recreates_a_missing_spai_dir() {
     let mut state = state_on(&project);
     fs::remove_dir_all(project.join("docs").join("spai")).unwrap();
 
-    let id = state.create_quick_note_with_status("prvni", SpaiType::Todo, SpaiStatus::Todo, ". prvni
-").unwrap();
+    let id = state
+        .create_quick_note_with_status(
+            "prvni",
+            SpaiType::Todo,
+            SpaiStatus::Todo,
+            ". prvni
+",
+        )
+        .unwrap();
     assert_eq!(id, "SPAI-001");
     let created = fs::read_dir(project.join("docs").join("spai"))
         .expect("docs/spai must be recreated")

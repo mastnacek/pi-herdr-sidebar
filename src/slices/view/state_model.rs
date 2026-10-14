@@ -97,6 +97,7 @@ pub struct SidebarState {
     pub last_key: String,
     pub missing_ticks: u8,
     pub anim_tick: u64,
+    #[allow(dead_code)]
     pub last_active_skill: Option<String>,
     pub live: Option<LiveTelemetry>,
     pub live_session_id: Option<String>,

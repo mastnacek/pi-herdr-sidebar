@@ -41,10 +41,22 @@ fn help_lines() -> Vec<Line<'static>> {
         row("F1", "tahle nápověda"),
         blank(),
         head("PSANÍ (vždy — jeden mód)"),
-        row(". x ? - … + mezera", "rozpozná typ → vloží [10.2.2026 14:22:37]"),
-        row("@", "popup projektů — ↑/↓ vybrat, Enter/Tab doplnit, Esc skrýt"),
-        row("Enter", "nový řádek (řádky bez značky = pokračování záznamu)"),
-        row("Ctrl+S", "uložit/aktualizovat: řádky ↔ soubory, ✓ → projekt SPAI-xxx"),
+        row(
+            ". x ? - … + mezera",
+            "rozpozná typ → vloží [10.2.2026 14:22:37]",
+        ),
+        row(
+            "@",
+            "popup projektů — ↑/↓ vybrat, Enter/Tab doplnit, Esc skrýt",
+        ),
+        row(
+            "Enter",
+            "nový řádek (řádky bez značky = pokračování záznamu)",
+        ),
+        row(
+            "Ctrl+S",
+            "uložit/aktualizovat: řádky ↔ soubory, ✓ → projekt SPAI-xxx",
+        ),
         blank(),
         head("ZÁZNAMY"),
         row("Ctrl+O", "otevřít záznam pod kurzorem v editoru Notes"),
@@ -117,16 +129,19 @@ mod tests {
     #[ignore]
     fn help_preview() {
         let mut state = SpaiNotesState::new(None);
-        state.projects = vec![crate::slices::spai_notes::discovery::SpaiProjectSummary::new(
-            "herdr".to_string(),
-            PathBuf::from("D:/tmp/herdr"),
-            PathBuf::from("D:/tmp/herdr/docs/spai"),
-        )];
+        state.projects = vec![
+            crate::slices::spai_notes::discovery::SpaiProjectSummary::new(
+                "herdr".to_string(),
+                PathBuf::from("D:/tmp/herdr"),
+                PathBuf::from("D:/tmp/herdr/docs/spai"),
+            ),
+        ];
         state.open_scratch(None);
         state.scratch.lines = vec![ScratchLine::empty()];
         state.scratch.help_visible = true;
         let mut t = Terminal::new(TestBackend::new(90, 30)).unwrap();
-        t.draw(|f| super::render_help_overlay(f, f.area(), &state)).unwrap();
+        t.draw(|f| super::render_help_overlay(f, f.area(), &state))
+            .unwrap();
         let area = t.backend().buffer().area;
         for y in area.top()..area.bottom() {
             for x in area.left()..area.right() {

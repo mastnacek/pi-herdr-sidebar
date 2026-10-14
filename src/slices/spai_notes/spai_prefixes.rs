@@ -9,8 +9,8 @@
 //! single-character substrings (`"/. "` before `"/ "`, `"!/. "` before `"!. "`).
 pub const SPAI_PREFIXES: &[&str] = &[
     "/. ", "/· ", "!. ", "!/ ", "!/. ", "!x ", "!X ", "!z ", "!Z ", "!? ", "!- ", "!+ ", "!= ",
-    "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ",
-    "+ ", "= ", "* ", "% ", "~ ", "$ ", "♥ ", "h ", "# ",
+    "!* ", "!% ", "!~ ", "!$ ", "!♥ ", "!# ", ". ", "/ ", "x ", "X ", "z ", "Z ", "? ", "- ", "+ ",
+    "= ", "* ", "% ", "~ ", "$ ", "♥ ", "h ", "# ",
 ];
 
 /// Strips a leading SPAI prefix from user input and returns the rest.
@@ -38,7 +38,10 @@ mod tests {
         assert_eq!(strip_leading_prefix("!. urgentní"), Some("urgentní"));
         assert_eq!(strip_leading_prefix("x hotovo"), Some("hotovo"));
         assert_eq!(strip_leading_prefix("h zada 4"), Some("zada 4"));
-        assert_eq!(strip_leading_prefix("♥ @zdravi hlava"), Some("@zdravi hlava"));
+        assert_eq!(
+            strip_leading_prefix("♥ @zdravi hlava"),
+            Some("@zdravi hlava")
+        );
     }
 
     #[test]

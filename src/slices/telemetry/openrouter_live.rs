@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Default)]
 pub struct OpenRouterAccountCredit {
+    #[allow(dead_code)]
     pub id: String,
     pub label: String,
     pub total_credits: f64,
@@ -56,6 +57,7 @@ struct OpenRouterApiData {
 static OPENROUTER_CACHE: Mutex<Option<(Instant, OpenRouterCreditTelemetry)>> = Mutex::new(None);
 const OR_CACHE_TTL: Duration = Duration::from_secs(60);
 
+#[allow(dead_code)]
 pub fn is_openrouter_provider(provider: &str) -> bool {
     let p = provider.trim().to_lowercase();
     p == "openrouter" || p.starts_with("openrouter-") || p.contains("openrouter")

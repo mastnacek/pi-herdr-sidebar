@@ -4,7 +4,6 @@ use std::path::Path;
 
 use super::gates::strip_comments;
 use super::time::iso_to_epoch_ms;
-use super::{parse_session_skills, parse_skills_str};
 
 const SAMPLE: &str = r#"
 {"type":"session","cwd":"D:\\proj","timestamp":"2026-09-23T21:00:00.000Z"}

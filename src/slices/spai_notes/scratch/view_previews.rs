@@ -1,15 +1,16 @@
 #[cfg(test)]
 mod previews {
-    use super::super::view::{render_scratch, visible_window};
-    use crate::slices::spai_notes::scratch::line_model::{LineOrigin, ScratchLine};
+    use super::super::view::render_scratch;
     use crate::slices::spai_notes::discovery::SpaiProjectSummary;
+    
     use crate::slices::spai_notes::state::SpaiNotesState;
     use ratatui::{backend::TestBackend, Terminal};
     use std::path::PathBuf;
 
     fn draw(state: &SpaiNotesState, w: u16, h: u16) -> String {
         let mut t = Terminal::new(TestBackend::new(w, h)).expect("terminal");
-        t.draw(|f| render_scratch(f, f.area(), state)).expect("draw");
+        t.draw(|f| render_scratch(f, f.area(), state))
+            .expect("draw");
         let area = t.backend().buffer().area;
         let mut out = String::new();
         for y in area.top()..area.bottom() {
@@ -109,8 +110,6 @@ mod previews {
         println!("{}", draw(&state, 90, 24));
     }
 
-
-
     /// Diagnostic 3: real-app shape — many records, long titles, semantic
     /// allows 2 of them, cursor walked down to the second match, scroll>0.
     #[test]
@@ -136,14 +135,16 @@ mod previews {
                     loaded_text: format!(". record {}", i),
                 }
             };
-            lines.push(crate::slices::spai_notes::scratch::line_model::ScratchLine {
-                text: if matched {
-                    format!(". record {} with a very long title that will clip", i)
-                } else {
-                    format!(". record {}", i)
+            lines.push(
+                crate::slices::spai_notes::scratch::line_model::ScratchLine {
+                    text: if matched {
+                        format!(". record {} with a very long title that will clip", i)
+                    } else {
+                        format!(". record {}", i)
+                    },
+                    origin,
                 },
-                origin,
-            });
+            );
         }
         state.scratch.lines = lines;
         let mut allowed = std::collections::HashSet::new();
@@ -202,7 +203,10 @@ mod previews {
         for y in 1..4 {
             let bg5 = buf[(5, y)].bg;
             let modi = buf[(3, y)].modifier;
-            println!("row {y}: bg5={bg5:?} mod3={modi:?} sym='{}'", buf[(3, y)].symbol());
+            println!(
+                "row {y}: bg5={bg5:?} mod3={modi:?} sym='{}'",
+                buf[(3, y)].symbol()
+            );
         }
         // Second row is the cursor row: amber bg + reversed cell; first row
         // must NOT be amber.
@@ -256,7 +260,10 @@ mod previews {
         for y in 1..4 {
             let bg5 = buf[(5, y)].bg;
             let modi = buf[(3, y)].modifier;
-            println!("row {y}: bg5={bg5:?} mod3={modi:?} sym='{}'", buf[(3, y)].symbol());
+            println!(
+                "row {y}: bg5={bg5:?} mod3={modi:?} sym='{}'",
+                buf[(3, y)].symbol()
+            );
         }
     }
 
@@ -348,11 +355,11 @@ mod previews {
 
 #[cfg(test)]
 mod highlight_tests {
-    use ratatui::style::Color;
     use super::super::view::render_scratch;
-    use crate::slices::spai_notes::scratch::line_render::HIGHLIGHT_BG;
     use crate::slices::spai_notes::scratch::line_model::{LineOrigin, ScratchLine};
+    use crate::slices::spai_notes::scratch::line_render::HIGHLIGHT_BG;
     use crate::slices::spai_notes::state::SpaiNotesState;
+    use ratatui::style::Color;
     use ratatui::{backend::TestBackend, Terminal};
 
     fn draw<'a>(state: &'a SpaiNotesState, w: u16, h: u16) -> ratatui::buffer::Buffer {
@@ -366,8 +373,14 @@ mod highlight_tests {
         let mut state = SpaiNotesState::new(None);
         state.open_scratch(None);
         state.scratch.lines = vec![
-            ScratchLine { text: ". first".into(), origin: LineOrigin::New },
-            ScratchLine { text: "? second record".into(), origin: LineOrigin::New },
+            ScratchLine {
+                text: ". first".into(),
+                origin: LineOrigin::New,
+            },
+            ScratchLine {
+                text: "? second record".into(),
+                origin: LineOrigin::New,
+            },
         ];
         state.scratch.cursor_line = 1;
         state.scratch.cursor_char = 5;

@@ -118,6 +118,7 @@ fn id_from_filename(file_name: &str) -> Option<String> {
 
 /// Keys this parser models; anything else in the frontmatter is preserved
 /// verbatim in [`SpaiNoteItem::extra_frontmatter`].
+#[allow(dead_code)]
 const KNOWN_KEYS: &[&str] = &[
     "type",
     "status",

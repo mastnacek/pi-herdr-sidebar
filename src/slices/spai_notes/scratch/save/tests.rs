@@ -26,10 +26,13 @@ fn state_on(project: &PathBuf) -> SpaiNotesState {
 }
 
 fn add_line(state: &mut SpaiNotesState, text: &str) {
-    state.scratch.lines.push(super::super::line_model::ScratchLine {
-        text: text.to_string(),
-        origin: LineOrigin::New,
-    });
+    state
+        .scratch
+        .lines
+        .push(super::super::line_model::ScratchLine {
+            text: text.to_string(),
+            origin: LineOrigin::New,
+        });
 }
 
 #[test]
@@ -93,7 +96,10 @@ fn unknown_mention_leaves_the_line_in_the_scratchpad() {
     let n = state.scratch_save_all();
     assert_eq!(n, 0, "nothing saved");
     let line = &state.scratch.lines[0];
-    assert!(matches!(line.origin, LineOrigin::New), "line stays (nothing is lost)");
+    assert!(
+        matches!(line.origin, LineOrigin::New),
+        "line stays (nothing is lost)"
+    );
     assert!(
         state
             .scratch
@@ -141,7 +147,10 @@ fn partial_failure_does_not_destroy_the_rest() {
     let mut state = state_on(&a);
     // The discovered project carries the temp dir name; mention it exactly.
     let proj_name = state.projects[state.selected_project_idx].name.clone();
-    add_line(&mut state, format!(". Dobrý záznam @{}", proj_name).as_str());
+    add_line(
+        &mut state,
+        format!(". Dobrý záznam @{}", proj_name).as_str(),
+    );
     add_line(&mut state, ". Špatný cíl @neexistuje");
 
     let n = state.scratch_save_all();
@@ -153,7 +162,10 @@ fn partial_failure_does_not_destroy_the_rest() {
         .iter()
         .find(|l| l.text.contains("Špatný"))
         .unwrap();
-    assert!(matches!(bad.origin, LineOrigin::New), "failed line stays editable");
+    assert!(
+        matches!(bad.origin, LineOrigin::New),
+        "failed line stays editable"
+    );
     // The good line is Saved with a label.
     let good = state
         .scratch
@@ -206,7 +218,9 @@ fn loaded_records_edit_and_save_updates_their_file() {
         .unwrap();
     // Load it via the Project scope (FromFile summary lines).
     state.switch_scratch_scope(super::super::state::ScratchScope::Project);
-    let file = state.projects[state.selected_project_idx].items[0].file_path.clone();
+    let file = state.projects[state.selected_project_idx].items[0]
+        .file_path
+        .clone();
 
     // Edit the loaded line: change title, keep the id token.
     state.scratch.cursor_line = 0;
@@ -221,7 +235,10 @@ fn loaded_records_edit_and_save_updates_their_file() {
     let created = state.scratch_save_all();
     assert_eq!(created, 0, "updates create no new files");
     let content = fs::read_to_string(&file).unwrap();
-    assert!(content.contains("# SPAI-001: prejmenovano!"), "title updated: {content}");
+    assert!(
+        content.contains("# SPAI-001: prejmenovano!"),
+        "title updated: {content}"
+    );
     // Unchanged second save is a no-op.
     assert_eq!(state.scratch_save_all(), 0);
     fs::remove_dir_all(&a).ok();
@@ -266,7 +283,10 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
     let file = state.scratch.last_batch[0].clone();
     assert_eq!(state.scratch_save_all(), 0, "no new file created");
     let content = fs::read_to_string(&file).unwrap();
-    assert!(content.contains("Uložený záznam!"), "updated body: {content}");
+    assert!(
+        content.contains("Uložený záznam!"),
+        "updated body: {content}"
+    );
     assert!(content.contains("# SPAI-001:"), "same id kept: {content}");
 
     // The cursor lands on a fresh New line so new entries flow immediately.
@@ -277,13 +297,17 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
     assert!(state.scratch.insert_char('X'), "can type after save");
     // The fresh dedup panel makes the next Ctrl+S warn (no prompt).
     state.scratch.dedup.visible = true;
-    state.scratch.dedup.matches.push(super::super::super::similarity::SimilarNoteMatch {
-        id: "SPAI-009".to_string(),
-        title: "jiny".to_string(),
-        symbol: ".".to_string(),
-        similarity: 0.9,
-        is_vector_match: false,
-    });
+    state
+        .scratch
+        .dedup
+        .matches
+        .push(super::super::super::similarity::SimilarNoteMatch {
+            id: "SPAI-009".to_string(),
+            title: "jiny".to_string(),
+            symbol: ".".to_string(),
+            similarity: 0.9,
+            is_vector_match: false,
+        });
     add_line(&mut state, "? Nový řádek");
     state.scratch_save_all();
     assert!(
@@ -303,14 +327,18 @@ fn loaded_scope_cursor_starts_on_first_record() {
     let a = temp_project("cursor");
     let mut state = state_on(&a);
     for t in ["prvni", "druhy", "treti"] {
-        state.create_quick_note_with_status(
-            t,
-            super::super::super::note::SpaiType::Todo,
-            super::super::super::note::SpaiStatus::Todo,
-            &format!(". {}
-", t),
-        )
-        .unwrap();
+        state
+            .create_quick_note_with_status(
+                t,
+                super::super::super::note::SpaiType::Todo,
+                super::super::super::note::SpaiStatus::Todo,
+                &format!(
+                    ". {}
+",
+                    t
+                ),
+            )
+            .unwrap();
     }
     state.switch_scratch_scope(super::super::state::ScratchScope::Project);
     // Cursor on the FIRST record (not the trailing typing slot).
@@ -321,11 +349,8 @@ fn loaded_scope_cursor_starts_on_first_record() {
         assert_eq!(state.scratch.cursor_line, i);
     }
     // The visible window contains the cursor.
-    let (scroll, h) = super::super::view::visible_window(
-        state.scratch.lines.len(),
-        state.scratch.cursor_line,
-        5,
-    );
+    let (scroll, h) =
+        super::super::view::visible_window(state.scratch.lines.len(), state.scratch.cursor_line, 5);
     assert!(state.scratch.cursor_line >= scroll);
     assert!(state.scratch.cursor_line < scroll + h);
     fs::remove_dir_all(&a).ok();
@@ -336,14 +361,18 @@ fn filter_is_live_only_matches_stay_visible() {
     let a = temp_project("live");
     let mut state = state_on(&a);
     for t in ["build", "review", "build again"] {
-        state.create_quick_note_with_status(
-            t,
-            super::super::super::note::SpaiType::Todo,
-            super::super::super::note::SpaiStatus::Todo,
-            &format!(". {}
-", t),
-        )
-        .unwrap();
+        state
+            .create_quick_note_with_status(
+                t,
+                super::super::super::note::SpaiType::Todo,
+                super::super::super::note::SpaiStatus::Todo,
+                &format!(
+                    ". {}
+",
+                    t
+                ),
+            )
+            .unwrap();
     }
     state.switch_scratch_scope(super::super::state::ScratchScope::Project);
 
@@ -376,19 +405,28 @@ fn semantic_allow_set_survives_buffer_edits_no_shift() {
     let a = temp_project("semshift");
     let mut state = state_on(&a);
     for t in ["build", "review", "docs"] {
-        state.create_quick_note_with_status(
-            t,
-            super::super::super::note::SpaiType::Todo,
-            super::super::super::note::SpaiStatus::Todo,
-            &format!(". {}
-", t),
-        )
-        .unwrap();
+        state
+            .create_quick_note_with_status(
+                t,
+                super::super::super::note::SpaiType::Todo,
+                super::super::super::note::SpaiStatus::Todo,
+                &format!(
+                    ". {}
+",
+                    t
+                ),
+            )
+            .unwrap();
     }
     state.switch_scratch_scope(super::super::state::ScratchScope::Project);
     // Simulate a semantic result: only the "review" record allowed (path-keyed).
-    let file = state.projects[state.selected_project_idx].items.iter()
-        .find(|it| it.title.contains("review")).unwrap().file_path.clone();
+    let file = state.projects[state.selected_project_idx]
+        .items
+        .iter()
+        .find(|it| it.title.contains("review"))
+        .unwrap()
+        .file_path
+        .clone();
     let mut allowed = std::collections::HashSet::new();
     allowed.insert(file);
     state.scratch.semantic_allowed = Some(allowed);
@@ -397,10 +435,18 @@ fn semantic_allow_set_survives_buffer_edits_no_shift() {
     // the allow-set must not.
     state.scratch.cursor_line = 0;
     state.scratch.split_line();
-    assert_eq!(state.scratch.visible_count(), 1, "only review stays visible");
+    assert_eq!(
+        state.scratch.visible_count(),
+        1,
+        "only review stays visible"
+    );
     // The review record is still findable by text in the buffer.
     assert!(
-        state.scratch.lines.iter().any(|l| l.text.contains("review")),
+        state
+            .scratch
+            .lines
+            .iter()
+            .any(|l| l.text.contains("review")),
         "review record still in the buffer"
     );
     fs::remove_dir_all(&a).ok();
@@ -410,18 +456,21 @@ fn semantic_allow_set_survives_buffer_edits_no_shift() {
 fn semantic_keep_continuation_lines_with_their_record() {
     let a = temp_project("semcont");
     let mut state = state_on(&a);
-    state.create_quick_note_with_status(
-        "dlouhy",
-        super::super::super::note::SpaiType::Todo,
-        super::super::super::note::SpaiStatus::Todo,
-        ". dlouhy zaznam
+    state
+        .create_quick_note_with_status(
+            "dlouhy",
+            super::super::super::note::SpaiType::Todo,
+            super::super::super::note::SpaiStatus::Todo,
+            ". dlouhy zaznam
 pokračovací řádek
 ",
-    )
-    .unwrap();
+        )
+        .unwrap();
     state.switch_scratch_scope(super::super::state::ScratchScope::Project);
     // Semantic result allows only the "dlouhy" record.
-    let file = state.projects[state.selected_project_idx].items[0].file_path.clone();
+    let file = state.projects[state.selected_project_idx].items[0]
+        .file_path
+        .clone();
     let mut allowed = std::collections::HashSet::new();
     allowed.insert(file);
     state.scratch.semantic_allowed = Some(allowed);
@@ -443,14 +492,18 @@ fn navigation_skips_hidden_records_no_popin() {
     let a = temp_project("navskip");
     let mut state = state_on(&a);
     for t in ["jedna", "dva", "tri", "ctyri"] {
-        state.create_quick_note_with_status(
-            t,
-            super::super::super::note::SpaiType::Todo,
-            super::super::super::note::SpaiStatus::Todo,
-            &format!(". {}
-", t),
-        )
-        .unwrap();
+        state
+            .create_quick_note_with_status(
+                t,
+                super::super::super::note::SpaiType::Todo,
+                super::super::super::note::SpaiStatus::Todo,
+                &format!(
+                    ". {}
+",
+                    t
+                ),
+            )
+            .unwrap();
     }
     state.switch_scratch_scope(super::super::state::ScratchScope::Project);
     // Semantic filter allows only records "dva" and "ctyri" (by path).
@@ -479,7 +532,11 @@ fn navigation_skips_hidden_records_no_popin() {
                 "{}:{}:{}",
                 i,
                 l.text,
-                if state.scratch.record_hidden(i) { "H" } else { "V" }
+                if state.scratch.record_hidden(i) {
+                    "H"
+                } else {
+                    "V"
+                }
             )
         })
         .collect();
@@ -501,8 +558,12 @@ fn navigation_skips_hidden_records_no_popin() {
     );
     // ↑ back; clamped at the edges.
     state.scratch.cursor_step_visible(-1);
-    assert!(state.scratch.lines[state.scratch.cursor_line].text.contains("ctyri"));
+    assert!(state.scratch.lines[state.scratch.cursor_line]
+        .text
+        .contains("ctyri"));
     state.scratch.cursor_step_visible(-5);
-    assert!(state.scratch.lines[state.scratch.cursor_line].text.contains("ctyri"));
+    assert!(state.scratch.lines[state.scratch.cursor_line]
+        .text
+        .contains("ctyri"));
     fs::remove_dir_all(&a).ok();
 }

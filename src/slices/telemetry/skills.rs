@@ -7,6 +7,7 @@ use std::path::Path;
 /// pi-plugin-dev event bus; this file makes it readable by the native sidebar.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct SkillSnapshotFile {
     #[serde(default)]
     pub version: u32,
@@ -66,6 +67,7 @@ pub struct SkillAction {
     #[serde(default)]
     pub summary: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub timestamp: u64,
 }
 

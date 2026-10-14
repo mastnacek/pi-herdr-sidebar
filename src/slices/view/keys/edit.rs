@@ -66,7 +66,7 @@ fn run_editor_dedup(state: &mut SidebarState) {
 }
 
 fn handle_insert_keys(key: &KeyEvent, state: &mut SidebarState) {
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let _ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     match key.code {
         KeyCode::Esc => state.spai_notes.leave_insert_mode(),
         KeyCode::Enter => state.spai_notes.on_edit_enter(),
