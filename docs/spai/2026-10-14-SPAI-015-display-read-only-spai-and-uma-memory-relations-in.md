@@ -11,6 +11,6 @@ facets:
 spai_symbol: 'x'
 ---
 
-# SPAI-012: Display read-only SPAI and UMA memory relations in the SPAI item detail pane
+# SPAI-015: Display read-only SPAI and UMA memory relations in the SPAI item detail pane
 
 x Display read-only SPAI and UMA memory relations in the SPAI item detail pane @pi-herdr-sidebar :spai:uma:sidebar:

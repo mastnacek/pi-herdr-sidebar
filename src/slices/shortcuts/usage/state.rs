@@ -94,6 +94,7 @@ impl UsageOverview {
         self.scan.as_ref().map(|h| h.progress())
     }
 
+    #[allow(dead_code)]
     pub fn is_scanning(&self) -> bool {
         self.scan.is_some()
     }
@@ -103,6 +104,7 @@ impl UsageOverview {
         &mut self.panels[self.focus.index()]
     }
 
+    #[allow(dead_code)]
     fn panel(&self) -> &PanelState {
         &self.panels[self.focus.index()]
     }
@@ -149,6 +151,7 @@ impl UsageOverview {
     }
 
     /// Last scrollable position for the focused panel, given the geometry cached by the renderer.
+    #[allow(dead_code)]
     pub fn max_scroll(&self) -> u16 {
         self.panel().rows.saturating_sub(self.panel().view_h)
     }

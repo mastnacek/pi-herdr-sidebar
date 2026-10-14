@@ -51,6 +51,7 @@ impl SpaiProjectSummary {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_items(
         name: String,
         path: PathBuf,

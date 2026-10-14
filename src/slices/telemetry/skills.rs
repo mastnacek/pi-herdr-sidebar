@@ -94,6 +94,7 @@ impl SkillSnapshotFile {
     }
 
     /// Gates scorecard: `(passed, total)`.
+    #[allow(dead_code)]
     pub fn gate_score(&self) -> (usize, usize) {
         match &self.state {
             None => (0, 0),

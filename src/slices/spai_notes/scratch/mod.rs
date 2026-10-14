@@ -13,6 +13,7 @@
 //! - [`mention`] / [`mention_popup`] — `@` project autocomplete + rendering
 //! - [`filter`] — token parser, fuzzy scoring, AND-composition
 //! - [`semantic`] — `~` filter: one embedding + cosine over stored vectors
+//! - [`semantic_job`] — Ctrl+R background job state and passive polling
 //! - [`scope`] — New / Project / All loading, record opening, status cycling
 //! - [`view`] / [`footer`] / [`help`] — rendering (buffer, footer, `?` overlay)
 //!
@@ -34,14 +35,17 @@ pub mod mention_popup;
 pub mod save;
 pub mod scope;
 pub mod semantic;
+pub mod semantic_job;
 pub mod state;
 pub mod view;
 pub mod view_previews;
 pub mod visibility;
 
+use state::ScratchState;
+
 /// Hook called by the event loop's tick so background dedup results land
 /// without any timer-driven start (plan §3: "no automatic request").
 pub fn poll_background(state: &mut super::state::SpaiNotesState) {
-    state.scratch.poll_dedup();
-    state.scratch.poll_semantic();
+    ScratchState::poll_dedup(&mut state.scratch);
+    ScratchState::poll_semantic(&mut state.scratch);
 }

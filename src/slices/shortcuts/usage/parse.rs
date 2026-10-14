@@ -13,6 +13,7 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 struct SessionLine {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     kind: Option<String>,
     message: Option<MsgLine>,
 }

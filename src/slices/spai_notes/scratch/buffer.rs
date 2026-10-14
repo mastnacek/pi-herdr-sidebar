@@ -126,6 +126,7 @@ impl ScratchState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn cursor_down(&mut self) {
         if self.cursor_line + 1 < self.lines.len() {
             self.cursor_line += 1;

@@ -165,6 +165,7 @@ impl UsageStats {
             .collect()
     }
 
+    #[allow(dead_code)]
     pub fn builtin_row(&self) -> Option<&PluginUsage> {
         self.plugins.iter().find(|p| p.plugin == "builtin")
     }
