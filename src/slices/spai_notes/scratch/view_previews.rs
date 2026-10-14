@@ -2,7 +2,7 @@
 mod previews {
     use super::super::view::render_scratch;
     use crate::slices::spai_notes::discovery::SpaiProjectSummary;
-    
+
     use crate::slices::spai_notes::state::SpaiNotesState;
     use ratatui::{backend::TestBackend, Terminal};
     use std::path::PathBuf;

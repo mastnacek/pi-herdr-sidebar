@@ -195,11 +195,8 @@ fn viewer_shows_read_only_uma_relations() {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "spai_relations_{}_{}",
-        std::process::id(),
-        nanos
-    ));
+    let root =
+        std::env::temp_dir().join(format!("spai_relations_{}_{}", std::process::id(), nanos));
     let fact_dir = root.join(".uma").join("decision");
     std::fs::create_dir_all(&fact_dir).unwrap();
     let fact_id = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
@@ -238,7 +235,10 @@ fn viewer_shows_read_only_uma_relations() {
         frame.contains("Vazby / Links:"),
         "relation section missing:\n{frame}"
     );
-    assert!(frame.contains('↔'), "both-direction glyph missing:\n{frame}");
+    assert!(
+        frame.contains('↔'),
+        "both-direction glyph missing:\n{frame}"
+    );
     assert!(frame.contains("…9G5FAV"), "short id missing:\n{frame}");
     assert!(frame.contains("[decision]"), "fact type missing:\n{frame}");
     assert!(

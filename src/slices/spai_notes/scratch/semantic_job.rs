@@ -62,11 +62,7 @@ impl ScratchState {
         while let Ok(msg) = job.receiver.try_recv() {
             match msg {
                 SemanticMessage::Progress { step, total, label } => {
-                    self.semantic_progress = SemanticProgress::Running {
-                        step,
-                        total,
-                        label,
-                    };
+                    self.semantic_progress = SemanticProgress::Running { step, total, label };
                 }
                 SemanticMessage::Done { allowed, label } => {
                     self.semantic_allowed = Some(allowed);
