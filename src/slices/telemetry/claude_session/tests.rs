@@ -150,3 +150,31 @@ fn subscription_label_from_claude_json() {
     assert_eq!(label_from(r#"{"numStartups":3}"#), "Claude Code · API");
     assert_eq!(label_from(""), "Claude Code · API");
 }
+
+const PROMPT: &str = r#"{"type":"attachment","timestamp":"2026-11-19T10:00:00Z","attachment":{"type":"prompt_snapshot","systemPrompt":["You are an agent.\nMore."]}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:01Z","attachment":{"type":"instructions","files":[{"path":"C:/nowhere/CLAUDE.md","type":"User","content":"abcd"}]}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:02Z","attachment":{"type":"skill_listing","content":"- spai: tasks","isInitial":true}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:03Z","attachment":{"type":"skill_listing","content":"- x: y","isInitial":false}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:04Z","attachment":{"type":"deferred_tools_delta","addedNames":["LSP","Monitor"],"addedLines":["LSP","Monitor"],"removedNames":[]}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:05Z","attachment":{"type":"deferred_tools_delta","addedNames":[],"addedLines":[],"removedNames":["Monitor"]}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:06Z","attachment":{"type":"session_context","context":{"userEmail":"secret@example.com","gitStatus":"clean"}}}
+{"type":"attachment","timestamp":"2026-11-19T10:00:07Z","attachment":{"type":"hook_additional_context","hookEvent":"UserPromptSubmit","content":["per-turn"]}}
+"#;
+
+#[test]
+fn prompt_tree_from_attachments() {
+    let tree = super::prompt::parse_prompt_tree(PROMPT).unwrap();
+    assert!(tree.claude);
+    let sec = |n: &str| tree.sections.iter().find(|s| s.name == n).unwrap();
+    assert_eq!(sec("preamble").preview, "You are an agent.");
+    assert_eq!(sec("project_context").chars, 4);
+    assert_eq!(tree.context_files[0].path, "C:/nowhere/CLAUDE.md");
+    assert_eq!(sec("skills").patches, 1);
+    assert_eq!(tree.tools, vec!["LSP".to_string()]);
+    assert_eq!((tree.tools_added, tree.tools_removed, tree.tool_messages), (2, 1, 2));
+    assert!(sec("session_context").custom);
+    assert_eq!(sec("session_context").preview, "gitStatus, userEmail");
+    assert!(!tree.sections.iter().any(|s| s.name == "hooks"), "per-turn hook context is not prompt");
+    assert_eq!(tree.loaded_at, "2026-11-19T10:00:06Z");
+    assert!(super::prompt::parse_prompt_tree(LOG).is_none());
+}

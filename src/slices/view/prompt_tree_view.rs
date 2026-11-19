@@ -78,6 +78,8 @@ struct PromptView {
     exact: bool,
     /// Set when the whole prompt was replaced by a forced one.
     forced: bool,
+    /// Claude Code transcript: absent pi sections are not rendered.
+    claude: bool,
 }
 
 impl PromptView {
@@ -189,6 +191,7 @@ impl PromptView {
             total_chars: tree.total_chars,
             exact: false,
             forced: false,
+            claude: tree.claude,
         }
     }
 }
@@ -226,6 +229,8 @@ pub(super) fn prompt_tree_lines(
     let mut lines = Vec::new();
     let source_label = if view.exact {
         "exact · before_agent_start"
+    } else if view.claude {
+        "přílohy v přepisu Claude Code"
     } else {
         "replay ze session logu"
     };
@@ -265,18 +270,25 @@ pub(super) fn prompt_tree_lines(
     lines.push(Line::from(header));
 
     let custom: Vec<&PromptSection> = view.sections.iter().filter(|s| s.custom).collect();
-    let total = SECTION_ORDER.len();
-    for (index, name) in SECTION_ORDER.iter().enumerate() {
-        let glyph = if index + 1 == total && custom.is_empty() {
+    // Claude Code has no `rules` / `docs` / `addendum`: list only what exists.
+    let rows: Vec<(usize, &str)> = SECTION_ORDER
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| !view.claude || view.sections.iter().any(|s| s.name == **n))
+        .map(|(i, n)| (i, *n))
+        .collect();
+    let total = rows.len();
+    for (row, &(index, name)) in rows.iter().enumerate() {
+        let glyph = if row + 1 == total && custom.is_empty() {
             "└─"
         } else {
             "├─"
         };
-        let section = view.sections.iter().find(|s| s.name == *name);
+        let section = view.sections.iter().find(|s| s.name == name);
         lines.push(section_line(glyph, index + 1, name, section));
         if let Some(section) = section {
             lines.extend(child_lines(glyph, section, &view));
-        } else if *name == "addendum" {
+        } else if name == "addendum" {
             // A missing addendum is where a file that exists on disk but never
             // loaded gets explained — otherwise the panel stays silent about a
             // misconfiguration (untrusted project, missing /reload).

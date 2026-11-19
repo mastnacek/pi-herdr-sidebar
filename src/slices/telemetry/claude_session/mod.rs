@@ -144,6 +144,7 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
     t.session_file = Some(path.to_path_buf());
     // Display only: catalog lookups use `PROVIDER`, never this field.
     t.provider = subscription::label().to_string();
+    t.prompt = prompt::parse_prompt_tree(&content);
     if !t.cwd.is_empty() {
         if let Some(git) = git_info(Path::new(&t.cwd)) {
             t.git_branch = git.branch.clone();
@@ -291,6 +292,7 @@ pub fn parse_mcp(path: &Path) -> Option<super::mcp_live::McpTelemetry> {
 }
 
 pub mod pi_shape;
+pub mod prompt;
 pub mod subscription;
 
 #[cfg(test)]

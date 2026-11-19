@@ -230,6 +230,7 @@ impl Builder {
             tool_messages: self.tool_messages,
             patches: self.messages.saturating_sub(1),
             total_chars,
+            claude: false,
         }
     }
 }

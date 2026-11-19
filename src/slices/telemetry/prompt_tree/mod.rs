@@ -130,6 +130,9 @@ pub struct PromptTree {
     /// System messages after the first one (each patches something).
     pub patches: u32,
     pub total_chars: usize,
+    /// Built from a Claude Code transcript (`claude_session::prompt`): pi-only
+    /// sections (`rules`, `docs`, `addendum`) do not exist there.
+    pub claude: bool,
 }
 
 /// Drift of a file loaded at `loaded_at` (an ISO-8601 timestamp).
