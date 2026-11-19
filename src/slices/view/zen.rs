@@ -85,10 +85,19 @@ pub fn render_zen_face(frame: &mut Frame, area: Rect, state: &SidebarState) {
         ("klid".to_string(), Color::DarkGray)
     };
 
-    lines.push(Line::from(vec![
+    let mut mcp_spans = vec![
         Span::styled("MCP:     ", Style::default().fg(Color::DarkGray)),
         Span::styled(mcp_text, Style::default().fg(mcp_color)),
-    ]));
+    ];
+    if let Some(l) = live.filter(|l| l.code_mode.is_on()) {
+        let text = if l.repl_calls > 0 {
+            format!(" · 🧩 code mode ({}× REPL)", l.repl_calls)
+        } else {
+            " · 🧩 code mode".to_string()
+        };
+        mcp_spans.push(Span::styled(text, Style::default().fg(Color::Yellow)));
+    }
+    lines.push(Line::from(mcp_spans));
 
     // 4. SPAI tasks
     lines.push(Line::raw(""));

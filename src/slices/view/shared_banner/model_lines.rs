@@ -6,7 +6,19 @@ use ratatui::{
 };
 
 use super::super::ui::spinner_char;
+use crate::slices::telemetry::LiveTelemetry;
 use crate::slices::view::state::SidebarState;
+
+/// Code Mode badge (Claude panes only): bright when the transcript proves it,
+/// dim when only the global setting says so. `🧩` — `⚡` is taken by the turns line.
+pub(super) fn code_mode_badge(l: &LiveTelemetry) -> Option<Span<'static>> {
+    use crate::slices::telemetry::claude_session::code_mode::CodeMode;
+    match l.code_mode {
+        CodeMode::Off => None,
+        CodeMode::Transcript => Some(Span::styled("🧩 CM", Style::default().fg(Color::Yellow).bold())),
+        CodeMode::Config => Some(Span::styled("🧩 CM?", Style::default().fg(Color::DarkGray))),
+    }
+}
 
 pub(super) fn build_model_and_turns_lines(state: &SidebarState) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
@@ -54,6 +66,10 @@ pub(super) fn build_model_and_turns_lines(state: &SidebarState) -> Vec<Line<'sta
                 Style::default().fg(Color::Cyan),
             ));
         }
+    }
+    if let Some(badge) = live.and_then(code_mode_badge) {
+        model_line.push(Span::raw(" "));
+        model_line.push(badge);
     }
     lines.push(Line::from(model_line));
 

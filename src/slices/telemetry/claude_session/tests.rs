@@ -50,6 +50,31 @@ fn turns_tools_and_errors() {
 }
 
 #[test]
+fn code_mode_from_repl_mode_line() {
+    assert_eq!(parsed().code_mode, code_mode::CodeMode::Off);
+    let on = format!(
+        "{}\n{LOG}",
+        r#"{"type":"repl-mode","replMode":true,"sessionId":"abc12345-0000"}"#
+    );
+    assert_eq!(parse_content(&on, "").unwrap().code_mode, code_mode::CodeMode::Transcript);
+    let off = format!("{}\n{LOG}", r#"{"type":"repl-mode","replMode":false}"#);
+    assert_eq!(parse_content(&off, "").unwrap().code_mode, code_mode::CodeMode::Off);
+}
+
+#[test]
+fn code_mode_from_repl_tool_use_counts_main_only() {
+    let repl = |sidechain: bool| {
+        format!(
+            r#"{{"type":"assistant","isSidechain":{sidechain},"message":{{"id":"m{sidechain}","model":"claude-opus-5-5","usage":{{"input_tokens":1,"output_tokens":1}},"content":[{{"type":"tool_use","id":"r","name":"REPL","input":{{}}}}]}}}}"#
+        )
+    };
+    let main = parse_content(&repl(false), "").unwrap();
+    assert_eq!((main.repl_calls, main.code_mode), (1, code_mode::CodeMode::Transcript));
+    let side = parse_content(&repl(true), "").unwrap();
+    assert_eq!((side.repl_calls, side.code_mode), (0, code_mode::CodeMode::Off));
+}
+
+#[test]
 fn end_turn_means_idle_and_a_new_prompt_means_working() {
     assert!(!parsed().is_working);
     let more = format!(

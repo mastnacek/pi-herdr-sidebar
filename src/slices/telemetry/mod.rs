@@ -90,6 +90,10 @@ pub struct LiveTelemetry {
     /// which `AGENTS.md` files they came from and whether an `APPEND_SYSTEM.md`
     /// addendum made it in.
     pub prompt: Option<prompt_tree::PromptTree>,
+    /// Claude Code only: is Code Mode on, and by which evidence.
+    pub code_mode: claude_session::code_mode::CodeMode,
+    /// Claude Code only: `REPL` tool calls in the main conversation.
+    pub repl_calls: u64,
 }
 
 #[derive(Deserialize)]

@@ -91,6 +91,8 @@ struct ClaudeEntry {
     is_meta: bool,
     #[serde(default, rename = "isCompactSummary")]
     is_compact_summary: bool,
+    #[serde(default, rename = "replMode")]
+    repl_mode: Option<bool>,
     #[serde(default)]
     message: Option<ClaudeMessage>,
 }
@@ -144,6 +146,10 @@ pub fn parse_session(path: &Path, session_id: &str) -> Option<LiveTelemetry> {
     t.session_file = Some(path.to_path_buf());
     // Display only: catalog lookups use `PROVIDER`, never this field.
     t.provider = subscription::label().to_string();
+    t.code_mode = code_mode::resolve(
+        t.code_mode == code_mode::CodeMode::Transcript,
+        code_mode::user_settings_enable_code_mode(),
+    );
     t.prompt = prompt::parse_prompt_tree(&content);
     if !t.cwd.is_empty() {
         if let Some(git) = git_info(Path::new(&t.cwd)) {
@@ -164,6 +170,7 @@ fn parse_content(content: &str, session_id: &str) -> Option<LiveTelemetry> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut context: Option<u64> = None;
     let mut working = false;
+    let mut repl_line = false;
 
     for line in content.lines() {
         let Ok(e) = serde_json::from_str::<ClaudeEntry>(line) else {
@@ -184,6 +191,9 @@ fn parse_content(content: &str, session_id: &str) -> Option<LiveTelemetry> {
             "assistant" => {
                 let Some(msg) = e.message.as_ref() else { continue };
                 t.tool_calls_count += count_blocks(msg.content.as_ref(), "tool_use", false);
+                if !e.is_sidechain {
+                    t.repl_calls += count_named_tool_use(msg.content.as_ref(), "REPL");
+                }
                 if e.is_sidechain {
                     add_usage(&mut t, msg, &mut seen);
                     continue;
@@ -208,11 +218,15 @@ fn parse_content(content: &str, session_id: &str) -> Option<LiveTelemetry> {
                 }
                 working = true;
             }
+            k if code_mode::is_repl_mode_line(k, e.repl_mode) => repl_line = true,
             "system" if e.subtype.as_deref() == Some("compact_boundary") => context = None,
             _ => {}
         }
     }
 
+    // The transcript's own evidence only; the settings fallback is added by
+    // `parse_session`, which is the one place that touches the disk.
+    t.code_mode = code_mode::resolve(repl_line || t.repl_calls > 0, false);
     if t.model_id.is_empty() && t.input_tokens == 0 && t.output_tokens == 0 {
         return None;
     }
@@ -268,6 +282,16 @@ fn count_blocks(content: Option<&serde_json::Value>, kind: &str, errors_only: bo
         .count() as u64
 }
 
+/// Counts `tool_use` blocks with the given tool name.
+fn count_named_tool_use(content: Option<&serde_json::Value>, name: &str) -> u64 {
+    let Some(serde_json::Value::Array(blocks)) = content else { return 0 };
+    blocks
+        .iter()
+        .filter(|b| b.get("type").and_then(|v| v.as_str()) == Some("tool_use"))
+        .filter(|b| b.get("name").and_then(|v| v.as_str()) == Some(name))
+        .count() as u64
+}
+
 /// A prompt the person typed: plain text, not only tool results.
 fn is_prompt(content: Option<&serde_json::Value>) -> bool {
     match content {
@@ -291,6 +315,7 @@ pub fn parse_mcp(path: &Path) -> Option<super::mcp_live::McpTelemetry> {
     super::mcp_live::parse_mcp_str(&pi_shape::to_pi_lines(&content))
 }
 
+pub mod code_mode;
 pub mod pi_shape;
 pub mod prompt;
 pub mod subscription;
