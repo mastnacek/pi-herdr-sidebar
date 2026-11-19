@@ -67,6 +67,15 @@ pub fn classify_mcp_tool(tool_name: &str, known_servers: &[String]) -> Option<(S
         return Some(("mcp".to_string(), "gateway".to_string()));
     }
     if let Some(rest) = tool_name.strip_prefix("mcp__") {
+        // Claude Code: `mcp__<server>__<tool>`; a plugin's server is
+        // `plugin_<plugin>_<server>` (`mcp__plugin_context7_context7__query-docs`).
+        if let Some((server, tool)) = rest.rsplit_once("__") {
+            let server = match server.strip_prefix("plugin_") {
+                Some(p) => p.rsplit('_').next().unwrap_or(p),
+                None => server,
+            };
+            return Some((server.to_string(), tool.to_string()));
+        }
         return Some((rest.to_string(), rest.to_string()));
     }
     for s in known_servers {
@@ -97,6 +106,12 @@ pub fn estimate_tokens_from_len(len_chars: usize) -> u64 {
 /// Parse MCP telemetry directly from session JSONL content.
 pub fn parse_mcp_session(path: &Path) -> Option<McpTelemetry> {
     let content = fs::read_to_string(path).ok()?;
+    parse_mcp_str(&content)
+}
+
+/// Parse MCP telemetry from pi-shaped session lines (a Claude Code transcript
+/// goes through `claude_session::pi_shape` first).
+pub fn parse_mcp_str(content: &str) -> Option<McpTelemetry> {
     let configured_servers = load_configured_servers();
 
     let mut t = McpTelemetry::default();

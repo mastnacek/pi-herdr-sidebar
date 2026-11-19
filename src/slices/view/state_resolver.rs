@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use crate::shared::{snapshot_path_for_pane, HerdrPaneInfo};
 
-/// Find Pi agent in the target tab.
+/// Find the agent the sidebar follows in the target tab: pi, or Claude Code
+/// (`agent: "claude"`, telemetry from its transcript). The focused pane wins,
+/// then pi over Claude.
 pub fn resolve_target_pane(
     panes: &[HerdrPaneInfo],
     current_tab: Option<&str>,
@@ -18,7 +20,8 @@ pub fn resolve_target_pane(
                     .as_deref()
                     .is_some_and(|t| t.contains('π'))
                 || p.terminal_title.as_deref().is_some_and(|t| t.contains('π'));
-            same_tab && not_self && is_pi
+            let is_claude = p.agent.as_deref() == Some("claude");
+            same_tab && not_self && (is_pi || is_claude)
         })
         .max_by_key(|p| (p.focused.unwrap_or(false), p.agent.as_deref() == Some("pi")))
         .cloned()
@@ -55,7 +58,7 @@ pub fn resolve_pane_binding(
             target_pane_id: None,
             snapshot_path: None,
             live_session_id: None,
-            refresh_status: format!("Tab: {} (bez pi relace)", current_tab.unwrap_or("?")),
+            refresh_status: format!("Tab: {} (bez relace pi ani Claude)", current_tab.unwrap_or("?")),
         }
     }
 }

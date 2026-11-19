@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::SystemTime;
 
+use crate::slices::telemetry::claude_session;
 use crate::slices::telemetry::prompt_sidecar::{sidecar_path, PromptSidecar};
 use crate::slices::telemetry::weather_live::WeatherTelemetry;
 use crate::slices::telemetry::{
@@ -21,7 +22,11 @@ pub fn refresh_skills(
                 let mtime = meta.modified().ok();
                 if force || *skills_mtime != mtime || skills.is_none() {
                     *skills_mtime = mtime;
-                    *skills = crate::slices::telemetry::skills_live::parse_session_skills(f);
+                    *skills = if claude_session::is_transcript(f) {
+                        claude_session::parse_skills(f)
+                    } else {
+                        crate::slices::telemetry::skills_live::parse_session_skills(f)
+                    };
                 }
                 return;
             }
@@ -65,7 +70,11 @@ pub fn refresh_mcp(
                 let mtime = meta.modified().ok();
                 if force || *mcp_mtime != mtime || mcp.is_none() {
                     *mcp_mtime = mtime;
-                    *mcp = crate::slices::telemetry::mcp_live::parse_mcp_session(f);
+                    *mcp = if claude_session::is_transcript(f) {
+                        claude_session::parse_mcp(f)
+                    } else {
+                        crate::slices::telemetry::mcp_live::parse_mcp_session(f)
+                    };
                 }
                 return;
             }
@@ -174,5 +183,19 @@ pub fn load_live_session(
         return current_live.clone();
     }
     *live_session_mtime = mtime;
-    crate::slices::telemetry::parse_session(file, session_id)
+    if claude_session::is_transcript(file) {
+        claude_session::parse_session(file, session_id)
+    } else {
+        crate::slices::telemetry::parse_session(file, session_id)
+    }
+}
+
+/// Transcript of a Claude Code pane. Herdr's session id is the only key: a
+/// Claude pane never falls back to the newest pi session.
+pub fn claude_session_file(
+    session_id: Option<String>,
+    cwd: Option<&str>,
+) -> (Option<std::path::PathBuf>, String) {
+    let sid = session_id.unwrap_or_default();
+    (claude_session::find_session_file(&sid, cwd), sid)
 }

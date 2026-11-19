@@ -356,13 +356,16 @@ impl SidebarState {
             .as_ref()
             .filter(|s| s.len() >= 8)
             .cloned();
-        let pane_cwd = self
+        let pane = self
             .panes
             .iter()
-            .find(|p| self.target_pane_id.as_deref() == Some(p.pane_id.as_str()))
-            .and_then(|p| p.cwd.clone());
+            .find(|p| self.target_pane_id.as_deref() == Some(p.pane_id.as_str()));
+        let pane_cwd = pane.and_then(|p| p.cwd.clone());
+        let is_claude = pane.and_then(|p| p.agent.as_deref()) == Some("claude");
 
-        let (file, sid) = if let Some(session_id) = herdr_session {
+        let (file, sid) = if is_claude {
+            super::state_refresh::claude_session_file(herdr_session, pane_cwd.as_deref())
+        } else if let Some(session_id) = herdr_session {
             let prefix = session_id.get(..8).unwrap_or(&session_id).to_string();
             let cwd = pane_cwd.clone().unwrap_or_default();
             let file = crate::slices::telemetry::find_session_file(&prefix, &cwd)

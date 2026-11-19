@@ -2,6 +2,7 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub mod claude_session;
 pub mod context_usage;
 pub mod git_live;
 pub mod mcp_live;
