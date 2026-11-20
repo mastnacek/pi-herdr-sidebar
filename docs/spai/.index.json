@@ -1,16 +1,18 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-14 18:46:23",
+  "lastUpdated": "2026-11-19 23:12:01",
   "records": [
     {
       "id": "SPAI-001",
       "title": "Doladit ZEN režim v herdr sidebaru a pri zapisu nefunguje @ pro vkladani projektu",
       "type": "Todo",
-      "status": "working",
-      "symbol": "/",
+      "status": "done",
+      "symbol": "x",
       "timestamp": "2026-09-24 10:57:47",
       "tags": [],
+      "priority": "medium",
       "project": "pi-herdr-sidebar",
+      "projectPath": "D:/01_programovani/herdr/plugins/pi-herdr-sidebar",
       "file": "2026-09-24-SPAI-001-doladit-zen-rezim-v-herdr-sidebaru-a-pri-zapisu-ne.md"
     },
     {
@@ -45,6 +47,7 @@
       "symbol": "x",
       "timestamp": "2026-09-25 08:57:51",
       "tags": [],
+      "priority": "medium",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-004-create-spai-notes-slice-under-srcslices-with-state.md"
@@ -57,6 +60,7 @@
       "symbol": "x",
       "timestamp": "2026-09-25 08:57:54",
       "tags": [],
+      "priority": "medium",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-005-move-spai-notes-slice-to-srcslices-create-staters-.md"
@@ -69,6 +73,8 @@
       "symbol": "x",
       "timestamp": "2026-09-25 09:01:11",
       "tags": [],
+      "priority": "medium",
+      "deadline": "2026-09-25",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-006-create-viewrs-for-spai-notes-slice-render-spai-not.md"
@@ -81,6 +87,8 @@
       "symbol": "x",
       "timestamp": "2026-09-25 09:06:09",
       "tags": [],
+      "priority": "medium",
+      "deadline": "2026-09-25",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-007-implement-spai-parserformatter-yaml-frontmatter-pr.md"
@@ -93,6 +101,7 @@
       "symbol": "x",
       "timestamp": "2026-09-25 09:06:10",
       "tags": [],
+      "priority": "medium",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-008-implement-multi-project-spai-discovery-pi-projects.md"
@@ -105,6 +114,8 @@
       "symbol": "x",
       "timestamp": "2026-09-25 09:06:15",
       "tags": [],
+      "priority": "medium",
+      "deadline": "2026-09-25T09:06:15",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-009-build-zen-notes-spai-fileviewer-ui-tab-in-srcslice.md"
@@ -117,6 +128,7 @@
       "symbol": "x",
       "timestamp": "2026-09-25 09:11:08",
       "tags": [],
+      "priority": "medium",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-010-add-in-tui-note-creation-popupinput-dialog-with-ti.md"
@@ -129,9 +141,49 @@
       "symbol": "x",
       "timestamp": "2026-09-25 09:11:14",
       "tags": [],
+      "priority": "medium",
       "project": "pi-herdr-sidebar",
       "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
       "file": "2026-09-25-SPAI-011-add-note-status-cycling-in-notes-tab-hotkey-x-todo.md"
+    },
+    {
+      "id": "SPAI-012",
+      "title": "T testování zápisu",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 07:31:13",
+      "tags": [],
+      "priority": "low",
+      "deadline": "2026-09-25T07:31:13",
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:\\01_programovani\\herdr\\plugins\\pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-012-t-testování-zápisu.md"
+    },
+    {
+      "id": "SPAI-013",
+      "title": "! . vysoká priorita, nefunguje editace ukolu",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-09-25 08:13:06",
+      "tags": [],
+      "priority": "high",
+      "project": "pi-herdr-sidebar",
+      "projectPath": "D:/01_programovani/herdr/plugins/pi-herdr-sidebar",
+      "file": "2026-09-25-SPAI-013-vysoká-priorita-nefunguje-editace-ukolu.md"
+    },
+    {
+      "id": "SPAI-014",
+      "title": "@pi_sidebar tohle vypada dobre",
+      "type": "Todo",
+      "status": "note",
+      "symbol": "-",
+      "timestamp": "2026-10-06 08:01:35",
+      "tags": [],
+      "project": "pi_sidebar",
+      "projectPath": "D:/01_programovani/herdr/plugins/pi-herdr-sidebar",
+      "file": "2026-10-06-SPAI-014-pi-sidebar-tohle-vypada-dobre.md"
     },
     {
       "id": "SPAI-015",
