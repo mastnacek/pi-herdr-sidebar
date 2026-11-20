@@ -10,6 +10,7 @@ pub fn format_viewer_content(
     item: &SpaiNoteItem,
     memory_links: &[UmaMemoryLink],
     width: u16,
+    body: &str,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
@@ -163,7 +164,7 @@ pub fn format_viewer_content(
     lines.push(Line::raw(""));
 
     // 3. Body lines
-    for line in item.body.lines() {
+    for line in body.lines() {
         if line.starts_with("# ") {
             lines.push(Line::styled(
                 format!("  {}", line),

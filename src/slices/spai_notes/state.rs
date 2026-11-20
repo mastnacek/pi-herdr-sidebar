@@ -42,6 +42,8 @@ pub struct SpaiNotesState {
     pub dedup: DedupPanel,
     /// How the sidebar reaches `spai` (a process; tests use a scripted one).
     pub core: crate::shared::spai_client::CoreConfig,
+    /// Czech body of the selected record (`spai show`), cached per file.
+    pub body_cs: super::state_body_cs::BodyCs,
     /// A creation-dialog `spai add` running in the background.
     pub add_job: Option<super::state_add::AddJob>,
     /// Records with a vector (`spai projects`), refreshed in the background.
@@ -98,6 +100,7 @@ impl SpaiNotesState {
             scratch: super::scratch::state::ScratchState::default(),
             dedup: DedupPanel::default(),
             core: default_core(),
+            body_cs: Default::default(),
             add_job: None,
             vector_total: 0,
             vectors_stale: true,

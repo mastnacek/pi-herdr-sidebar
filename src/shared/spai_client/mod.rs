@@ -91,6 +91,13 @@ pub fn similar(cfg: &CoreConfig, project: &Path, text: &str) -> Result<Vec<Simil
     Ok(hits(&data))
 }
 
+/// `spai show <id>`: the Czech body (`body_cs`), `None` when the record has none.
+pub fn show_body_cs(cfg: &CoreConfig, project: &Path, id: &str) -> Result<Option<String>, String> {
+    let proj = project.to_string_lossy();
+    let (_, data, _) = call(cfg, &["show", id, "--project", &proj], project)?;
+    Ok(data["body_cs"].as_str().filter(|s| !s.trim().is_empty()).map(String::from))
+}
+
 /// `spai set <id> <status>` in `project` (status name or symbol).
 pub fn set_status(cfg: &CoreConfig, project: &Path, id: &str, status: &str) -> Result<(), String> {
     let proj = project.to_string_lossy();

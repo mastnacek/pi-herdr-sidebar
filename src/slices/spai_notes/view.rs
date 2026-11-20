@@ -257,6 +257,8 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
             Span::styled(" stav ", Style::default().fg(Color::DarkGray)),
             Span::styled("[n]", Style::default().fg(Color::Yellow).bold()),
             Span::styled(" nová ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[t]", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(" CS/EN ", Style::default().fg(Color::DarkGray)),
             Span::styled("[Del]", Style::default().fg(Color::Red).bold()),
             Span::styled(" smaž", Style::default().fg(Color::DarkGray)),
         ]),
@@ -275,6 +277,7 @@ fn render_right_viewer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                 item,
                 state.selected_memory_links(),
                 area.width,
+                state.viewer_body(item),
             ),
         )
     } else {

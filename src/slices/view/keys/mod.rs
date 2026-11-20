@@ -131,6 +131,7 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
             open_external_editor(guard, state);
         }
         KeyCode::Char('e') if state.active_tab == Tab::Notes => state.spai_notes.open_edit_dialog(),
+        KeyCode::Char('t') if state.active_tab == Tab::Notes => state.spai_notes.toggle_body_lang(),
         KeyCode::Char('x') if state.active_tab == Tab::Notes => {
             let _ = state.spai_notes.cycle_selected_status();
         }

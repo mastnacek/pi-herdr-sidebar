@@ -33,7 +33,7 @@ fn links_section_renders_short_id_type_and_title() {
         "Keep the stores separate",
         UmaLinkDirection::Forward,
     )];
-    let lines = format_viewer_content(&item, &links, 60);
+    let lines = format_viewer_content(&item, &links, 60, &item.body);
     let rendered: Vec<String> = lines.iter().map(line_text).collect();
 
     assert!(
@@ -58,7 +58,7 @@ fn links_section_renders_short_id_type_and_title() {
 #[test]
 fn no_links_means_no_empty_section() {
     let item = item(". Task\n");
-    let rendered: Vec<String> = format_viewer_content(&item, &[], 60)
+    let rendered: Vec<String> = format_viewer_content(&item, &[], 60, &item.body)
         .iter()
         .map(line_text)
         .collect();
@@ -77,7 +77,7 @@ fn long_link_titles_are_truncated_to_the_available_width() {
         &"x".repeat(200),
         UmaLinkDirection::Both,
     )];
-    let lines = format_viewer_content(&item, &links, 40);
+    let lines = format_viewer_content(&item, &links, 40, &item.body);
     let relation = lines
         .iter()
         .find(|line| line_text(line).contains('↔'))
@@ -105,7 +105,7 @@ fn missing_title_still_renders_a_named_row() {
         "",
         UmaLinkDirection::Reverse,
     )];
-    let rendered: Vec<String> = format_viewer_content(&item, &links, 60)
+    let rendered: Vec<String> = format_viewer_content(&item, &links, 60, &item.body)
         .iter()
         .map(line_text)
         .collect();
