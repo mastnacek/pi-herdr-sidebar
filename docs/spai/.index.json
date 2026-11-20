@@ -1,6 +1,7 @@
 {
   "version": 1,
-  "lastUpdated": "2026-11-19 23:12:01",
+  "lastUpdated": "2026-11-20 09:49:07",
+  "lastId": "SPAI-017",
   "records": [
     {
       "id": "SPAI-001",
@@ -217,6 +218,22 @@
       "project": "pi_sidebar",
       "projectPath": "D:/01_programovani/herdr/plugins/pi-herdr-sidebar",
       "file": "2026-10-14-SPAI-016-keep-spai-ids-stable-never-renumber-an-existing-it.md"
+    },
+    {
+      "id": "SPAI-017",
+      "title": "Fix project switching in the Notes tab and add type-to-search for projects",
+      "type": "Todo",
+      "status": "done",
+      "symbol": "x",
+      "timestamp": "2026-11-20 09:45:01",
+      "tags": [
+        "agent",
+        "coder",
+        "sidebar"
+      ],
+      "project": "pi_sidebar",
+      "projectPath": "D:/01_programovani/herdr/plugins/pi-herdr-sidebar",
+      "file": "2026-11-20-SPAI-017-fix-project-switching-in-the-notes-tab-and-add.md"
     }
   ]
 }
