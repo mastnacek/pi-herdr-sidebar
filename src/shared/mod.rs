@@ -2,6 +2,7 @@ pub mod client;
 pub mod context;
 pub mod keys;
 pub mod snapshot;
+pub mod spai_client;
 pub mod terminal;
 pub mod theme;
 

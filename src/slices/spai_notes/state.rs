@@ -39,7 +39,7 @@ pub struct SpaiNotesState {
     /// job only — never runs on its own.
     pub dedup: DedupPanel,
     /// How the sidebar reaches `spai` (a process; tests use a scripted one).
-    pub core: super::core_bridge::CoreConfig,
+    pub core: crate::shared::spai_client::CoreConfig,
     /// A creation-dialog `spai add` running in the background.
     pub add_job: Option<super::state_add::AddJob>,
     /// Records with a vector (`spai projects`), refreshed in the background.
@@ -47,6 +47,18 @@ pub struct SpaiNotesState {
     pub vectors_stale: bool,
     pub(super) vector_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
     projects_fingerprint: Fingerprint,
+}
+
+/// Tests never start the real `spai` (it would touch real backlogs): they get the emulator.
+fn default_core() -> crate::shared::spai_client::CoreConfig {
+    #[cfg(test)]
+    {
+        super::test_emulator::config()
+    }
+    #[cfg(not(test))]
+    {
+        crate::shared::spai_client::CoreConfig::from_process()
+    }
 }
 
 impl Default for SpaiNotesState {
@@ -72,7 +84,7 @@ impl SpaiNotesState {
             edit_dialog: NoteEditDialog::default(),
             scratch: super::scratch::state::ScratchState::default(),
             dedup: DedupPanel::default(),
-            core: super::core_bridge::CoreConfig::from_process(),
+            core: default_core(),
             add_job: None,
             vector_total: 0,
             vectors_stale: true,

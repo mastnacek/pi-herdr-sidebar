@@ -7,6 +7,7 @@ use super::storage_format::parser::unescape_yaml_scalar;
 const EXTRA_TITLE_CS: &str = "title_cs";
 const EXTRA_PENDING: &str = "pending";
 const TRANSLATE_CS: &str = "translate_cs";
+const RETITLE_EN: &str = "retitle_en";
 
 impl SpaiNoteItem {
     /// The Czech title, when the record has one.
@@ -31,6 +32,27 @@ impl SpaiNoteItem {
             return;
         }
         self.extra_frontmatter.retain(|(k, _)| k != EXTRA_TITLE_CS);
+        self.add_pending(TRANSLATE_CS);
+    }
+
+    /// The user edited the Czech title shown in the UI: the new text goes to
+    /// `title_cs`; the English `title` stays and `retitle_en` asks
+    /// `spai reindex` to translate the new text back. Returns false (and
+    /// changes nothing) when the record has no `title_cs`.
+    pub fn retitle_cs(&mut self, new_cs: &str) -> bool {
+        if self.title_cs().is_none() {
+            return false;
+        }
+        let escaped = new_cs.replace('\\', "\\\\").replace('"', "\\\"");
+        if let Some((_, v)) = self.extra_frontmatter.iter_mut().find(|(k, _)| k == EXTRA_TITLE_CS) {
+            *v = format!("\"{escaped}\"");
+        }
+        self.add_pending(RETITLE_EN);
+        true
+    }
+
+    /// Adds `token` to the `pending` list once.
+    fn add_pending(&mut self, token: &str) {
         match self.extra_frontmatter.iter_mut().find(|(k, _)| k == EXTRA_PENDING) {
             Some((_, v)) => {
                 let mut items: Vec<String> = v
@@ -41,14 +63,14 @@ impl SpaiNoteItem {
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                     .collect();
-                if !items.iter().any(|s| s == TRANSLATE_CS) {
-                    items.push(TRANSLATE_CS.to_string());
+                if !items.iter().any(|s| s == token) {
+                    items.push(token.to_string());
                 }
                 *v = format!("[{}]", items.join(", "));
             }
             None => self
                 .extra_frontmatter
-                .push((EXTRA_PENDING.to_string(), format!("[{TRANSLATE_CS}]"))),
+                .push((EXTRA_PENDING.to_string(), format!("[{token}]"))),
         }
     }
 }

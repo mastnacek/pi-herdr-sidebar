@@ -1,7 +1,7 @@
 //! Background `spai reindex` and AI facet classification triggers for S.P.A.I.
 use super::classify_service::{classify_note, collect_taxonomy};
 use super::state::{AsyncProgress, SettingsState};
-use crate::slices::spai_notes::core_bridge;
+use crate::shared::spai_client;
 use crate::slices::spai_notes::note::SpaiNoteItem;
 use crate::slices::spai_notes::storage_format::format_spai_markdown;
 use crate::slices::spai_notes::SpaiNotesState;
@@ -36,7 +36,7 @@ fn run_reindex_worker(settings: &mut SettingsState, notes_state: &mut SpaiNotesS
         .or_else(|| notes_state.projects.first().map(|p| p.path.clone()))
         .unwrap_or_else(|| std::path::PathBuf::from("."));
     std::thread::spawn(move || {
-        let msg = match core_bridge::reindex_all(&cfg, &cwd) {
+        let msg = match spai_client::reindex_all(&cfg, &cwd) {
             Ok(summary) => AsyncProgress::Done(format!("✅ {summary}")),
             Err(e) => AsyncProgress::Error(e),
         };

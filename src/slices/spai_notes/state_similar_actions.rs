@@ -2,7 +2,7 @@
 //! `Ctrl+D` runs `spai similar` on demand (background), `Ctrl+O/A/U` act on
 //! its results, `Ctrl+S` over a duplicate stopped by `add` saves anyway.
 //! Every UI tick only drains an already finished background call.
-use super::core_bridge::{self, SimilarHit};
+use crate::shared::spai_client::{self, SimilarHit};
 use super::note::SpaiStatus;
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
@@ -42,8 +42,8 @@ impl SpaiNotesState {
             return;
         };
         let (cfg, path) = (self.core.clone(), proj.path.clone());
-        self.dedup.receiver = Some(core_bridge::spawn(move || {
-            core_bridge::similar(&cfg, &path, query.trim())
+        self.dedup.receiver = Some(spai_client::spawn(move || {
+            spai_client::similar(&cfg, &path, query.trim())
         }));
         self.dedup.is_evaluating = true;
     }

@@ -5,7 +5,7 @@
 //! The result is the *allow-set keyed by file path* — stable across buffer
 //! edits (indices shift the moment a line is added or removed, which made the
 //! filtered list visibly shift).
-use super::super::core_bridge;
+use crate::shared::spai_client;
 use super::super::state::SpaiNotesState;
 use super::state::{SemanticJob, SemanticMessage};
 use std::sync::mpsc;
@@ -43,7 +43,7 @@ impl SpaiNotesState {
                 total: 1,
                 label: format!("spai search „{}“", query),
             });
-            let msg = match core_bridge::search_paths(&cfg, &path, &query) {
+            let msg = match spai_client::search_paths(&cfg, &path, &query) {
                 Ok(allowed) => SemanticMessage::Done {
                     label: format!("Sémantický filtr: {} shod (spai search)", allowed.len()),
                     allowed,

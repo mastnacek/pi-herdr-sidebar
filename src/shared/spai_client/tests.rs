@@ -1,7 +1,9 @@
 //! The bridge with a scripted `spai` (no process, no network, no real backlog),
 //! plus one test against the real binary when it exists.
 use super::testkit::{duplicate, out, written, FakeRunner};
+use super::runner::{find_binary, ProcessRunner};
 use super::*;
+use std::sync::Arc;
 
 fn proj() -> PathBuf {
     PathBuf::from("proj")

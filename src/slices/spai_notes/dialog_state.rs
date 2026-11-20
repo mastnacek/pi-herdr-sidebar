@@ -2,7 +2,7 @@
 //! with Normal/Insert modes, and the on-demand dedup panel).
 use super::autocomplete::ProjectSuggestion;
 use super::note::SpaiType;
-use super::core_bridge::SimilarHit;
+use crate::shared::spai_client::SimilarHit;
 use std::sync::mpsc::Receiver;
 
 /// Background result of a duplicate check (`spai similar`).

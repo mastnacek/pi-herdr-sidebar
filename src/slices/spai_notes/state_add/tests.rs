@@ -1,7 +1,7 @@
 //! Creation dialog write through `spai`: background, duplicate, force, offline,
 //! missing binary, status change.
-use super::super::core_bridge::testkit::{duplicate, out, written, FakeRunner};
-use super::super::core_bridge::{CoreConfig, ProcessRunner};
+use crate::shared::spai_client::testkit::{duplicate, out, written, FakeRunner};
+use crate::shared::spai_client::{CoreConfig, ProcessRunner};
 use super::*;
 use std::fs;
 use std::sync::Arc;

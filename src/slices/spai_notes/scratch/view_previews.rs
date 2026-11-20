@@ -86,7 +86,7 @@ mod previews {
     #[test]
     #[ignore]
     fn scratch_preview_dedup_popup() {
-        use crate::slices::spai_notes::core_bridge::SimilarHit;
+        use crate::shared::spai_client::SimilarHit;
         let mut state = state_with_projects();
         state.open_scratch(None);
         for c in ". Opravit build @herdr".chars() {

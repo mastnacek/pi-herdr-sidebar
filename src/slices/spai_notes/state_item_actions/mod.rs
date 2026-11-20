@@ -31,7 +31,7 @@ impl SpaiNotesState {
         file: &std::path::Path,
         status: SpaiStatus,
     ) -> Result<SpaiStatus, String> {
-        super::core_bridge::set_status(&self.core, project, id, status.as_str())?;
+        crate::shared::spai_client::set_status(&self.core, project, id, status.as_str())?;
         let content = std::fs::read_to_string(file).map_err(|e| format!("Čtení selhalo: {e}"))?;
         let fresh = super::storage_format::parse_spai_markdown(&content, file.to_path_buf())
             .ok_or_else(|| "Soubor nelze načíst jako SPAI poznámku".to_string())?;

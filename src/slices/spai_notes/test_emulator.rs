@@ -1,13 +1,11 @@
 //! Test double of `spai` that really writes files (no translation, no
 //! network): enough for the Scratchpad and dialog tests to see records on disk.
 //! A text containing `DUPLIKAT` is "a duplicate" until `--force`.
-use super::{CoreConfig, RunOut, Runner};
-use crate::slices::spai_notes::discovery::SpaiProjectSummary;
-use crate::slices::spai_notes::input_highlighter::detect_spai_input;
-use crate::slices::spai_notes::note::{SpaiFacets, SpaiNoteItem};
-use crate::slices::spai_notes::spai_prefixes::strip_leading_prefix;
-use crate::slices::spai_notes::state::SpaiNotesState;
-use crate::slices::spai_notes::storage_format::format_spai_markdown;
+use super::input_highlighter::detect_spai_input;
+use super::note::{SpaiFacets, SpaiNoteItem};
+use super::spai_prefixes::strip_leading_prefix;
+use super::storage_format::format_spai_markdown;
+use crate::shared::spai_client::{CoreConfig, RunOut, Runner};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -24,7 +22,10 @@ fn next_number(dir: &Path) -> u32 {
     for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let name = e.file_name().to_string_lossy().to_string();
         if let Some(i) = name.find("SPAI-") {
-            let n: String = name[i + 5..].chars().take_while(|c| c.is_ascii_digit()).collect();
+            let n: String = name[i + 5..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
             max = max.max(n.parse().unwrap_or(0));
         }
     }
@@ -37,7 +38,10 @@ pub fn write_note(project: &Path, name: &str, text: &str) -> SpaiNoteItem {
     std::fs::create_dir_all(&dir).unwrap();
     let first = text.lines().next().unwrap_or("").trim();
     let detected = detect_spai_input(first);
-    let title = strip_leading_prefix(first).unwrap_or(first).trim().to_string();
+    let title = strip_leading_prefix(first)
+        .unwrap_or(first)
+        .trim()
+        .to_string();
     let id = format!("SPAI-{:03}", next_number(&dir));
     let file_name = format!("2026-11-20-{}-note.md", id);
     let item = SpaiNoteItem {
@@ -70,7 +74,11 @@ impl Runner for Emulator {
                 stderr: String::new(),
             })
         };
-        let value_of = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1));
+        let value_of = |flag: &str| {
+            args.iter()
+                .position(|a| a == flag)
+                .and_then(|i| args.get(i + 1))
+        };
         match args.first().map(String::as_str) {
             Some("add") => {
                 let text = &args[1];
@@ -99,11 +107,13 @@ impl Runner for Emulator {
                 let (id, status) = (&args[1], &args[2]);
                 for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
                     let text = std::fs::read_to_string(e.path()).unwrap_or_default();
-                    let Some(mut item) = crate::slices::spai_notes::storage_format::parse_spai_markdown(&text, e.path()) else {
+                    let Some(mut item) =
+                        super::storage_format::parse_spai_markdown(&text, e.path())
+                    else {
                         continue;
                     };
                     if &item.id == id {
-                        item.status = crate::slices::spai_notes::note::SpaiStatus::from_str(status);
+                        item.status = super::note::SpaiStatus::from_str(status);
                         item.symbol = item.status.symbol().to_string();
                         std::fs::write(e.path(), format_spai_markdown(&item)).unwrap();
                         return json(0, "{}".to_string());
@@ -117,27 +127,5 @@ impl Runner for Emulator {
             }
             _ => Err("unsupported".to_string()),
         }
-    }
-}
-
-impl SpaiNotesState {
-    /// Test fixture: writes a record into the selected project and lists it first.
-    pub fn create_quick_note_with_status(
-        &mut self,
-        _title: &str,
-        _kind: crate::slices::spai_notes::note::SpaiType,
-        _status: crate::slices::spai_notes::note::SpaiStatus,
-        body: &str,
-    ) -> Result<String, String> {
-        let proj: &mut SpaiProjectSummary = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
-        proj.ensure_items();
-        let item = write_note(&proj.path, &proj.name, body.trim());
-        let id = item.id.clone();
-        proj.items.insert(0, item);
-        self.selected_item_idx = 0;
-        Ok(id)
     }
 }

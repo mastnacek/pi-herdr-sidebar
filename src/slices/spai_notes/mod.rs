@@ -1,6 +1,5 @@
 //! Spai Notes Slice
 pub mod autocomplete;
-pub mod core_bridge;
 pub mod dialog_state;
 pub mod dialog_views;
 pub mod discovery;
@@ -19,6 +18,10 @@ pub mod state_edit;
 pub mod state_item_actions;
 pub mod state_similar_actions;
 pub mod storage_format;
+#[cfg(test)]
+mod test_emulator;
+#[cfg(test)]
+mod test_fixture;
 pub mod text_cursor;
 pub mod text_layout;
 pub mod time_utils;

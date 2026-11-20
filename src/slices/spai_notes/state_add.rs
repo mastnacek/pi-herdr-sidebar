@@ -1,7 +1,7 @@
 //! Writing from the creation dialog: `spai add` runs in the background, the
 //! dialog shows "ukládám…", a duplicate opens the panel ("uložit i tak" =
 //! Ctrl+S there), a written record is selected in the list.
-use super::core_bridge::{self, AddOutcome};
+use crate::shared::spai_client::{self, AddOutcome};
 use super::dialog_state::DedupPanel;
 use super::state::SpaiNotesState;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ impl SpaiNotesState {
             .map(|p| p.path.clone())
             .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
         let (cfg, sent) = (self.core.clone(), text.clone());
-        let rx = core_bridge::spawn(move || core_bridge::add_record(&cfg, &project, &sent, force));
+        let rx = spai_client::spawn(move || spai_client::add_record(&cfg, &project, &sent, force));
         self.dedup = DedupPanel::default();
         self.creation_dialog.saving = true;
         self.status_message = Some("⏳ ukládám…".to_string());
@@ -104,7 +104,7 @@ impl SpaiNotesState {
         let Some(cwd) = cwd else { return };
         self.vectors_stale = false;
         let cfg = self.core.clone();
-        self.vector_rx = Some(core_bridge::spawn(move || core_bridge::vector_total(&cfg, &cwd)));
+        self.vector_rx = Some(spai_client::spawn(move || spai_client::vector_total(&cfg, &cwd)));
     }
 
     pub(super) fn poll_vector_total(&mut self) {

@@ -13,7 +13,7 @@
 //! a duplicate — for Saved records and for FromFile records loaded with
 //! Ctrl+T alike. FromFile lines carry the id (`SPAI-014`), which is stripped
 //! before the rewrite so the title is never polluted.
-use super::super::core_bridge;
+use crate::shared::spai_client;
 use super::super::note_writer;
 use super::super::spai_prefixes::strip_leading_prefix;
 use super::super::state::SpaiNotesState;
@@ -57,7 +57,7 @@ impl SpaiNotesState {
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
-                    if text != original {
+                    if text.trim_end() != original.trim_end() {
                         updates.push((s, path.clone()));
                     }
                 }
@@ -65,7 +65,7 @@ impl SpaiNotesState {
                     path, loaded_text, ..
                 } => {
                     // Continuations typed under the summary count as changes.
-                    if text != *loaded_text {
+                    if text.trim_end() != loaded_text.trim_end() {
                         updates.push((s, path.clone()));
                     }
                 }
@@ -86,7 +86,8 @@ impl SpaiNotesState {
                 Err(e) => errors.push(e),
             }
         }
-        let updated = self.apply_scratch_updates(&updates, &mut errors);
+        let (updated, retitled) = self.apply_scratch_updates(&updates, &mut errors);
+        self.start_reindex(retitled);
         self.start_creates(items, false, updated, errors);
     }
 
@@ -130,10 +131,10 @@ impl SpaiNotesState {
         }
         let cfg = self.core.clone();
         let work = items.clone();
-        let rx = core_bridge::spawn(move || {
+        let rx = spai_client::spawn(move || {
             work.into_iter()
                 .map(|it| {
-                    let r = core_bridge::add_record(&cfg, &it.project_path, &it.text, force);
+                    let r = spai_client::add_record(&cfg, &it.project_path, &it.text, force);
                     (it.start, r)
                 })
                 .collect::<Vec<_>>()
@@ -167,9 +168,15 @@ impl SpaiNotesState {
     }
 
     /// Applies the edits of already saved records to their files (reverse
-    /// order; spans do not change). Returns the number of updated records.
-    fn apply_scratch_updates(&mut self, updates: &[(usize, PathBuf)], errors: &mut Vec<String>) -> usize {
+    /// order; spans do not change). Returns the number of updated records and
+    /// the projects of records that now wait for `retitle_en`.
+    fn apply_scratch_updates(
+        &mut self,
+        updates: &[(usize, PathBuf)],
+        errors: &mut Vec<String>,
+    ) -> (usize, Vec<PathBuf>) {
         let mut updated = 0usize;
+        let mut retitled: Vec<PathBuf> = Vec::new();
         for (start, path) in updates.iter().rev() {
             let (s, e) = super::line_model::record_span(&self.scratch.lines, *start);
             let text = self.scratch.lines[s..e]
@@ -182,8 +189,12 @@ impl SpaiNotesState {
             // prefix and any continuation lines.
             let file_text = strip_leading_id(&text);
             match note_writer::update_record(path, &file_text) {
-                Ok(()) => {
+                Ok(retitle) => {
                     updated += 1;
+                    // <project>/docs/spai/<file>.md
+                    if let (true, Some(root)) = (retitle, path.ancestors().nth(3)) {
+                        retitled.push(root.to_path_buf());
+                    }
                     // Refresh the change-detection baseline line by line.
                     let new_lines: Vec<String> = file_text.lines().map(String::from).collect();
                     let head_origin = self.scratch.lines[s].origin.clone();
@@ -223,7 +234,7 @@ impl SpaiNotesState {
                 Err(er) => errors.push(format!("Řádek {}: {}", s + 1, er)),
             }
         }
-        updated
+        (updated, retitled)
     }
 }
 
@@ -275,3 +286,5 @@ mod id_tests {
 mod tests;
 #[cfg(test)]
 mod tests_more;
+#[cfg(test)]
+mod tests_retitle;

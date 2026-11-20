@@ -61,3 +61,18 @@ fn a_record_without_pending_gets_one() {
     it.on_title_changed(&old);
     assert!(format_spai_markdown(&it).contains("pending: [translate_cs]"));
 }
+
+#[test]
+fn edited_czech_title_goes_to_title_cs_and_asks_for_retitle_en() {
+    let mut it = item();
+    assert!(it.retitle_cs("Nové \"znění\""));
+    assert_eq!(it.title, "Fix login");
+    assert_eq!(it.display_title(), "Nové \"znění\"");
+    let out = format_spai_markdown(&it);
+    assert!(out.contains("pending: [embed, retitle_en]"), "{out}");
+    assert!(it.retitle_cs("Jinak"));
+    assert_eq!(format_spai_markdown(&it).matches("retitle_en").count(), 1);
+    let mut plain = item();
+    plain.extra_frontmatter.retain(|(k, _)| k != "title_cs");
+    assert!(!plain.retitle_cs("X"));
+}

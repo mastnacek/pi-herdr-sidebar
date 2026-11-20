@@ -61,8 +61,10 @@ fn take_stamp_token(s: &str) -> (String, Option<String>) {
 /// editing): the id, file path, tags, facets and extra frontmatter stay; the
 /// title, type/status, body and (when the line carries an inline stamp) the
 /// timestamp come from the edited text. The file name is NOT renamed — the
-/// id stays the anchor.
-pub fn update_record(path: &std::path::Path, text: &str) -> Result<(), String> {
+/// id stays the anchor. A changed Czech title (`title_cs`) never touches the
+/// English `title` or the SPAI line: it adds `retitle_en` to `pending`.
+/// Returns true when `retitle_en` was added (`spai reindex` should run).
+pub fn update_record(path: &std::path::Path, text: &str) -> Result<bool, String> {
     let content = std::fs::read_to_string(path).map_err(|e| format!("Čtení selhalo: {}", e))?;
     let mut item = parse_spai_markdown(&content, path.to_path_buf())
         .ok_or_else(|| "Soubor nelze načíst jako SPAI poznámku".to_string())?;
@@ -76,21 +78,83 @@ pub fn update_record(path: &std::path::Path, text: &str) -> Result<(), String> {
         .unwrap_or(first_line)
         .trim();
     let (clean, typed_stamp) = take_stamp_token(clean);
+    let before = format_spai_markdown(&item);
     let old_title = item.title.clone();
     // The scratch line shows the Czech title: unchanged text keeps both titles.
+    let had_cs = item.title_cs().is_some();
+    let mut retitled = false;
     if !clean.is_empty() && clean != item.display_title() {
-        item.title = clean.to_string();
+        retitled = item.retitle_cs(&clean);
+        if !retitled {
+            item.title = clean.to_string();
+        }
     }
     item.on_title_changed(&old_title);
     item.kind = detected.kind;
     item.status = detected.status;
     item.symbol = detected.status.symbol().to_string();
-    item.body = text.trim().to_string();
+    let mut new_first = text.trim().lines().next().unwrap_or("").to_string();
+    if had_cs && !clean.is_empty() {
+        // The first line shows the Czech title; the file keeps the English one.
+        new_first = new_first.replacen(clean.as_str(), &item.title, 1);
+    }
+    let continuation: Vec<&str> = text.trim().lines().skip(1).collect();
+    let typed_prefix = &first_line[..first_line.len() - strip_leading_prefix(first_line).unwrap_or(first_line).len()];
+    item.body = merge_body(
+        &item.body,
+        (typed_prefix, &new_first),
+        (&old_title, &item.title),
+        &continuation,
+    );
     if let Some(ts) = typed_stamp {
         item.timestamp = ts;
     }
 
-    write_atomic(path, &format_spai_markdown(&item))
+    let after = format_spai_markdown(&item);
+    if after != before {
+        write_atomic(path, &after)?;
+    }
+    Ok(retitled)
+}
+
+/// The old `body` with only the mark and the title of its SPAI line changed
+/// (`!priority`, `@project`, `:tags:` stay); every other line stays. `typed` is
+/// the mark and the whole edited line (used when the body has no SPAI line),
+/// `titles` the old and the new title. Typed continuation lines the body does
+/// not have yet are appended; none is ever removed.
+fn merge_body(
+    body: &str,
+    typed: (&str, &str),
+    titles: (&str, &str),
+    continuation: &[&str],
+) -> String {
+    let (mark, first) = typed;
+    let mut lines: Vec<String> = body.lines().map(String::from).collect();
+    let spai_line = lines.iter().position(|l| !l.trim().is_empty());
+    match spai_line.and_then(|i| strip_leading_prefix(&lines[i]).map(|t| (i, t.to_string()))) {
+        Some((i, tail)) => {
+            let tail = match tail.strip_prefix(titles.0) {
+                Some(rest) => format!("{}{rest}", titles.1),
+                None => tail,
+            };
+            lines[i] = format!("{mark}{tail}");
+        }
+        None => {
+            lines.insert(0, String::new());
+            lines.insert(0, first.to_string());
+        }
+    }
+    let mut added = Vec::new();
+    for line in continuation.iter().map(|l| l.trim_end()).filter(|l| !l.trim().is_empty()) {
+        if !lines.iter().any(|l| l.trim_end() == line) {
+            added.push(line.to_string());
+        }
+    }
+    if !added.is_empty() {
+        lines.push(String::new());
+        lines.extend(added);
+    }
+    lines.join("\n").trim().to_string()
 }
 
 /// `text` without the inline stamp the Scratchpad puts after the mark prefix

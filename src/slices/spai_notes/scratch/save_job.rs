@@ -1,5 +1,5 @@
 //! Background write of new Scratchpad records (`spai add`).
-use super::super::core_bridge::AddOutcome;
+use crate::shared::spai_client::AddOutcome;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 

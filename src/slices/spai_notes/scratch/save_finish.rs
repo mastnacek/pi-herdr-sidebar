@@ -1,6 +1,6 @@
 //! The end of a Scratchpad save: results of the background `spai add`
 //! become Saved lines, a summary, a duplicate popup; plus undo (`u`).
-use super::super::core_bridge::AddOutcome;
+use crate::shared::spai_client::AddOutcome;
 use super::super::state::SpaiNotesState;
 use super::line_model::{LineOrigin, ScratchLine};
 use super::save_job::SaveResults;

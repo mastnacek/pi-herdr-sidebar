@@ -308,7 +308,7 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
         .scratch
         .dedup
         .matches
-        .push(super::super::super::core_bridge::SimilarHit {
+        .push(crate::shared::spai_client::SimilarHit {
             project: "jiny".to_string(),
             id: "SPAI-009".to_string(),
             title: "jiny".to_string(),

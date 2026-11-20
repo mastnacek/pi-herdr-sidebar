@@ -8,7 +8,7 @@
 //! Split for the line cap:
 //! - [`super::buffer`] — Edit-mode text operations on the buffer
 //! - [`super::visibility`] — filter helpers and record navigation
-use super::super::core_bridge::SimilarHit;
+use crate::shared::spai_client::SimilarHit;
 use super::super::dialog_state::SimilarResult;
 use super::filter::{FilterQuery, StatusFilter};
 use super::line_model::ScratchLine;
@@ -126,6 +126,8 @@ pub struct ScratchState {
     pub last_batch: Vec<PathBuf>,
     /// Background `spai add` of the last Ctrl+S; the buffer is read-only meanwhile.
     pub save_job: Option<super::save_job::SaveJob>,
+    /// Background `spai reindex` after an edited Czech title; a failure is a warning.
+    pub reindex_job: Option<std::sync::mpsc::Receiver<Vec<String>>>,
     /// Footer summary of the last save: `Uloženo 3 · herdr SPAI-014…`.
     pub last_summary: Option<String>,
     /// Ctrl+S warning when a fresh dedup result is similar: `⚠ similar: SPAI-009`.

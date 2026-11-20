@@ -32,6 +32,7 @@ pub mod line_model;
 pub mod line_render;
 pub mod mention;
 pub mod mention_popup;
+pub mod reindex;
 pub mod save;
 pub mod save_finish;
 pub mod save_job;
@@ -51,5 +52,6 @@ use state::ScratchState;
 pub fn poll_background(state: &mut super::state::SpaiNotesState) {
     ScratchState::poll_dedup(&mut state.scratch);
     ScratchState::poll_semantic(&mut state.scratch);
+    state.poll_reindex();
     state.poll_scratch_save();
 }

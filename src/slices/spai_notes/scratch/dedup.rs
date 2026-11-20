@@ -1,7 +1,7 @@
 //! Ctrl+D in the Scratchpad: on-demand dedup for the line under the cursor
 //! (plan §3). Popup anchored under that line; ↑/↓ select, Ctrl+O/A/U act,
 //! Esc closes. No timers, no automatic requests.
-use super::super::core_bridge;
+use crate::shared::spai_client;
 use super::super::note_writer;
 use super::super::state::SpaiNotesState;
 use super::super::storage_format::format_spai_markdown;
@@ -34,8 +34,8 @@ impl SpaiNotesState {
         };
         let (cfg, path) = (self.core.clone(), proj.path.clone());
         self.scratch.dedup.is_evaluating = true;
-        self.scratch.dedup.receiver = Some(core_bridge::spawn(move || {
-            core_bridge::similar(&cfg, &path, &query_trim)
+        self.scratch.dedup.receiver = Some(spai_client::spawn(move || {
+            spai_client::similar(&cfg, &path, &query_trim)
         }));
     }
 
