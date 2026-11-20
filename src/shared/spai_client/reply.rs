@@ -49,6 +49,29 @@ pub(super) fn hits(data: &Value) -> Vec<SimilarHit> {
     all
 }
 
+/// A project of `spai projects`: the same list every agent sees.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedProject {
+    pub name: String,
+    pub path: PathBuf,
+}
+
+pub(super) fn listed_projects(data: &Value) -> Vec<ListedProject> {
+    data["projects"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|p| {
+                    Some(ListedProject {
+                        name: p["name"].as_str()?.to_string(),
+                        path: PathBuf::from(p["path"].as_str()?),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// A record `add` wrote.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Written {

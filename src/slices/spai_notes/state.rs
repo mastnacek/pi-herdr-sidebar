@@ -46,7 +46,11 @@ pub struct SpaiNotesState {
     pub vector_total: usize,
     pub vectors_stale: bool,
     pub(super) vector_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
-    projects_fingerprint: Fingerprint,
+    pub(super) projects_fingerprint: Fingerprint,
+    /// `spai projects` running in the background (see `state_projects`).
+    pub(super) projects_rx: Option<
+        std::sync::mpsc::Receiver<Result<Vec<crate::shared::spai_client::ListedProject>, String>>,
+    >,
 }
 
 /// Tests never start the real `spai` (it would touch real backlogs): they get the emulator.
@@ -90,9 +94,11 @@ impl SpaiNotesState {
             vectors_stale: true,
             vector_rx: None,
             projects_fingerprint: (0, 0, 0, 0, 0, 0),
+            projects_rx: None,
         };
         state.ensure_selected_items();
         state.projects_fingerprint = state.fingerprint();
+        state.request_project_list();
         state
     }
 
@@ -112,9 +118,10 @@ impl SpaiNotesState {
         self.clamp_indices();
         self.ensure_selected_items();
         self.projects_fingerprint = self.fingerprint();
+        self.request_project_list();
     }
 
-    fn fingerprint(&self) -> Fingerprint {
+    pub(super) fn fingerprint(&self) -> Fingerprint {
         let cache = projects_cache_path()
             .and_then(|p| file_fingerprint(&p))
             .unwrap_or_default();
@@ -129,13 +136,13 @@ impl SpaiNotesState {
     }
 
     /// Notes are read on demand — the viewer only ever shows one project.
-    fn ensure_selected_items(&mut self) {
+    pub(super) fn ensure_selected_items(&mut self) {
         if let Some(proj) = self.projects.get_mut(self.selected_project_idx) {
             proj.ensure_items();
         }
     }
 
-    fn clamp_indices(&mut self) {
+    pub(super) fn clamp_indices(&mut self) {
         if self.projects.is_empty() {
             self.selected_project_idx = 0;
             self.selected_item_idx = 0;

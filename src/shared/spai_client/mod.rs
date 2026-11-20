@@ -18,12 +18,12 @@ pub mod testkit;
 mod tests;
 
 pub use config::CoreConfig;
-pub use reply::{AddOutcome, SimilarHit, Written};
+pub use reply::{AddOutcome, ListedProject, SimilarHit, Written};
 pub use runner::Runner;
 #[cfg(test)]
 pub use runner::{ProcessRunner, RunOut, NOT_FOUND};
 
-use reply::hits;
+use reply::{hits, listed_projects};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -131,6 +131,12 @@ pub fn reindex_all(cfg: &CoreConfig, cwd: &Path) -> Result<String, String> {
         s.push_str(&format!(" ({w})"));
     }
     Ok(s)
+}
+
+/// `spai projects`: the project list (cwd, pi cache, database, own scan), in order.
+pub fn project_list(cfg: &CoreConfig, cwd: &Path) -> Result<Vec<ListedProject>, String> {
+    let (_, data, _) = call(cfg, &["projects"], cwd)?;
+    Ok(listed_projects(&data))
 }
 
 /// Records with a vector in all projects (`spai projects`).
