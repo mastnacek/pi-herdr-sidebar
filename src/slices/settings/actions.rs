@@ -1,99 +1,46 @@
-//! Background vectorization and AI facet classification triggers for S.P.A.I.
+//! Background `spai reindex` and AI facet classification triggers for S.P.A.I.
 use super::classify_service::{classify_note, collect_taxonomy};
 use super::state::{AsyncProgress, SettingsState};
-use super::vector_service::vectorize_project_items_with_progress;
+use crate::slices::spai_notes::core_bridge;
 use crate::slices::spai_notes::note::SpaiNoteItem;
 use crate::slices::spai_notes::storage_format::format_spai_markdown;
 use crate::slices::spai_notes::SpaiNotesState;
 use std::sync::mpsc::channel;
 
-/// Triggers background vectorization for only missing records.
+/// Fills in the missing translations and vectors of all projects (`spai reindex --all`).
 pub fn vectorize_missing_records(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
-    run_vectorize_worker(settings, notes_state, false);
+    run_reindex_worker(settings, notes_state);
 }
 
-/// Triggers background vectorization for all records (force re-embed all).
+/// `spai` re-embeds only what is missing, so "all" is the same call.
 pub fn vectorize_all_records(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
-    run_vectorize_worker(settings, notes_state, true);
+    run_reindex_worker(settings, notes_state);
 }
 
-fn run_vectorize_worker(
-    settings: &mut SettingsState,
-    notes_state: &mut SpaiNotesState,
-    force_all: bool,
-) {
+fn run_reindex_worker(settings: &mut SettingsState, notes_state: &mut SpaiNotesState) {
     if settings.is_busy {
         return;
     }
-    if settings.api_key.trim().is_empty() {
-        settings.status_message = Some(
-            "❌ Chybí OpenRouter API klíč! Nastavte jej v záložce Nastavení (klávesa 6 -> e)"
-                .to_string(),
-        );
-        return;
-    }
-
     let (tx, rx) = channel();
     settings.task_receiver = Some(rx);
     settings.is_busy = true;
-    settings.busy_label = if force_all {
-        "Převektorizace všech záznamů...".to_string()
-    } else {
-        "Vektorizace chybějících záznamů...".to_string()
-    };
+    settings.busy_label = "Doplňuji překlady a vektory (spai reindex)...".to_string();
     settings.busy_step = 0;
     settings.busy_total = 0;
+    notes_state.vectors_stale = true;
 
-    let api_key = settings.api_key.clone();
-    let model = settings.embedding_model.clone();
-
-    let mut projects_data = Vec::new();
-    for p in &mut notes_state.projects {
-        p.ensure_items();
-        projects_data.push((p.path.clone(), p.items.clone()));
-    }
-
+    let cfg = notes_state.core.clone();
+    let cwd = notes_state
+        .current_project_path
+        .clone()
+        .or_else(|| notes_state.projects.first().map(|p| p.path.clone()))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
     std::thread::spawn(move || {
-        let mut total_records = 0;
-        for (_, items) in &projects_data {
-            total_records += items.len();
-        }
-
-        if total_records == 0 {
-            let _ = tx.send(AsyncProgress::Done("Žádné záznamy k vektorizaci".to_string()));
-            return;
-        }
-
-        let _ = tx.send(AsyncProgress::Progress {
-            step: 0,
-            total: total_records,
-            label: format!("Indexuji záznamy (model: {})...", model),
-        });
-
-        let mut processed = 0;
-        for (project_path, items) in projects_data {
-            if items.is_empty() {
-                continue;
-            }
-            if let Err(err) = vectorize_project_items_with_progress(
-                &api_key,
-                &model,
-                &project_path,
-                &items,
-                force_all,
-                &tx,
-                &mut processed,
-                total_records,
-            ) {
-                let _ = tx.send(AsyncProgress::Error(err));
-                return;
-            }
-        }
-
-        let _ = tx.send(AsyncProgress::Done(format!(
-            "✅ Vektorizace dokončena: {} záznamů zpracováno modelem {}",
-            processed, model
-        )));
+        let msg = match core_bridge::reindex_all(&cfg, &cwd) {
+            Ok(summary) => AsyncProgress::Done(format!("✅ {summary}")),
+            Err(e) => AsyncProgress::Error(e),
+        };
+        let _ = tx.send(msg);
     });
 }
 

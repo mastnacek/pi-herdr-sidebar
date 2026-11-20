@@ -4,7 +4,7 @@ use super::super::line_model::LineOrigin;
 use std::fs;
 use std::path::PathBuf;
 
-fn temp_project(tag: &str) -> PathBuf {
+pub(super) fn temp_project(tag: &str) -> PathBuf {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -14,7 +14,7 @@ fn temp_project(tag: &str) -> PathBuf {
     dir
 }
 
-fn state_on(project: &PathBuf) -> SpaiNotesState {
+pub(super) fn state_on(project: &PathBuf) -> SpaiNotesState {
     let mut state = SpaiNotesState::new(Some(project.clone()));
     let idx = state
         .projects
@@ -25,7 +25,7 @@ fn state_on(project: &PathBuf) -> SpaiNotesState {
     state
 }
 
-fn add_line(state: &mut SpaiNotesState, text: &str) {
+pub(super) fn add_line(state: &mut SpaiNotesState, text: &str) {
     state
         .scratch
         .lines
@@ -33,6 +33,13 @@ fn add_line(state: &mut SpaiNotesState, text: &str) {
             text: text.to_string(),
             origin: LineOrigin::New,
         });
+}
+
+/// Ctrl+S, then the background write is awaited; returns the created files.
+pub(super) fn save_all(state: &mut SpaiNotesState) -> usize {
+    state.scratch_save_all();
+    state.wait_scratch_save();
+    state.scratch.last_batch.len()
 }
 
 #[test]
@@ -58,7 +65,7 @@ fn routes_at_mention_to_the_right_folder_and_falls_back_to_current() {
 
     add_line(&mut state, ". Fix build @proj-b");
     add_line(&mut state, "? Nápad bez zmínky");
-    let n = state.scratch_save_all();
+    let n = save_all(&mut state);
     assert_eq!(n, 2);
 
     // The @mention routed to proj-b, the fallback went to the current (a).
@@ -93,7 +100,7 @@ fn unknown_mention_leaves_the_line_in_the_scratchpad() {
     let mut state = state_on(&a);
     add_line(&mut state, ". Fix @neexistuje");
 
-    let n = state.scratch_save_all();
+    let n = save_all(&mut state);
     assert_eq!(n, 0, "nothing saved");
     let line = &state.scratch.lines[0];
     assert!(
@@ -121,7 +128,7 @@ fn ids_are_unique_across_a_batch_of_three() {
     add_line(&mut state, ". Druhá");
     add_line(&mut state, ". Třetí");
 
-    let n = state.scratch_save_all();
+    let n = save_all(&mut state);
     assert_eq!(n, 3);
 
     let mut ids: Vec<String> = Vec::new();
@@ -153,7 +160,7 @@ fn partial_failure_does_not_destroy_the_rest() {
     );
     add_line(&mut state, ". Špatný cíl @neexistuje");
 
-    let n = state.scratch_save_all();
+    let n = save_all(&mut state);
     assert_eq!(n, 1, "the good line saved");
     // The bad line is still editable New.
     let bad = state
@@ -182,7 +189,7 @@ fn after_save_new_entries_can_be_added_immediately() {
     let a = temp_project("flow");
     let mut state = state_on(&a);
     add_line(&mut state, ". První");
-    assert_eq!(state.scratch_save_all(), 1);
+    assert_eq!(save_all(&mut state), 1);
 
     // The save leaves the cursor on a fresh empty line; typing a new record
     // must work without any extra navigation.
@@ -191,7 +198,7 @@ fn after_save_new_entries_can_be_added_immediately() {
         assert!(state.scratch.insert_char(c), "typing must not be blocked");
         state.scratch.cursor_char = state.scratch.current_line_len();
     }
-    assert_eq!(state.scratch_save_all(), 1, "the second entry created");
+    assert_eq!(save_all(&mut state), 1, "the second entry created");
 
     let spai = a.join("docs").join("spai");
     let names: Vec<String> = fs::read_dir(&spai)
@@ -232,7 +239,7 @@ fn loaded_records_edit_and_save_updates_their_file() {
     assert!(state.scratch.insert_char('!'));
 
     // Ctrl+S: no new file, the existing one is updated (id stays SPAI-001).
-    let created = state.scratch_save_all();
+    let created = save_all(&mut state);
     assert_eq!(created, 0, "updates create no new files");
     let content = fs::read_to_string(&file).unwrap();
     assert!(
@@ -240,7 +247,7 @@ fn loaded_records_edit_and_save_updates_their_file() {
         "title updated: {content}"
     );
     // Unchanged second save is a no-op.
-    assert_eq!(state.scratch_save_all(), 0);
+    assert_eq!(save_all(&mut state), 0);
     fs::remove_dir_all(&a).ok();
 }
 
@@ -250,7 +257,7 @@ fn undo_batch_deletes_the_files_and_restores_lines() {
     let mut state = state_on(&a);
     add_line(&mut state, ". Vratný záznam");
     add_line(&mut state, "pokračování");
-    assert_eq!(state.scratch_save_all(), 1);
+    assert_eq!(save_all(&mut state), 1);
     let file = state.scratch.last_batch[0].clone();
     assert!(file.exists());
 
@@ -273,7 +280,7 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
     let a = temp_project("readonly");
     let mut state = state_on(&a);
     add_line(&mut state, ". Uložený záznam");
-    assert_eq!(state.scratch_save_all(), 1);
+    assert_eq!(save_all(&mut state), 1);
 
     // Bidirectional: editing the Saved record works (cursor back onto it)…
     state.scratch.cursor_line = 0;
@@ -281,7 +288,7 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
     assert!(state.scratch.insert_char('!'));
     // …and Ctrl+S updates the same file (no new id, content changed).
     let file = state.scratch.last_batch[0].clone();
-    assert_eq!(state.scratch_save_all(), 0, "no new file created");
+    assert_eq!(save_all(&mut state), 0, "no new file created");
     let content = fs::read_to_string(&file).unwrap();
     assert!(
         content.contains("Uložený záznam!"),
@@ -301,15 +308,16 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
         .scratch
         .dedup
         .matches
-        .push(super::super::super::similarity::SimilarNoteMatch {
+        .push(super::super::super::core_bridge::SimilarHit {
+            project: "jiny".to_string(),
             id: "SPAI-009".to_string(),
             title: "jiny".to_string(),
-            symbol: ".".to_string(),
-            similarity: 0.9,
-            is_vector_match: false,
+            score: 0.9,
+            path: "x.md".to_string(),
+            duplicate: true,
         });
     add_line(&mut state, "? Nový řádek");
-    state.scratch_save_all();
+    save_all(&mut state);
     assert!(
         state
             .scratch
@@ -320,250 +328,5 @@ fn saved_lines_stay_editable_and_re_save_updates_the_file() {
         "footer warning present: {:?}",
         state.scratch.warn_similar
     );
-    fs::remove_dir_all(&a).ok();
-}
-#[test]
-fn loaded_scope_cursor_starts_on_first_record() {
-    let a = temp_project("cursor");
-    let mut state = state_on(&a);
-    for t in ["prvni", "druhy", "treti"] {
-        state
-            .create_quick_note_with_status(
-                t,
-                super::super::super::note::SpaiType::Todo,
-                super::super::super::note::SpaiStatus::Todo,
-                &format!(
-                    ". {}
-",
-                    t
-                ),
-            )
-            .unwrap();
-    }
-    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
-    // Cursor on the FIRST record (not the trailing typing slot).
-    assert_eq!(state.scratch.cursor_line, 0);
-    // Arrow down walks into the records; scrolling keeps the cursor visible.
-    for i in 1..4 {
-        state.scratch.cursor_down();
-        assert_eq!(state.scratch.cursor_line, i);
-    }
-    // The visible window contains the cursor.
-    let (scroll, h) =
-        super::super::view::visible_window(state.scratch.lines.len(), state.scratch.cursor_line, 5);
-    assert!(state.scratch.cursor_line >= scroll);
-    assert!(state.scratch.cursor_line < scroll + h);
-    fs::remove_dir_all(&a).ok();
-}
-
-#[test]
-fn filter_is_live_only_matches_stay_visible() {
-    let a = temp_project("live");
-    let mut state = state_on(&a);
-    for t in ["build", "review", "build again"] {
-        state
-            .create_quick_note_with_status(
-                t,
-                super::super::super::note::SpaiType::Todo,
-                super::super::super::note::SpaiStatus::Todo,
-                &format!(
-                    ". {}
-",
-                    t
-                ),
-            )
-            .unwrap();
-    }
-    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
-
-    // Simulate typing into the filter input: live application per keystroke.
-    state.scratch.input_mode = Some(super::super::state::ScratchInput::FuzzyFilter);
-    for c in "buil".chars() {
-        state.scratch.input_buffer.push(c);
-        let text = state.scratch.input_buffer.clone();
-        state.scratch.apply_filter_text(Some(text));
-    }
-    // "review" has no 'b' → hidden; both "build…" records match the
-    // subsequence → visible.
-    let count = state.scratch.visible_count();
-    assert_eq!(count, 2, "review is hidden by 'buil'");
-
-    // Typing 'rev' hides both build records, shows only "review".
-    state.scratch.input_buffer.clear();
-    state.scratch.apply_filter_text(Some("rev".to_string()));
-    assert_eq!(state.scratch.visible_count(), 1);
-
-    // Esc cancels: the snapshot filter (None) is restored → all visible.
-    state.scratch.input_buffer.clear();
-    state.scratch.filter = state.scratch.filter_before_input.take();
-    assert_eq!(state.scratch.visible_count(), 3);
-    fs::remove_dir_all(&a).ok();
-}
-
-#[test]
-fn semantic_allow_set_survives_buffer_edits_no_shift() {
-    let a = temp_project("semshift");
-    let mut state = state_on(&a);
-    for t in ["build", "review", "docs"] {
-        state
-            .create_quick_note_with_status(
-                t,
-                super::super::super::note::SpaiType::Todo,
-                super::super::super::note::SpaiStatus::Todo,
-                &format!(
-                    ". {}
-",
-                    t
-                ),
-            )
-            .unwrap();
-    }
-    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
-    // Simulate a semantic result: only the "review" record allowed (path-keyed).
-    let file = state.projects[state.selected_project_idx]
-        .items
-        .iter()
-        .find(|it| it.title.contains("review"))
-        .unwrap()
-        .file_path
-        .clone();
-    let mut allowed = std::collections::HashSet::new();
-    allowed.insert(file);
-    state.scratch.semantic_allowed = Some(allowed);
-
-    // The user types a continuation line on the FIRST record — indices shift,
-    // the allow-set must not.
-    state.scratch.cursor_line = 0;
-    state.scratch.split_line();
-    assert_eq!(
-        state.scratch.visible_count(),
-        1,
-        "only review stays visible"
-    );
-    // The review record is still findable by text in the buffer.
-    assert!(
-        state
-            .scratch
-            .lines
-            .iter()
-            .any(|l| l.text.contains("review")),
-        "review record still in the buffer"
-    );
-    fs::remove_dir_all(&a).ok();
-}
-
-#[test]
-fn semantic_keep_continuation_lines_with_their_record() {
-    let a = temp_project("semcont");
-    let mut state = state_on(&a);
-    state
-        .create_quick_note_with_status(
-            "dlouhy",
-            super::super::super::note::SpaiType::Todo,
-            super::super::super::note::SpaiStatus::Todo,
-            ". dlouhy zaznam
-pokračovací řádek
-",
-        )
-        .unwrap();
-    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
-    // Semantic result allows only the "dlouhy" record.
-    let file = state.projects[state.selected_project_idx].items[0]
-        .file_path
-        .clone();
-    let mut allowed = std::collections::HashSet::new();
-    allowed.insert(file);
-    state.scratch.semantic_allowed = Some(allowed);
-    state.scratch.cursor_line = 0;
-
-    // Buffer layout after scope load: [". SPAI-001 dlouhy", "pokračovací…", ""].
-    // The continuation line must NOT be judged as its own record — only the
-    // group verdict counts.
-    assert!(!state.scratch.record_hidden(0), "head visible");
-    assert!(
-        !state.scratch.record_hidden(1),
-        "continuation stays with its record"
-    );
-    fs::remove_dir_all(&a).ok();
-}
-
-#[test]
-fn navigation_skips_hidden_records_no_popin() {
-    let a = temp_project("navskip");
-    let mut state = state_on(&a);
-    for t in ["jedna", "dva", "tri", "ctyri"] {
-        state
-            .create_quick_note_with_status(
-                t,
-                super::super::super::note::SpaiType::Todo,
-                super::super::super::note::SpaiStatus::Todo,
-                &format!(
-                    ". {}
-",
-                    t
-                ),
-            )
-            .unwrap();
-    }
-    state.switch_scratch_scope(super::super::state::ScratchScope::Project);
-    // Semantic filter allows only records "dva" and "ctyri" (by path).
-    let paths: Vec<_> = state.projects[state.selected_project_idx]
-        .items
-        .iter()
-        .filter(|it| it.title.contains("dva") || it.title.contains("ctyri"))
-        .map(|it| it.file_path.clone())
-        .collect();
-    let mut allowed = std::collections::HashSet::new();
-    for p in paths {
-        allowed.insert(p);
-    }
-    state.scratch.semantic_allowed = Some(allowed);
-    state.scratch.cursor_line = 0;
-    assert_eq!(state.scratch.visible_count(), 2);
-
-    // What is visible and what hidden?
-    let vis: Vec<String> = state
-        .scratch
-        .lines
-        .iter()
-        .enumerate()
-        .map(|(i, l)| {
-            format!(
-                "{}:{}:{}",
-                i,
-                l.text,
-                if state.scratch.record_hidden(i) {
-                    "H"
-                } else {
-                    "V"
-                }
-            )
-        })
-        .collect();
-    eprintln!("VIS={vis:?}");
-
-    // (The Project scope loads records in descending id order: 004, 003,
-    // 002, 001 — visible are "ctyri" (line 0) and "dva" (line 2).)
-    assert!(!state.scratch.record_hidden(0));
-    assert!(state.scratch.record_hidden(1));
-
-    // ↓ jumps OVER the hidden record straight to the next VISIBLE one —
-    // no pop-in of hidden entries while navigating.
-    state.scratch.cursor_step_visible(1);
-    assert!(
-        state.scratch.lines[state.scratch.cursor_line]
-            .text
-            .contains("dva"),
-        "landed on the next VISIBLE record, skipping the hidden one"
-    );
-    // ↑ back; clamped at the edges.
-    state.scratch.cursor_step_visible(-1);
-    assert!(state.scratch.lines[state.scratch.cursor_line]
-        .text
-        .contains("ctyri"));
-    state.scratch.cursor_step_visible(-5);
-    assert!(state.scratch.lines[state.scratch.cursor_line]
-        .text
-        .contains("ctyri"));
     fs::remove_dir_all(&a).ok();
 }

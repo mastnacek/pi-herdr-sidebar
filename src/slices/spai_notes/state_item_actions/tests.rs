@@ -1,5 +1,6 @@
 //! Unit tests for note lifecycle actions: status cycles, deletion, creation.
 use super::*;
+use crate::slices::spai_notes::note::SpaiType;
 use std::fs;
 
 fn temp_project() -> std::path::PathBuf {

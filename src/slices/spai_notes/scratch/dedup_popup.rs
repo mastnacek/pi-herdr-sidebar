@@ -58,7 +58,7 @@ pub fn render_dedup_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNote
     let mut lines: Vec<Line> = Vec::new();
     if dedup.is_evaluating {
         lines.push(Line::from(Span::styled(
-            " ⏳ vyhodnocuji… (místní, bez sítě — embeddingy když jsou dostupné)",
+            " ⏳ hledám podobné záznamy (spai)…",
             Style::default().fg(Color::DarkGray),
         )));
     } else if dedup.matches.is_empty() {
@@ -77,14 +77,14 @@ pub fn render_dedup_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNote
             } else {
                 Style::default().fg(Color::DarkGray)
             };
-            let pct = (m.similarity * 100.0).round() as u32;
+            let tag = if m.duplicate { "dup" } else { "pří" };
             lines.push(Line::from(vec![
-                Span::styled(format!(" {:>2}% ", pct), style),
+                Span::styled(format!(" {:>2}% ", m.percent()), style),
                 Span::styled(
-                    format!("{} ", m.symbol),
+                    format!("{} ", tag),
                     Style::default().fg(Color::Yellow).bold(),
                 ),
-                Span::styled(format!("{}: {}", m.id, m.title), style),
+                Span::styled(format!("{} {}: {}", m.project, m.id, m.title), style),
             ]));
         }
         lines.push(Line::from(vec![
@@ -96,6 +96,14 @@ pub fn render_dedup_popup(frame: &mut Frame, buffer_area: Rect, state: &SpaiNote
             Span::styled("připojit  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[Ctrl+U] ", Style::default().fg(Color::Green).bold()),
             Span::styled("stav  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if dedup.force_start.is_some() { "[Ctrl+S] " } else { "" },
+                Style::default().fg(Color::Green).bold(),
+            ),
+            Span::styled(
+                if dedup.force_start.is_some() { "uložit i tak  " } else { "" },
+                Style::default().fg(Color::DarkGray),
+            ),
             Span::styled("[Esc] ", Style::default().fg(Color::Cyan).bold()),
             Span::styled("zavřít", Style::default().fg(Color::DarkGray)),
         ]));

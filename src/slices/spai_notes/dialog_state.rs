@@ -2,8 +2,11 @@
 //! with Normal/Insert modes, and the on-demand dedup panel).
 use super::autocomplete::ProjectSuggestion;
 use super::note::SpaiType;
-use super::similarity::SimilarNoteMatch;
+use super::core_bridge::SimilarHit;
 use std::sync::mpsc::Receiver;
+
+/// Background result of a duplicate check (`spai similar`).
+pub type SimilarResult = Result<Vec<SimilarHit>, String>;
 
 pub struct NoteCreationDialog {
     pub active: bool,
@@ -14,6 +17,8 @@ pub struct NoteCreationDialog {
     pub autocomplete_active: bool,
     pub autocomplete_selected: usize,
     pub suggestions: Vec<ProjectSuggestion>,
+    /// A write (`spai add`) runs in the background: the dialog shows "ukládám…".
+    pub saving: bool,
 }
 
 impl Default for NoteCreationDialog {
@@ -27,6 +32,7 @@ impl Default for NoteCreationDialog {
             autocomplete_active: false,
             autocomplete_selected: 0,
             suggestions: Vec::new(),
+            saving: false,
         }
     }
 }
@@ -53,6 +59,7 @@ impl Clone for NoteCreationDialog {
             autocomplete_active: self.autocomplete_active,
             autocomplete_selected: self.autocomplete_selected,
             suggestions: self.suggestions.clone(),
+            saving: self.saving,
         }
     }
 }
@@ -102,8 +109,11 @@ pub struct NoteEditDialog {
 pub struct DedupPanel {
     pub visible: bool,
     pub is_evaluating: bool,
-    pub matches: Vec<SimilarNoteMatch>,
-    pub receiver: Option<Receiver<Vec<SimilarNoteMatch>>>,
+    pub matches: Vec<SimilarHit>,
+    pub receiver: Option<Receiver<SimilarResult>>,
+    /// Text whose write was stopped by a duplicate: "uložit i tak" (Ctrl+S)
+    /// writes it with force. `None` for a plain Ctrl+D check.
+    pub force_text: Option<String>,
 }
 
 impl Clone for DedupPanel {
@@ -113,6 +123,7 @@ impl Clone for DedupPanel {
             is_evaluating: self.is_evaluating,
             matches: self.matches.clone(),
             receiver: None,
+            force_text: self.force_text.clone(),
         }
     }
 }

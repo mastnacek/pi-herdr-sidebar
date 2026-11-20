@@ -1,70 +1,42 @@
 //! Ctrl+D in the Scratchpad: on-demand dedup for the line under the cursor
 //! (plan §3). Popup anchored under that line; ↑/↓ select, Ctrl+O/A/U act,
 //! Esc closes. No timers, no automatic requests.
-use super::super::dedup_engine;
+use super::super::core_bridge;
 use super::super::note_writer;
 use super::super::state::SpaiNotesState;
 use super::super::storage_format::format_spai_markdown;
 
 impl SpaiNotesState {
-    /// Runs dedup for the record under the cursor (Ctrl+D in Edit mode).
-    /// Query = the record text; items = the routed project's records.
-    pub fn run_scratch_dedup(&mut self, api_key: &str, model: &str, threshold: f64) {
+    /// Runs `spai similar` for the record under the cursor (Ctrl+D in Edit
+    /// mode) in the background. Compares against all projects.
+    pub fn run_scratch_dedup(&mut self) {
         let anchor = self.scratch.cursor_line;
         let query = super::line_model::record_text(&self.scratch.lines, anchor);
-        let query_trim = query.trim().to_string();
+        let query_trim = super::super::note_writer::without_stamp(query.trim());
 
         // Reset the popup and anchor it at the current line.
         self.scratch.dedup = super::state::ScratchDedup {
             visible: true,
             anchor_line: anchor,
-            is_evaluating: false,
-            matches: Vec::new(),
-            selected: 0,
-            receiver: None,
+            ..Default::default()
         };
 
         if query_trim.len() < 3 {
             return; // panel shows "nothing to compare"
         }
-
-        // Compare against the routed (or current) project. Resolve it to an
-        // index first, then load its items mutably (ensure_items).
-        let proj_idx = note_writer::route_mention(&query_trim, &self.projects)
-            .and_then(|p| self.projects.iter().position(|x| x.path == p.path))
+        let proj = note_writer::route_mention(&query_trim, &self.projects)
             .or_else(|| {
                 note_writer::current_project(self.current_project_path.as_deref(), &self.projects)
-                    .and_then(|p| self.projects.iter().position(|x| x.path == p.path))
-            });
-
-        let Some(proj_idx) = proj_idx else {
+            })
+            .or_else(|| self.projects.get(self.selected_project_idx));
+        let Some(proj) = proj else {
             return;
         };
-        let (items, proj_path) = {
-            let proj = &mut self.projects[proj_idx];
-            proj.ensure_items();
-            (proj.items.clone(), proj.path.clone())
-        };
-
-        let outcome = dedup_engine::run(dedup_engine::DedupRequest {
-            query: query_trim,
-            items,
-            project_path: proj_path,
-            api_key: api_key.to_string(),
-            model: model.to_string(),
-            threshold,
-        });
-
-        match outcome {
-            dedup_engine::DedupOutcome::Ready(matches) => {
-                self.scratch.dedup.matches = matches;
-                self.scratch.dedup.is_evaluating = false;
-            }
-            dedup_engine::DedupOutcome::Running(rx) => {
-                self.scratch.dedup.is_evaluating = true;
-                self.scratch.dedup.receiver = Some(rx);
-            }
-        }
+        let (cfg, path) = (self.core.clone(), proj.path.clone());
+        self.scratch.dedup.is_evaluating = true;
+        self.scratch.dedup.receiver = Some(core_bridge::spawn(move || {
+            core_bridge::similar(&cfg, &path, &query_trim)
+        }));
     }
 
     /// `↑/↓` in the dedup popup.
@@ -80,25 +52,14 @@ impl SpaiNotesState {
         };
     }
 
-    fn scratch_dedup_target(&self) -> Option<(usize, usize)> {
-        let id = self
-            .scratch
-            .dedup
-            .matches
-            .get(self.scratch.dedup.selected)
-            .map(|m| m.id.clone())?;
-        // The project the anchor line routes to (same rule as the run).
-        let query =
-            super::line_model::record_text(&self.scratch.lines, self.scratch.dedup.anchor_line);
-        let proj_idx = note_writer::route_mention(&query, &self.projects)
-            .and_then(|p| self.projects.iter().position(|x| x.path == p.path))
-            .unwrap_or(self.selected_project_idx);
-        let pos = self
-            .projects
-            .get(proj_idx)?
+    fn scratch_dedup_target(&mut self) -> Option<(usize, usize)> {
+        let hit = self.scratch.dedup.matches.get(self.scratch.dedup.selected)?.clone();
+        let proj_idx = self.projects.iter().position(|p| p.name == hit.project)?;
+        self.projects[proj_idx].ensure_items();
+        let pos = self.projects[proj_idx]
             .items
             .iter()
-            .position(|it| it.id == id)?;
+            .position(|it| it.id == hit.id)?;
         Some((proj_idx, pos))
     }
 
@@ -151,26 +112,20 @@ impl SpaiNotesState {
         Ok(id)
     }
 
-    /// Ctrl+U in the popup: cycle the status of the selected record.
+    /// Ctrl+U in the popup: cycle the status of the selected record (`spai set`).
     pub fn scratch_dedup_cycle_status(&mut self) -> Result<String, String> {
         let (proj_idx, pos) = self
             .scratch_dedup_target()
             .ok_or_else(|| "Není vybrána shoda".to_string())?;
-
         let item = &self.projects[proj_idx].items[pos];
-        let mut updated = item.clone();
-        updated.status = updated.status.next_cycle();
-        updated.symbol = updated.status.symbol().to_string();
-        let formatted = format_spai_markdown(&updated);
-        super::super::note_io::write_atomic(&updated.file_path, &formatted)
-            .map_err(|e| format!("Chyba při zápisu: {}", e))?;
-
-        let next = updated.status;
-        self.projects[proj_idx].items[pos].status = next;
-        self.projects[proj_idx].items[pos].symbol = updated.symbol;
-        self.projects[proj_idx].items[pos].body = updated.body;
-
-        Ok(next.as_str().to_string())
+        let (next, id, file, path) = (
+            item.status.next_cycle(),
+            item.id.clone(),
+            item.file_path.clone(),
+            self.projects[proj_idx].path.clone(),
+        );
+        let done = self.set_status_via_spai(&path, &id, &file, next)?;
+        Ok(done.as_str().to_string())
     }
 
     /// Removes the anchor line's record (used by Ctrl+A after appending).

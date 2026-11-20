@@ -116,7 +116,7 @@ fn dedup_panel_renders_over_the_dialog_and_disappears() {
     );
 
     // Visible after the (local fallback) run — no project, so "žádné duplicity".
-    state.run_dedup("", "model", 0.5, ". nákupní koš".to_string());
+    state.run_dedup(". nákupní koš".to_string());
     let visible = draw(&state);
     assert!(
         visible.contains("Kontrola duplicit")

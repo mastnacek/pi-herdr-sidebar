@@ -140,21 +140,3 @@ fn missing_id_falls_back_to_a_unique_marker_not_spai_001() {
     );
 }
 
-#[test]
-fn body_prefix_update_preserves_trailing_newline_and_crlf() {
-    use crate::slices::spai_notes::note::SpaiStatus;
-
-    let lf = ". task\n";
-    assert_eq!(
-        update_body_status_prefix(lf, SpaiStatus::Done),
-        "x task\n",
-        "trailing newline kept"
-    );
-
-    let crlf = ". task\r\nsecond line\r\n";
-    let updated = update_body_status_prefix(crlf, SpaiStatus::Working);
-    assert_eq!(
-        updated, "/ task\r\nsecond line\r\n",
-        "CRLF style kept: {updated:?}"
-    );
-}

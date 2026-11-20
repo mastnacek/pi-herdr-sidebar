@@ -9,12 +9,10 @@ pub mod picker_view;
 pub mod state;
 pub mod state_cycling;
 pub mod storage;
-pub mod vector_service;
 pub mod view;
 
 pub use actions::{
     classify_all_facets, classify_missing_facets, vectorize_all_records, vectorize_missing_records,
 };
 pub use state::{ModelTarget, SettingsField, SettingsState};
-pub use vector_service::load_project_vectors;
 pub use view::render_settings_tab;

@@ -201,7 +201,7 @@ impl SpaiNotesState {
 
 /// `symbol id title` on one line, ready to be re-saved/opened.
 fn item_to_line(item: &super::super::note::SpaiNoteItem) -> ScratchLine {
-    let text = format!("{} {} {}", item.symbol, item.id, item.title);
+    let text = format!("{} {} {}", item.symbol, item.id, item.display_title());
     ScratchLine {
         text: text.clone(),
         origin: LineOrigin::FromFile {

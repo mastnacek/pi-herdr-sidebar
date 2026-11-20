@@ -46,7 +46,7 @@ pub fn render_dedup_overlay(frame: &mut Frame, area: Rect, state: &SpaiNotesStat
             Style::default().fg(Color::Yellow).bold(),
         ));
         lines.push(Line::from(Span::styled(
-            " Vektorizuji a porovnávám přes OpenRouter…",
+            " Hledám podobné záznamy ve všech projektech (spai)…",
             Style::default().fg(Color::Yellow),
         )));
     } else if state.dedup.matches.is_empty() {
@@ -55,7 +55,7 @@ pub fn render_dedup_overlay(frame: &mut Frame, area: Rect, state: &SpaiNotesStat
             Style::default().fg(Color::Rgb(55, 244, 153)).bold(),
         ));
         lines.push(Line::from(Span::styled(
-            " Podobný záznam nebyl nalezen (text + vektory).",
+            " Podobný záznam nebyl nalezen (všechny projekty).",
             Style::default().fg(Color::DarkGray),
         )));
     } else {
@@ -64,20 +64,19 @@ pub fn render_dedup_overlay(frame: &mut Frame, area: Rect, state: &SpaiNotesStat
             Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
         ));
         for m in &state.dedup.matches {
-            let pct = (m.similarity * 100.0).round() as u32;
-            let color = if pct >= 70 {
+            let color = if m.duplicate {
                 Color::Rgb(255, 83, 69)
             } else {
                 Color::Rgb(255, 184, 108)
             };
-            let tag = if m.is_vector_match { "[Vektor] " } else { "" };
+            let tag = if m.duplicate { "duplicita" } else { "příbuzné" };
             lines.push(Line::from(vec![
                 Span::styled(
-                    format!(" [{:>2}%] {}{}", pct, tag, m.symbol),
+                    format!(" [{:>2}%] {}", m.percent(), tag),
                     Style::default().fg(color).bold(),
                 ),
                 Span::styled(
-                    format!(" {}: {}", m.id, m.title),
+                    format!(" {} {}: {}", m.project, m.id, m.title),
                     Style::default().fg(Color::White),
                 ),
             ]));
@@ -102,6 +101,14 @@ pub fn render_dedup_overlay(frame: &mut Frame, area: Rect, state: &SpaiNotesStat
                 Style::default().fg(Color::Rgb(139, 233, 253)).bold(),
             ),
             Span::styled("stav ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if state.dedup.force_text.is_some() { "[Ctrl+S] " } else { "" },
+                Style::default().fg(Color::Rgb(255, 184, 108)).bold(),
+            ),
+            Span::styled(
+                if state.dedup.force_text.is_some() { "uložit i tak " } else { "" },
+                Style::default().fg(Color::DarkGray),
+            ),
             Span::styled(
                 "[Esc] ",
                 Style::default().fg(Color::Rgb(139, 233, 253)).bold(),

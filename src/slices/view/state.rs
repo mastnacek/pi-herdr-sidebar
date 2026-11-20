@@ -244,6 +244,9 @@ impl SidebarState {
         crate::slices::spai_notes::scratch::poll_background(&mut self.spai_notes);
 
         self.spai_notes.refresh(pane_cwd, force);
+        if self.spai_notes.vectors_stale && !self.settings.is_busy {
+            self.spai_notes.request_vector_count();
+        }
 
         let (total_notes, total_vectors, total_classified) =
             self.spai_notes.count_notes_vectors_facets();

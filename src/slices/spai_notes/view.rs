@@ -142,12 +142,13 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
                 Color::White
             };
 
-            let title_chars_count = item.title.chars().count();
+            let shown_title = item.display_title();
+            let title_chars_count = shown_title.chars().count();
             let title_display = if title_chars_count > 28 {
-                let s: String = item.title.chars().take(25).collect();
+                let s: String = shown_title.chars().take(25).collect();
                 format!("{}...", s)
             } else {
-                item.title.clone()
+                shown_title
             };
 
             list_lines.push(Line::from(vec![
@@ -240,7 +241,7 @@ fn render_right_viewer(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
 
     let (title, content_lines) = if let Some(item) = item_opt {
         (
-            format!(" {} · {} ", item.id, item.title),
+            format!(" {} · {} ", item.id, item.display_title()),
             super::viewer_content::format_viewer_content(
                 item,
                 state.selected_memory_links(),

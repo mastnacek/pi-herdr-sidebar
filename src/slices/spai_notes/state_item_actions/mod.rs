@@ -1,72 +1,46 @@
 //! Note items lifecycle and status cycling actions.
-use super::note::{SpaiStatus, SpaiType};
-use super::note_io::write_atomic;
+use super::note::SpaiStatus;
 use super::state::SpaiNotesState;
-use super::storage_format::{format_spai_markdown, update_body_status_prefix};
 
 impl SpaiNotesState {
+    /// Cycles the status of the selected record through `spai set` (it keeps the
+    /// rest of the file and the index in step).
     pub fn cycle_selected_status(&mut self) -> Result<(), String> {
         let proj = self
             .projects
-            .get_mut(self.selected_project_idx)
+            .get(self.selected_project_idx)
             .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
-        proj.ensure_items();
-
         let item = proj
             .items
             .get(self.selected_item_idx)
             .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
-
-        // Write first, mutate state only after the disk write succeeded, so
-        // the UI never shows a status that does not exist on disk.
-        let mut updated = item.clone();
-        updated.status = updated.status.next_cycle();
-        updated.symbol = updated.status.symbol().to_string();
-        updated.body = update_body_status_prefix(&updated.body, updated.status);
-        let updated_content = format_spai_markdown(&updated);
-        write_atomic(&updated.file_path, &updated_content)?;
-
-        let (glyph, status_str) = (updated.status.glyph(), updated.status.as_str());
-        let item = proj
-            .items
-            .get_mut(self.selected_item_idx)
-            .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
-        item.status = updated.status;
-        item.symbol = updated.symbol;
-        item.body = updated.body;
-
-        self.status_message = Some(format!("Stav změněn: {} {}", glyph, status_str));
-
+        let next = item.status.next_cycle();
+        let (path, id) = (proj.path.clone(), item.id.clone());
+        let file = item.file_path.clone();
+        self.set_status_via_spai(&path, &id, &file, next)?;
+        self.status_message = Some(format!("Stav změněn: {} {}", next.glyph(), next.as_str()));
         Ok(())
     }
 
-    pub fn create_quick_note_with_status(
+    /// `spai set` for one record, then the record is re-read from its file.
+    /// Returns the new status. Nothing changes in memory when `spai` fails.
+    pub fn set_status_via_spai(
         &mut self,
-        _title: &str,
-        _kind: SpaiType,
+        project: &std::path::Path,
+        id: &str,
+        file: &std::path::Path,
         status: SpaiStatus,
-        body: &str,
-    ) -> Result<String, String> {
-        let proj = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Není vybrán žádný projekt".to_string())?;
-        proj.ensure_items();
-
-        // Delegate to the shared note_writer (disk-backed ids, create_new,
-        // dir creation). The caller passes `body` as the prefix line
-        // `"<glyph> <title>"`, so the writer's prefix detection resolves the
-        // same kind/status the dialog selected.
-        let written = super::note_writer::write_record(proj, body.trim())?;
-        debug_assert_eq!(written.item.status, status, "glyph/status mismatch");
-
-        let id = written.id.clone();
-        proj.items.insert(0, written.item);
-        proj.reload_memory_links();
-        self.selected_item_idx = 0;
-        self.viewer_scroll = 0;
-
-        Ok(id)
+    ) -> Result<SpaiStatus, String> {
+        super::core_bridge::set_status(&self.core, project, id, status.as_str())?;
+        let content = std::fs::read_to_string(file).map_err(|e| format!("Čtení selhalo: {e}"))?;
+        let fresh = super::storage_format::parse_spai_markdown(&content, file.to_path_buf())
+            .ok_or_else(|| "Soubor nelze načíst jako SPAI poznámku".to_string())?;
+        for p in self.projects.iter_mut().filter(|p| p.path == project) {
+            if let Some(it) = p.items.iter_mut().find(|i| i.file_path == file) {
+                *it = fresh.clone();
+            }
+        }
+        Ok(fresh.status)
     }
 
     /// Arm the two-step delete confirmation for the selected item.

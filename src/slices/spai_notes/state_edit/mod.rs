@@ -107,8 +107,9 @@ impl SpaiNotesState {
         // state, so a failed write never leaves the UI describing a disk
         // state that does not exist.
         let mut updated = item.clone();
-        updated.title = new_title;
+        let old_title = std::mem::replace(&mut updated.title, new_title);
         updated.body = new_body;
+        updated.on_title_changed(&old_title);
         let updated_content = format_spai_markdown(&updated);
         write_atomic(&updated.file_path, &updated_content)?;
 
@@ -118,6 +119,7 @@ impl SpaiNotesState {
             .ok_or_else(|| "Není vybrána žádná položka".to_string())?;
         item.title = updated.title;
         item.body = updated.body;
+        item.extra_frontmatter = updated.extra_frontmatter;
         proj.reload_memory_links();
         self.status_message = Some("Poznámka uložena".to_string());
         self.close_edit_dialog();

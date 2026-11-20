@@ -213,12 +213,11 @@ impl SpaiNotesState {
             (detected.kind, detected.status, detected.prefix_glyph)
         };
 
-        let prefix_line = format!("{}{}\n", glyph, title_to_use);
-        let res = self.create_quick_note_with_status(&title_to_use, kind, status, &prefix_line);
-        if res.is_ok() {
-            self.close_creation_dialog();
-        }
-        res
+        // `spai add` translates, embeds and checks duplicates in the
+        // background; the dialog closes when the result arrives (state_add).
+        let _ = (kind, status);
+        self.start_creation_add(format!("{}{}", glyph, title_to_use), false)?;
+        Ok("ukládám…".to_string())
     }
 }
 

@@ -93,7 +93,9 @@ fn submit_title(word: &str) -> String {
     // submit-time stripping, not live type detection.
     state.creation_dialog.title_input = word.to_string();
     state.creation_dialog.cursor = word.chars().count();
-    state.submit_creation_dialog().expect("note created");
+    state.submit_creation_dialog().expect("note creation started");
+    assert!(state.creation_dialog.saving, "the write runs in the background");
+    state.wait_add_job();
     state.selected_item().expect("item inserted").title.clone()
 }
 

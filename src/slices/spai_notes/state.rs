@@ -38,6 +38,14 @@ pub struct SpaiNotesState {
     /// On-demand duplicate-check panel (Ctrl+D); polls a finished background
     /// job only — never runs on its own.
     pub dedup: DedupPanel,
+    /// How the sidebar reaches `spai` (a process; tests use a scripted one).
+    pub core: super::core_bridge::CoreConfig,
+    /// A creation-dialog `spai add` running in the background.
+    pub add_job: Option<super::state_add::AddJob>,
+    /// Records with a vector (`spai projects`), refreshed in the background.
+    pub vector_total: usize,
+    pub vectors_stale: bool,
+    pub(super) vector_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
     projects_fingerprint: Fingerprint,
 }
 
@@ -64,6 +72,11 @@ impl SpaiNotesState {
             edit_dialog: NoteEditDialog::default(),
             scratch: super::scratch::state::ScratchState::default(),
             dedup: DedupPanel::default(),
+            core: super::core_bridge::CoreConfig::from_process(),
+            add_job: None,
+            vector_total: 0,
+            vectors_stale: true,
+            vector_rx: None,
             projects_fingerprint: (0, 0, 0, 0, 0, 0),
         };
         state.ensure_selected_items();
@@ -129,7 +142,6 @@ impl SpaiNotesState {
 
     pub fn count_notes_vectors_facets(&mut self) -> (usize, usize, usize) {
         let mut total_notes = 0;
-        let mut total_vectors = 0;
         let mut total_classified = 0;
         for p in &mut self.projects {
             p.ensure_items();
@@ -139,11 +151,9 @@ impl SpaiNotesState {
                     total_classified += 1;
                 }
             }
-            if let Some(store) = crate::slices::settings::load_project_vectors(&p.path) {
-                total_vectors += store.vectors.len();
-            }
         }
-        (total_notes, total_vectors, total_classified)
+        self.poll_vector_total();
+        (total_notes, self.vector_total, total_classified)
     }
 
     pub fn current_items(&self) -> &[SpaiNoteItem] {

@@ -30,6 +30,12 @@ pub fn handle_scratch_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
         return false;
     }
 
+    // A background `spai add` runs: the buffer is read-only until it answers
+    // (the line numbers of the results must stay valid).
+    if state.spai_notes.scratch.save_job.is_some() {
+        return true;
+    }
+
     // The F1 help overlay owns the keyboard while visible: any key closes.
     if state.spai_notes.scratch.help_visible {
         state.spai_notes.scratch.help_visible = false;
@@ -92,20 +98,12 @@ pub fn handle_scratch_key(key: &KeyEvent, state: &mut SidebarState) -> bool {
     handle_buffer_keys(key, state)
 }
 
-pub fn threshold(state: &SidebarState) -> f64 {
-    state.settings.similarity_threshold as f64 / 100.0
-}
-
 fn save_scratch(state: &mut SidebarState) {
     state.spai_notes.scratch_save_all();
 }
 
 fn run_dedup(state: &mut SidebarState) {
-    state.spai_notes.run_scratch_dedup(
-        &state.settings.api_key,
-        &state.settings.embedding_model,
-        threshold(state),
-    );
+    state.spai_notes.run_scratch_dedup();
 }
 
 // ── The single keymap ─────────────────────────────────────────────

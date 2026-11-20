@@ -86,8 +86,8 @@ impl FilterQuery {
 /// subsequence). Word-start and consecutive matches score higher; both sides
 /// are Czech-normalised (diacritics folded) via the similarity module.
 pub fn fuzzy_score(needle: &str, haystack: &str) -> Option<f64> {
-    let n = super::super::similarity::normalize_czech(needle.trim());
-    let h = super::super::similarity::normalize_czech(haystack);
+    let n = normalize_czech(needle.trim());
+    let h = normalize_czech(haystack);
     if n.is_empty() {
         return Some(0.0);
     }
@@ -237,3 +237,25 @@ pub fn matches(
 
 #[cfg(test)]
 mod tests;
+
+/// Odstraní českou diakritiku a převede na malá písmena pro robustní porovnání.
+pub fn normalize_czech(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'á' | 'Á' => 'a',
+            'č' | 'Č' => 'c',
+            'ď' | 'Ď' => 'd',
+            'é' | 'ě' | 'É' | 'Ě' => 'e',
+            'í' | 'Í' => 'i',
+            'ň' | 'Ň' => 'n',
+            'ó' | 'Ó' => 'o',
+            'ř' | 'Ř' => 'r',
+            'š' | 'Š' => 's',
+            'ť' | 'Ť' => 't',
+            'ú' | 'ů' | 'Ú' | 'Ů' => 'u',
+            'ý' | 'Ý' => 'y',
+            'ž' | 'Ž' => 'z',
+            other => other.to_ascii_lowercase(),
+        })
+        .collect()
+}

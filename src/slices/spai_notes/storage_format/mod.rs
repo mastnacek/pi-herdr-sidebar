@@ -5,5 +5,5 @@ pub mod parser;
 #[cfg(test)]
 mod tests;
 
-pub use formatter::{format_spai_markdown, slugify, update_body_status_prefix};
+pub use formatter::format_spai_markdown;
 pub use parser::parse_spai_markdown;

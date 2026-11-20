@@ -162,7 +162,6 @@ impl SettingsState {
                     self.is_busy = false;
                     self.status_message = Some(msg);
                     self.task_receiver = None;
-                    self.vector_count = self.busy_total;
                     break;
                 }
                 AsyncProgress::Error(err) => {

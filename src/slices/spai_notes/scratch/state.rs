@@ -8,7 +8,8 @@
 //! Split for the line cap:
 //! - [`super::buffer`] — Edit-mode text operations on the buffer
 //! - [`super::visibility`] — filter helpers and record navigation
-use super::super::similarity::SimilarNoteMatch;
+use super::super::core_bridge::SimilarHit;
+use super::super::dialog_state::SimilarResult;
 use super::filter::{FilterQuery, StatusFilter};
 use super::line_model::ScratchLine;
 use std::path::PathBuf;
@@ -67,9 +68,12 @@ pub struct ScratchDedup {
     pub visible: bool,
     pub anchor_line: usize,
     pub is_evaluating: bool,
-    pub matches: Vec<SimilarNoteMatch>,
+    pub matches: Vec<SimilarHit>,
     pub selected: usize,
-    pub receiver: Option<Receiver<Vec<SimilarNoteMatch>>>,
+    pub receiver: Option<Receiver<SimilarResult>>,
+    /// First line of the record whose write was stopped by a duplicate
+    /// ("uložit i tak" = Ctrl+S in the popup); `None` for a plain Ctrl+D.
+    pub force_start: Option<usize>,
 }
 
 impl Clone for ScratchDedup {
@@ -81,6 +85,7 @@ impl Clone for ScratchDedup {
             matches: self.matches.clone(),
             selected: self.selected,
             receiver: None,
+            force_start: self.force_start,
         }
     }
 }
@@ -119,6 +124,8 @@ pub struct ScratchState {
     pub semantic_job: Option<SemanticJob>,
     /// Files created by the last Ctrl+S batch — `u` in Read deletes them.
     pub last_batch: Vec<PathBuf>,
+    /// Background `spai add` of the last Ctrl+S; the buffer is read-only meanwhile.
+    pub save_job: Option<super::save_job::SaveJob>,
     /// Footer summary of the last save: `Uloženo 3 · herdr SPAI-014…`.
     pub last_summary: Option<String>,
     /// Ctrl+S warning when a fresh dedup result is similar: `⚠ similar: SPAI-009`.
@@ -230,8 +237,8 @@ impl ScratchState {
     /// Drains a finished background dedup computation. Purely passive.
     pub fn poll_dedup(&mut self) {
         if let Some(rx) = &self.dedup.receiver {
-            if let Ok(matches) = rx.try_recv() {
-                self.dedup.matches = matches;
+            if let Ok(result) = rx.try_recv() {
+                self.dedup.matches = result.unwrap_or_default();
                 self.dedup.is_evaluating = false;
                 self.dedup.receiver = None;
             }

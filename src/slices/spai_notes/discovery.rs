@@ -79,6 +79,11 @@ impl SpaiProjectSummary {
         }
     }
 
+    /// Re-reads the note files (after `spai` wrote or changed one).
+    pub fn reload_items(&mut self) {
+        self.scan_items();
+    }
+
     /// Rebuilds the read-only UMA relation snapshot after SPAI mutations.
     pub fn reload_memory_links(&mut self) {
         self.memory_links = resolve_memory_links(&self.uma_dir, &self.items);

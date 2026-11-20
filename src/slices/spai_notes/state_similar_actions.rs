@@ -1,96 +1,87 @@
-//! Duplicate-check actions for the Smart Input dialog and the integrated
-//! editor: `Ctrl+D` runs the check on demand, `Ctrl+O/A/U` act on its results,
-//! and every UI tick only drains an already-finished background computation.
+//! Duplicate-check actions for the creation dialog and the integrated editor:
+//! `Ctrl+D` runs `spai similar` on demand (background), `Ctrl+O/A/U` act on
+//! its results, `Ctrl+S` over a duplicate stopped by `add` saves anyway.
+//! Every UI tick only drains an already finished background call.
+use super::core_bridge::{self, SimilarHit};
 use super::note::SpaiStatus;
-use super::similarity::find_similar_notes;
 use super::state::SpaiNotesState;
 use super::storage_format::format_spai_markdown;
 
 impl SpaiNotesState {
-    /// Drains a finished background dedup computation into the panel. Purely
-    /// passive: no timer, no keystroke tracking, no network call — the plan's
-    /// "dedup na zkratku" guarantee.
+    /// Drains finished background calls (duplicate check, creation write) into
+    /// the UI. Purely passive: no timer, no keystroke tracking.
     pub fn poll_dedup_receiver(&mut self) {
+        self.poll_add_job();
         if let Some(rx) = &self.dedup.receiver {
-            if let Ok(matches) = rx.try_recv() {
-                self.dedup.matches = matches;
-                self.dedup.is_evaluating = false;
+            if let Ok(result) = rx.try_recv() {
                 self.dedup.receiver = None;
+                self.dedup.is_evaluating = false;
+                match result {
+                    Ok(hits) => self.dedup.matches = hits,
+                    Err(e) => {
+                        self.dedup.visible = false;
+                        self.status_message = Some(format!("⚠ {e}"));
+                    }
+                }
             }
         }
     }
 
-    /// Runs the duplicate check for `query` on demand (Ctrl+D) through the
-    /// shared engine. With an API key it vectorizes in the background; without
-    /// one it falls back to local text similarity + stored vectors,
-    /// synchronously, without an error. The overlay panel is shown always.
-    pub fn run_dedup(&mut self, api_key: &str, model: &str, threshold: f64, query: String) {
+    /// Runs `spai similar` for `query` on demand (Ctrl+D) in the background.
+    /// The panel is shown always; all projects are compared.
+    pub fn run_dedup(&mut self, query: String) {
         self.dedup.visible = true;
         self.dedup.matches.clear();
         self.dedup.receiver = None;
-
+        self.dedup.force_text = None;
+        self.dedup.is_evaluating = false;
+        if query.trim().len() < 3 {
+            return;
+        }
         let Some(proj) = self.projects.get(self.selected_project_idx) else {
             return;
         };
-
-        let outcome = super::dedup_engine::run(super::dedup_engine::DedupRequest {
-            query,
-            items: proj.items.clone(),
-            project_path: proj.path.clone(),
-            api_key: api_key.to_string(),
-            model: model.to_string(),
-            threshold,
-        });
-
-        match outcome {
-            super::dedup_engine::DedupOutcome::Ready(matches) => {
-                self.dedup.matches = matches;
-                self.dedup.is_evaluating = false;
-            }
-            super::dedup_engine::DedupOutcome::Running(rx) => {
-                self.dedup.is_evaluating = true;
-                self.dedup.receiver = Some(rx);
-            }
-        }
+        let (cfg, path) = (self.core.clone(), proj.path.clone());
+        self.dedup.receiver = Some(core_bridge::spawn(move || {
+            core_bridge::similar(&cfg, &path, query.trim())
+        }));
+        self.dedup.is_evaluating = true;
     }
 
     /// Hides the dedup overlay (Esc over the panel).
     pub fn close_dedup_panel(&mut self) {
         self.dedup.visible = false;
+        self.dedup.force_text = None;
     }
 
-    /// Returns the top dedup match, falling back to a fast local text check
-    /// against the currently typed creation input.
-    pub fn top_similar_match(&self) -> Option<String> {
-        if !self.dedup.matches.is_empty() {
-            return self.dedup.matches.first().map(|m| m.id.clone());
-        }
+    /// The top dedup match (any project).
+    pub fn top_similar_match(&self) -> Option<SimilarHit> {
+        self.dedup.matches.first().cloned()
+    }
 
-        let raw = self.creation_dialog.title_input.trim();
-        if raw.len() < 3 {
-            return None;
-        }
-        let proj = self.projects.get(self.selected_project_idx)?;
-        let matches = find_similar_notes(raw, &proj.items, 0.45, 1);
-        matches.first().map(|m| m.id.clone())
+    /// Project and item index of a hit, when the sidebar knows the record.
+    fn locate(&mut self, hit: &SimilarHit) -> Option<(usize, usize)> {
+        let pi = self.projects.iter().position(|p| p.name == hit.project)?;
+        self.projects[pi].ensure_items();
+        let ii = self.projects[pi].items.iter().position(|i| i.id == hit.id)?;
+        Some((pi, ii))
     }
 
     /// Aborts creation dialog and opens the first similar matching note in edit mode.
     pub fn open_first_similar_match(&mut self) -> bool {
-        let Some(target_id) = self.top_similar_match() else {
+        let Some(hit) = self.top_similar_match() else {
             return false;
         };
-
-        if let Some(proj) = self.projects.get_mut(self.selected_project_idx) {
-            if let Some(pos) = proj.items.iter().position(|it| it.id == target_id) {
-                self.selected_item_idx = pos;
-                self.close_creation_dialog();
-                self.open_edit_dialog();
-                self.status_message = Some(format!("Otevřen existující záznam {}", target_id));
-                return true;
-            }
-        }
-        false
+        let Some((pi, ii)) = self.locate(&hit) else {
+            self.status_message = Some(format!("Záznam {} ({}) nenalezen", hit.id, hit.project));
+            return false;
+        };
+        self.selected_project_idx = pi;
+        self.selected_item_idx = ii;
+        self.close_creation_dialog();
+        self.open_edit_dialog();
+        self.status_message = Some(format!("Otevřen existující záznam {}", hit.id));
+        true
     }
 
     /// Appends the newly typed text as a timestamped comment to the existing matched note.
@@ -99,72 +90,43 @@ impl SpaiNotesState {
         if text_to_append.is_empty() {
             return Err("Text k připojení je prázdný".to_string());
         }
-
-        let target_id = self
+        let hit = self
             .top_similar_match()
             .ok_or_else(|| "Nebyl nalezen žádný podobný záznam k připojení".to_string())?;
-
-        let proj = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Projekt nenalezen".to_string())?;
-
-        let item = proj
-            .items
-            .iter_mut()
-            .find(|it| it.id == target_id)
-            .ok_or_else(|| format!("Záznam {} nenalezen", target_id))?;
+        let (pi, ii) = self
+            .locate(&hit)
+            .ok_or_else(|| format!("Záznam {} nenalezen", hit.id))?;
 
         let (ts, _) = super::time_utils::current_timestamp_and_date();
-        let mut updated = item.clone();
+        let mut updated = self.projects[pi].items[ii].clone();
         updated
             .body
             .push_str(&format!("\n\n- [{}] Aktualizace: {}", ts, text_to_append));
-
-        let formatted = format_spai_markdown(&updated);
-        super::note_io::write_atomic(&updated.file_path, &formatted)
+        super::note_io::write_atomic(&updated.file_path, &format_spai_markdown(&updated))
             .map_err(|e| format!("Chyba při zápisu: {}", e))?;
-        item.body = updated.body;
+        self.projects[pi].items[ii].body = updated.body;
 
         self.close_creation_dialog();
-        self.status_message = Some(format!("Připojeno k existujícímu {}", target_id));
-        Ok(target_id)
+        self.status_message = Some(format!("Připojeno k existujícímu {}", hit.id));
+        Ok(hit.id)
     }
 
     /// Cycles the status of the first similar matching note (e.g. todo -> working -> done).
     pub fn cycle_status_of_first_similar_match(&mut self) -> Result<SpaiStatus, String> {
-        let target_id = self
+        let hit = self
             .top_similar_match()
             .ok_or_else(|| "Nebyl nalezen žádný podobný záznam".to_string())?;
-
-        let proj = self
-            .projects
-            .get_mut(self.selected_project_idx)
-            .ok_or_else(|| "Projekt nenalezen".to_string())?;
-
-        let item = proj
-            .items
-            .iter_mut()
-            .find(|it| it.id == target_id)
-            .ok_or_else(|| format!("Záznam {} nenalezen", target_id))?;
-
-        // Write first, mutate only on success.
-        let mut updated = item.clone();
-        updated.status = updated.status.next_cycle();
-        updated.symbol = updated.status.symbol().to_string();
-        let formatted = format_spai_markdown(&updated);
-        super::note_io::write_atomic(&updated.file_path, &formatted)
-            .map_err(|e| format!("Chyba při zápisu: {}", e))?;
-        let next_status = updated.status;
-        item.status = next_status;
-        item.symbol = updated.symbol;
-        item.body = updated.body;
-
-        self.status_message = Some(format!(
-            "Změněn stav {} na {}",
-            target_id,
-            next_status.as_str()
-        ));
-        Ok(next_status)
+        let (pi, ii) = self
+            .locate(&hit)
+            .ok_or_else(|| format!("Záznam {} nenalezen", hit.id))?;
+        let item = &self.projects[pi].items[ii];
+        let (next, file, path) = (
+            item.status.next_cycle(),
+            item.file_path.clone(),
+            self.projects[pi].path.clone(),
+        );
+        let done = self.set_status_via_spai(&path, &hit.id, &file, next)?;
+        self.status_message = Some(format!("Změněn stav {} na {}", hit.id, done.as_str()));
+        Ok(done)
     }
 }

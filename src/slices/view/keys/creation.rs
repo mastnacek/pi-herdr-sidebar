@@ -8,6 +8,11 @@ pub fn handle_creation_dialog(key: &KeyEvent, state: &mut SidebarState) -> bool 
         return false;
     }
 
+    // A background `spai add` runs: the dialog is read-only until it answers.
+    if state.spai_notes.creation_dialog.saving {
+        return true;
+    }
+
     // The dedup overlay sits above the dialog and swallows its keys first.
     if state.spai_notes.dedup.visible {
         return handle_dedup_panel_keys(key, state);
@@ -18,13 +23,9 @@ pub fn handle_creation_dialog(key: &KeyEvent, state: &mut SidebarState) -> bool 
 
     match key.code {
         KeyCode::Char('d') | KeyCode::Char('D') if ctrl => {
-            let threshold = state.settings.similarity_threshold as f64 / 100.0;
-            state.spai_notes.run_dedup(
-                &state.settings.api_key,
-                &state.settings.embedding_model,
-                threshold,
-                state.spai_notes.creation_dialog.title_input.clone(),
-            );
+            state
+                .spai_notes
+                .run_dedup(state.spai_notes.creation_dialog.title_input.clone());
         }
         KeyCode::Esc => {
             if ac_active {
@@ -92,6 +93,11 @@ fn handle_dedup_panel_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
         }
         KeyCode::Char('u') | KeyCode::Char('U') if ctrl => {
             if let Err(e) = state.spai_notes.cycle_status_of_first_similar_match() {
+                state.spai_notes.status_message = Some(e);
+            }
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') if ctrl => {
+            if let Err(e) = state.spai_notes.force_creation_add() {
                 state.spai_notes.status_message = Some(e);
             }
         }

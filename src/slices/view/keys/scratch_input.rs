@@ -4,10 +4,6 @@
 use super::super::state::SidebarState;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-pub fn threshold(state: &SidebarState) -> f64 {
-    state.settings.similarity_threshold as f64 / 100.0
-}
-
 /// `/` fuzzy filter: typing accumulates, Enter applies, Esc cancels.
 pub fn handle_filter_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
     let scratch = &mut state.spai_notes.scratch;
@@ -50,7 +46,6 @@ pub fn handle_filter_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
 /// `~` semantic filter: on Enter — one query embedding + cosine over the
 /// stored vectors of loaded records (plan §4). Never runs by itself.
 pub fn handle_semantic_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
-    let th = threshold(state);
     match key.code {
         KeyCode::Enter => {
             let text = state.spai_notes.scratch.input_buffer.trim().to_string();
@@ -61,12 +56,7 @@ pub fn handle_semantic_input(key: &KeyEvent, state: &mut SidebarState) -> bool {
             }
             // Starts the background job; the footer shows the progress bar
             // (same visual as Settings vectorization) until it finishes.
-            state.spai_notes.scratch_semantic_filter(
-                &text,
-                &state.settings.api_key,
-                &state.settings.embedding_model,
-                th,
-            );
+            state.spai_notes.scratch_semantic_filter(&text);
             true
         }
         KeyCode::Esc => {
@@ -118,6 +108,12 @@ pub fn handle_dedup_keys(key: &KeyEvent, state: &mut SidebarState) -> bool {
         }
         KeyCode::Char('u') | KeyCode::Char('U') if ctrl => {
             if let Err(e) = state.spai_notes.scratch_dedup_cycle_status() {
+                state.spai_notes.status_message = Some(e);
+            }
+            true
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') if ctrl => {
+            if let Err(e) = state.spai_notes.scratch_force_save() {
                 state.spai_notes.status_message = Some(e);
             }
             true

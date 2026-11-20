@@ -56,13 +56,9 @@ pub fn handle_edit_dialog(
 }
 
 fn run_editor_dedup(state: &mut SidebarState) {
-    let threshold = state.settings.similarity_threshold as f64 / 100.0;
-    state.spai_notes.run_dedup(
-        &state.settings.api_key,
-        &state.settings.embedding_model,
-        threshold,
-        state.spai_notes.edit_dialog.title_input.clone(),
-    );
+    state
+        .spai_notes
+        .run_dedup(state.spai_notes.edit_dialog.title_input.clone());
 }
 
 fn handle_insert_keys(key: &KeyEvent, state: &mut SidebarState) {
