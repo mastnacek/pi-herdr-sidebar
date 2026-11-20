@@ -4,7 +4,6 @@
 use super::discovery::{find_spai_dir, SpaiProjectSummary};
 use super::state::SpaiNotesState;
 use crate::shared::spai_client::{self, ListedProject};
-use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
 
 impl SpaiNotesState {
@@ -47,10 +46,7 @@ impl SpaiNotesState {
     /// loaded notes; the selected project and note stay where they were. An empty
     /// list is not believed: the fallback stays.
     pub(super) fn apply_project_list(&mut self, listed: Vec<ListedProject>) {
-        let selected: Option<PathBuf> = self
-            .projects
-            .get(self.selected_project_idx)
-            .map(|p| p.path.clone());
+        let selected = self.selected_project_path();
         let mut old = std::mem::take(&mut self.projects);
         for item in listed {
             let Some(spai_dir) = find_spai_dir(&item.path) else {
@@ -67,15 +63,8 @@ impl SpaiNotesState {
             self.projects = old;
             return;
         }
-        match selected.and_then(|s| self.projects.iter().position(|p| p.path == s)) {
-            Some(at) => self.selected_project_idx = at,
-            None => {
-                self.selected_project_idx = 0;
-                self.selected_item_idx = 0;
-            }
-        }
-        self.clamp_indices();
-        self.ensure_selected_items();
-        self.projects_fingerprint = self.fingerprint();
+        self.spai_listed = true;
+        self.reselect_project(selected);
+        self.notes_fingerprint = self.notes_fingerprint_now();
     }
 }

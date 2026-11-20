@@ -16,6 +16,9 @@ pub mod state_add;
 pub mod state_creation;
 pub mod state_edit;
 pub mod state_item_actions;
+pub mod state_project_filter;
+#[cfg(test)]
+mod state_project_filter_tests;
 pub mod state_projects;
 #[cfg(test)]
 mod state_projects_tests;

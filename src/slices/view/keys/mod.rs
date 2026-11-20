@@ -18,7 +18,10 @@ pub fn handle_key(key: KeyEvent, state: &mut SidebarState, guard: &mut TerminalG
     }
 
     // Global Ctrl+N opens the Scratchpad from anywhere.
-    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('n') {
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.code == KeyCode::Char('n')
+        && state.spai_notes.project_filter.is_none()
+    {
         scratch::open_scratch(state);
         return false;
     }
@@ -107,6 +110,9 @@ fn handle_global_keys(key: &KeyEvent, state: &mut SidebarState, guard: &mut Term
             if state.active_tab == Tab::Notes =>
         {
             state.spai_notes.next_project();
+        }
+        KeyCode::Char('/') if state.active_tab == Tab::Notes => {
+            state.spai_notes.open_project_filter();
         }
         KeyCode::Char('n') if state.active_tab == Tab::Notes => {
             state.spai_notes.open_creation_dialog();

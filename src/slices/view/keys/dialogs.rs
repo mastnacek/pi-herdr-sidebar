@@ -89,5 +89,10 @@ pub fn handle_notes_dialogs(
         return true;
     }
 
+    // The project filter line owns the keyboard while open.
+    if state.spai_notes.handle_project_filter_key(key) {
+        return true;
+    }
+
     super::edit::handle_edit_dialog(key, state, guard) || super::creation::handle_creation_dialog(key, state)
 }

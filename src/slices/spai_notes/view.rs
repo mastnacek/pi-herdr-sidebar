@@ -50,12 +50,13 @@ pub fn render_spai_notes_tab(frame: &mut Frame, area: Rect, state: &SpaiNotesSta
 }
 
 fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
+    let filter_rows = u16::from(state.project_filter.is_some());
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Project header / switcher
-            Constraint::Min(4),    // Items list
-            Constraint::Length(2), // Footer hotkeys + status hint
+            Constraint::Length(3 + filter_rows), // Project header / switcher (+ filter line)
+            Constraint::Min(4),                  // Items list
+            Constraint::Length(2),               // Footer hotkeys + status hint
         ])
         .split(area);
 
@@ -77,13 +78,29 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         });
 
     let active_badge = if is_curr { " [AKTIVNÍ]" } else { "" };
-    let proj_title = format!(
-        " Projekt ({}/{}): {}{} ",
-        state.selected_project_idx + 1,
-        state.projects.len(),
-        proj_name,
-        active_badge
-    );
+    let proj_title = match &state.project_filter {
+        Some(_) => {
+            let matches = state.project_filter_matches();
+            let pos = matches
+                .iter()
+                .position(|&i| i == state.selected_project_idx)
+                .map_or(0, |p| p + 1);
+            format!(
+                " Projekt ({}/{} · filtr): {}{} ",
+                pos,
+                matches.len(),
+                proj_name,
+                active_badge
+            )
+        }
+        None => format!(
+            " Projekt ({}/{}): {}{} ",
+            state.selected_project_idx + 1,
+            state.projects.len(),
+            proj_name,
+            active_badge
+        ),
+    };
 
     let proj_block = Block::bordered()
         .title(Span::styled(
@@ -99,14 +116,24 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
             Color::DarkGray
         }));
 
-    let proj_hint = Paragraph::new(Line::from(vec![
+    let mut hint_lines = vec![Line::from(vec![
         Span::styled(
             "◄ [← / →] projekt  ",
             Style::default().fg(Color::Cyan).bold(),
         ),
         Span::styled("[p] aktivní", Style::default().fg(Color::Yellow)),
-    ]))
-    .block(proj_block);
+    ])];
+    if let Some(filter) = &state.project_filter {
+        hint_lines.push(if state.project_filter_matches().is_empty() {
+            Line::styled("🔍 žádný projekt", Style::default().fg(Color::Red))
+        } else {
+            Line::styled(
+                format!("🔍 {}▏", filter.query),
+                Style::default().fg(Color::Yellow),
+            )
+        });
+    }
+    let proj_hint = Paragraph::new(hint_lines).block(proj_block);
     frame.render_widget(proj_hint, chunks[0]);
 
     // 2. Items List
@@ -218,6 +245,8 @@ fn render_left_pane(frame: &mut Frame, area: Rect, state: &SpaiNotesState) {
         Line::from(vec![
             Span::styled("[←/→]", Style::default().fg(Color::Cyan).bold()),
             Span::styled(" proj ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[/]", Style::default().fg(Color::Cyan).bold()),
+            Span::styled(" hledat projekt ", Style::default().fg(Color::DarkGray)),
             Span::styled("[↑/↓]", Style::default().fg(Color::Yellow)),
             Span::styled(" položka ", Style::default().fg(Color::DarkGray)),
             Span::styled("[e]", Style::default().fg(Color::Yellow).bold()),

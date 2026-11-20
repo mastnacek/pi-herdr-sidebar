@@ -12,10 +12,12 @@ use super::note::SpaiNoteItem;
 use super::uma_links::UmaMemoryLink;
 use std::path::{Path, PathBuf};
 
-/// Cheap change signal: `(mtime, len)` of pi's project cache and of the selected
-/// project's notes dir. Two `stat()` calls stand in for what used to be a full
-/// re-read of every note on every refresh tick.
-type Fingerprint = (u64, u64, u64, u64, u64, u64);
+/// Cheap change signal: `(mtime, len)` pairs from a few `stat()` calls stand in for
+/// a full re-read of every note on every refresh tick. The project list and the
+/// selected project's notes have separate ones, so a note change never rebuilds
+/// the list (and a list change never reloads notes).
+pub(super) type ListFingerprint = (u64, u64);
+pub(super) type NotesFingerprint = (u64, u64, u64, u64);
 
 #[derive(Debug)]
 pub struct SpaiNotesState {
@@ -46,7 +48,14 @@ pub struct SpaiNotesState {
     pub vector_total: usize,
     pub vectors_stale: bool,
     pub(super) vector_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
-    pub(super) projects_fingerprint: Fingerprint,
+    /// Fingerprint of pi's project cache (the fallback list's source).
+    pub(super) projects_fingerprint: ListFingerprint,
+    /// Selected project + fingerprint of its notes and .uma dirs.
+    pub(super) notes_fingerprint: (Option<PathBuf>, NotesFingerprint),
+    /// Set once `spai projects` has answered: the fallback list is never used again.
+    pub(super) spai_listed: bool,
+    /// Type-to-search line over the project list (`/`).
+    pub project_filter: Option<super::state_project_filter::ProjectFilter>,
     /// `spai projects` running in the background (see `state_projects`).
     pub(super) projects_rx: Option<
         std::sync::mpsc::Receiver<Result<Vec<crate::shared::spai_client::ListedProject>, String>>,
@@ -93,11 +102,15 @@ impl SpaiNotesState {
             vector_total: 0,
             vectors_stale: true,
             vector_rx: None,
-            projects_fingerprint: (0, 0, 0, 0, 0, 0),
+            projects_fingerprint: (0, 0),
+            notes_fingerprint: (None, (0, 0, 0, 0)),
+            spai_listed: false,
+            project_filter: None,
             projects_rx: None,
         };
         state.ensure_selected_items();
-        state.projects_fingerprint = state.fingerprint();
+        state.projects_fingerprint = state.list_fingerprint();
+        state.notes_fingerprint = state.notes_fingerprint_now();
         state.request_project_list();
         state
     }
@@ -109,22 +122,38 @@ impl SpaiNotesState {
             self.current_project_path = Some(cp.to_path_buf());
         }
 
-        let fp = self.fingerprint();
-        if !force && !cwd_changed && fp == self.projects_fingerprint {
-            return;
+        // The project list: only the cache, the cwd or `force` ask for it again.
+        let list_fp = self.list_fingerprint();
+        if force || cwd_changed || list_fp != self.projects_fingerprint {
+            self.projects_fingerprint = list_fp;
+            if !self.spai_listed {
+                let selected = self.selected_project_path();
+                self.projects = discover_spai_projects(self.current_project_path.as_deref());
+                self.reselect_project(selected);
+            }
+            self.request_project_list();
         }
 
-        self.projects = discover_spai_projects(self.current_project_path.as_deref());
-        self.clamp_indices();
+        // The notes: only the selected project's own folders reload its items.
+        let (path, fp) = self.notes_fingerprint_now();
+        let same_project = self.notes_fingerprint.0 == path;
+        if force || (same_project && fp != self.notes_fingerprint.1) {
+            if let Some(proj) = self.projects.get_mut(self.selected_project_idx) {
+                proj.reload_items();
+            }
+            self.clamp_indices();
+        }
         self.ensure_selected_items();
-        self.projects_fingerprint = self.fingerprint();
-        self.request_project_list();
+        self.notes_fingerprint = self.notes_fingerprint_now();
     }
 
-    pub(super) fn fingerprint(&self) -> Fingerprint {
-        let cache = projects_cache_path()
+    pub(super) fn list_fingerprint(&self) -> ListFingerprint {
+        projects_cache_path()
             .and_then(|p| file_fingerprint(&p))
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    pub(super) fn notes_fingerprint_now(&self) -> (Option<PathBuf>, NotesFingerprint) {
         let selected = self.projects.get(self.selected_project_idx);
         let notes = selected
             .and_then(|p| file_fingerprint(&p.spai_dir))
@@ -132,7 +161,29 @@ impl SpaiNotesState {
         let uma = selected
             .and_then(|p| file_fingerprint(&p.uma_dir))
             .unwrap_or_default();
-        (cache.0, cache.1, notes.0, notes.1, uma.0, uma.1)
+        (
+            selected.map(|p| p.path.clone()),
+            (notes.0, notes.1, uma.0, uma.1),
+        )
+    }
+
+    pub(super) fn selected_project_path(&self) -> Option<PathBuf> {
+        self.projects
+            .get(self.selected_project_idx)
+            .map(|p| p.path.clone())
+    }
+
+    /// After the list was rebuilt: keeps the selection by path, never by index.
+    pub(super) fn reselect_project(&mut self, selected: Option<PathBuf>) {
+        match selected.and_then(|s| self.projects.iter().position(|p| p.path == s)) {
+            Some(at) => self.selected_project_idx = at,
+            None => {
+                self.selected_project_idx = 0;
+                self.selected_item_idx = 0;
+            }
+        }
+        self.clamp_indices();
+        self.ensure_selected_items();
     }
 
     /// Notes are read on demand — the viewer only ever shows one project.
@@ -204,10 +255,7 @@ impl SpaiNotesState {
     pub fn jump_to_active_project(&mut self) {
         if let Some(curr_path) = &self.current_project_path {
             if let Some(idx) = self.projects.iter().position(|p| p.path == *curr_path) {
-                self.selected_project_idx = idx;
-                self.selected_item_idx = 0;
-                self.viewer_scroll = 0;
-                self.ensure_selected_items();
+                self.select_project(idx);
                 self.status_message = Some(format!("Přepnuto na: {}", self.projects[idx].name));
                 return;
             }
@@ -216,25 +264,39 @@ impl SpaiNotesState {
     }
 
     pub fn next_project(&mut self) {
-        if !self.projects.is_empty() {
-            self.selected_project_idx = (self.selected_project_idx + 1) % self.projects.len();
-            self.selected_item_idx = 0;
-            self.viewer_scroll = 0;
-            self.ensure_selected_items();
-        }
+        self.step_project(true);
     }
 
     pub fn prev_project(&mut self) {
-        if !self.projects.is_empty() {
-            if self.selected_project_idx == 0 {
-                self.selected_project_idx = self.projects.len() - 1;
-            } else {
-                self.selected_project_idx -= 1;
-            }
-            self.selected_item_idx = 0;
-            self.viewer_scroll = 0;
-            self.ensure_selected_items();
+        self.step_project(false);
+    }
+
+    /// Selects project `idx` and resets the note cursor.
+    pub(super) fn select_project(&mut self, idx: usize) {
+        self.selected_project_idx = idx;
+        self.selected_item_idx = 0;
+        self.viewer_scroll = 0;
+        self.ensure_selected_items();
+        self.notes_fingerprint = self.notes_fingerprint_now();
+    }
+
+    /// One project forward/back, wrapping; while the filter is open only matches count.
+    fn step_project(&mut self, forward: bool) {
+        let ring: Vec<usize> = match &self.project_filter {
+            Some(_) => self.project_filter_matches(),
+            None => (0..self.projects.len()).collect(),
+        };
+        if ring.is_empty() {
+            return;
         }
+        let at = ring.iter().position(|&i| i == self.selected_project_idx);
+        let next = match (at, forward) {
+            (Some(a), true) => ring[(a + 1) % ring.len()],
+            (Some(a), false) => ring[(a + ring.len() - 1) % ring.len()],
+            (None, true) => ring[0],
+            (None, false) => ring[ring.len() - 1],
+        };
+        self.select_project(next);
     }
 
     pub fn next_item(&mut self) {
