@@ -5,7 +5,7 @@
 //! coordinates, cached responses on disk (`Expires`/`If-Modified-Since` honored
 //! by a simple TTL). No API key required.
 //!
-//! Eight preset locations cover the Czech Republic for trip planning; `w`
+//! Nine preset locations cover the Czech Republic for trip planning; `w`
 //! rotates them one step at a time. Default: Otovice u Broumova.
 //!
 //! Wire format, fetch, and parsing live in `yr_api.rs`.
@@ -25,7 +25,7 @@ const CACHE_TTL_SECS: u64 = 1800;
 // ---------------------------------------------------------------------------
 
 /// Preset locations covering the Czech Republic for trip planning:
-/// N (Broumovsko, Krkonoše), W (Plzeňsko), center (Praha), S (Českobudějovicko),
+/// N (Broumovsko, Krkonoše), NE (Hradec Králové), W (Plzeňsko), center (Praha), S (Českobudějovicko),
 /// SE (Brněnsko), E-SE (Zlínsko), E (Ostravsko).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WeatherLocation {
@@ -45,7 +45,7 @@ impl WeatherLocation {
     }
 }
 
-pub const LOCATIONS: [WeatherLocation; 8] = [
+pub const LOCATIONS: [WeatherLocation; 9] = [
     WeatherLocation {
         id: "otovice",
         name: "Otovice u Broumova",
@@ -57,6 +57,12 @@ pub const LOCATIONS: [WeatherLocation; 8] = [
         name: "Špindlerův Mlýn",
         lat_x10k: 507238,
         lon_x10k: 156244,
+    },
+    WeatherLocation {
+        id: "hradec",
+        name: "Hradec Králové",
+        lat_x10k: 502092,
+        lon_x10k: 158328,
     },
     WeatherLocation {
         id: "praha",
