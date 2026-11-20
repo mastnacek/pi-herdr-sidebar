@@ -177,7 +177,15 @@ impl SpaiNotesState {
 
         let mut undone = 0usize;
         for path in &paths {
-            if std::fs::remove_file(path).is_ok() {
+            let id = self
+                .scratch
+                .lines
+                .iter()
+                .find(|l| l.origin.file_path() == Some(path))
+                .and_then(|l| l.origin.record_id())
+                .unwrap_or_default()
+                .to_string();
+            if super::super::note_io::delete_via_spai(&self.core, path, &id).is_ok() {
                 undone += 1;
             }
             // Revert every Saved line of this file back to New with its

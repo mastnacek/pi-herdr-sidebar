@@ -1,11 +1,11 @@
-//! Deleting a scratchpad record (Ctrl+Del, two-step confirm): removes the
-//! backing file from disk and the record lines from the buffer. Works for
+//! Deleting a scratchpad record (Ctrl+Del, two-step confirm): `spai delete`
+//! removes the record (file, index, database), the record lines leave the buffer. Works for
 //! Saved records and records loaded from a project (Project/All scope).
 use super::super::state::SpaiNotesState;
 
 impl SpaiNotesState {
     /// First press arms the delete on the cursor line; the second press on
-    /// the same line performs it (file deleted, lines removed). Any other
+    /// the same line performs it (record deleted by spai, lines removed). Any other
     /// action leaves `confirm_delete` armed until the cursor moves.
     pub fn scratch_delete_request(&mut self, line_idx: usize) {
         let pending = self.scratch.confirm_delete;
@@ -20,7 +20,7 @@ impl SpaiNotesState {
         } else {
             self.scratch.confirm_delete = Some(line_idx);
             self.scratch.last_summary =
-                Some("Opravdu smazat? Ctrl+Del znovu (soubor se smaže z disku)".to_string());
+                Some("Opravdu smazat? Ctrl+Del znovu (spai delete, bez návratu)".to_string());
         }
     }
 
@@ -41,12 +41,13 @@ impl SpaiNotesState {
             )
         };
 
-        // Delete the file.
+        // Delete the record through spai (nothing changes when it fails).
         let fname = path
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| id.clone());
-        std::fs::remove_file(&path).map_err(|e| format!("Soubor {} nelze smazat: {}", fname, e))?;
+        super::super::note_io::delete_via_spai(&self.core, &path, &id)
+            .map_err(|e| format!("Záznam {} nelze smazat: {}", fname, e))?;
 
         // Drop stale undo entries pointing at the deleted file.
         self.scratch.last_batch.retain(|p| p != &path);

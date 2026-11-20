@@ -97,6 +97,13 @@ pub fn set_status(cfg: &CoreConfig, project: &Path, id: &str, status: &str) -> R
     call(cfg, &["set", id, status, "--project", &proj], project).map(|_| ())
 }
 
+/// `spai delete <id>` in `project`: the record file, index row and database rows
+/// go; `spai` never hands the id out again. Nothing is removed when it fails.
+pub fn delete_record(cfg: &CoreConfig, project: &Path, id: &str) -> Result<(), String> {
+    let proj = project.to_string_lossy();
+    call(cfg, &["delete", id, "--project", &proj], project).map(|_| ())
+}
+
 /// `spai search` over all projects: the files of the best hits.
 pub fn search_paths(cfg: &CoreConfig, project: &Path, query: &str) -> Result<HashSet<PathBuf>, String> {
     let (_, data, _) = call(cfg, &["search", query, "--limit", "50"], project)?;

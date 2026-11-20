@@ -70,6 +70,26 @@ fn delete_removes_file_from_disk_and_drops_the_item() {
 }
 
 #[test]
+fn delete_goes_through_spai_delete_and_a_failure_keeps_the_record() {
+    use crate::shared::spai_client::testkit::{out, FakeRunner};
+    let project = temp_project();
+    let note = write_note(&project, 5, "kept");
+    let mut state = state_on(&project);
+    let (cfg, fake) = FakeRunner::config(vec![out(1, r#"{"ok":false,"error":"locked"}"#, "")]);
+    state.core = cfg;
+
+    let err = state.confirm_delete_selected().unwrap_err();
+    assert!(err.contains("locked"), "{err}");
+    assert!(note.exists(), "the sidebar never removes the file itself");
+    assert_eq!(state.current_items().len(), 1, "item stays in memory");
+    let calls = fake.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0][..2], ["delete", "SPAI-005"]);
+
+    fs::remove_dir_all(&project).ok();
+}
+
+#[test]
 fn cancelled_delete_keeps_everything() {
     let project = temp_project();
     let note = write_note(&project, 1, "safe");

@@ -125,6 +125,24 @@ impl Runner for Emulator {
                     stderr: String::new(),
                 })
             }
+            Some("delete") => {
+                let project = PathBuf::from(value_of("--project").cloned().unwrap_or_default());
+                let dir = project.join("docs").join("spai");
+                let id = &args[1];
+                for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                    let text = std::fs::read_to_string(e.path()).unwrap_or_default();
+                    let found = super::storage_format::parse_spai_markdown(&text, e.path());
+                    if found.is_some_and(|item| &item.id == id) {
+                        std::fs::remove_file(e.path()).unwrap();
+                        return json(0, "{}".to_string());
+                    }
+                }
+                Ok(RunOut {
+                    code: 1,
+                    stdout: format!("{{\"ok\":false,\"error\":\"record not found: {id}\"}}"),
+                    stderr: String::new(),
+                })
+            }
             _ => Err("unsupported".to_string()),
         }
     }

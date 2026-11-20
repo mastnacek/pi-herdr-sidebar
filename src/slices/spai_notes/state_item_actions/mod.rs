@@ -51,7 +51,8 @@ impl SpaiNotesState {
         }
         self.delete_confirm_active = true;
         self.status_message = Some(
-            "Smazat položku trvale z disku? Delete = potvrdit, jiná klávesa = zrušit".to_string(),
+            "Smazat položku trvale (spai delete, bez návratu)? Delete = potvrdit, jiná klávesa = zrušit"
+                .to_string(),
         );
     }
 
@@ -61,7 +62,9 @@ impl SpaiNotesState {
         self.status_message = None;
     }
 
-    /// Permanently delete the selected item's file from disk and refresh.
+    /// Permanently delete the selected record with `spai delete` (file, index,
+    /// database; its id is never reused) and refresh. Nothing changes in memory
+    /// when `spai` fails. There is no undo of a delete.
     pub fn confirm_delete_selected(&mut self) -> Result<(), String> {
         self.delete_confirm_active = false;
 
@@ -75,8 +78,10 @@ impl SpaiNotesState {
             return Err("Není vybrána žádná položka".to_string());
         }
 
+        let (path, id) = (proj.path.clone(), proj.items[self.selected_item_idx].id.clone());
+        crate::shared::spai_client::delete_record(&self.core, &path, &id)
+            .map_err(|e| format!("Smazání selhalo: {e}"))?;
         let item = proj.items.remove(self.selected_item_idx);
-        std::fs::remove_file(&item.file_path).map_err(|e| format!("Smazání selhalo: {}", e))?;
 
         let title = item.title.clone();
         if self.selected_item_idx >= proj.items.len() {
@@ -85,7 +90,7 @@ impl SpaiNotesState {
         self.viewer_scroll = 0;
         let cwd = self.current_project_path.clone();
         self.refresh(cwd.as_deref(), true);
-        self.status_message = Some(format!("Smazáno z disku: {}", title));
+        self.status_message = Some(format!("Smazáno (spai delete, bez návratu): {}", title));
         Ok(())
     }
 }
